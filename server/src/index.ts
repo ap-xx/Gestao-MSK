@@ -18,7 +18,19 @@ import googleRoutes    from './routes/google';
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }));
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:4173',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Permitir requisições sem origin (mobile, Postman, cron) e origens conhecidas
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS bloqueado: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 app.use('/api/auth',        authRoutes);
@@ -35,6 +47,24 @@ app.use('/api/backup',      backupRoutes);
 app.use('/api/google',      googleRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ── Cron endpoint (sem JWT, autenticado por CRON_SECRET) ──────
+// Chamado pelo Render Cron Job ou qualquer scheduler externo.
+// Render Cron Job URL: GET https://msk-api.onrender.com/api/cron/gerar-avisos?secret=CRON_SECRET
+app.get('/api/cron/gerar-avisos', (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (secret && req.query.secret !== secret) {
+    return res.status(401).json({ error: 'Não autorizado' });
+  }
+  // Reutiliza a lógica do endpoint de avisos chamando a rota internamente
+  fetch(`http://localhost:${PORT}/api/avisos/gerar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.CRON_JWT ?? ''}`, 'Content-Type': 'application/json' },
+  })
+    .then(r => r.json())
+    .then(data => res.json({ ok: true, ...data }))
+    .catch(err => res.status(500).json({ error: String(err) }));
+});
 
 async function main() {
   await initializeDatabase();

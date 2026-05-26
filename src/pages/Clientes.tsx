@@ -172,8 +172,9 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">
@@ -428,6 +429,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           </button>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -680,7 +682,8 @@ export default function Clientes() {
 
       {/* Modal visualização */}
       {viewCliente && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{viewCliente.nome}</h2>
@@ -728,6 +731,7 @@ export default function Clientes() {
                 Fechar
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}

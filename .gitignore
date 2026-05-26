@@ -4,4 +4,8 @@ server/node_modules
 server/dist
 server/.env
 server/data/users.json
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
 .env
+.vercel

@@ -1,6 +1,8 @@
 import type { Cliente, Contrato, Processo, Lancamento, Aviso, Escritorio, User, Andamento } from '../types';
 
-const BASE = '/api';
+// Em produção (Vercel): VITE_API_URL = https://msk-api.onrender.com/api
+// Em desenvolvimento: Vite proxy encaminha /api → localhost:3001
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
 function authHeaders(): HeadersInit {
   const token = sessionStorage.getItem('msk_token');

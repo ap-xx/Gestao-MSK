@@ -3,7 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+// Em produção no Render: DATA_DIR=/opt/render/data (disco persistente montado)
+// Em desenvolvimento: pasta server/data/
+const DATA_DIR = process.env.DATA_DIR ?? path.join(__dirname, '..', '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'msk.db');
 const USERS_JSON = path.join(DATA_DIR, 'users.json');
 
@@ -380,10 +382,6 @@ function seedAvisosIfEmpty(): void {
 export async function initializeDatabase(): Promise<void> {
   await seedUsers();
   seedEscritorioIfEmpty();
-  seedClientesIfEmpty();
-  seedContratosIfEmpty();
-  seedProcessosIfEmpty();
-  seedLancamentosIfEmpty();
-  seedAvisosIfEmpty();
+  // Dados de exemplo removidos — cadastro manual via interface
   console.log('[db] Banco de dados inicializado em', DB_PATH);
 }
