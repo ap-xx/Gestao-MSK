@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
+import { syncAviso } from '../google/calendar';
 
 const router = Router();
 router.use(requireAuth);
 
-function parseAviso(row: Record<string, unknown>) {
+function parseAviso(row: Record<string, unknown>): Record<string, unknown> {
   return { ...row, lido: Boolean(row.lido) };
 }
 
@@ -37,7 +38,11 @@ router.post('/', (req: Request, res: Response) => {
     );
 
     const created = db.prepare('SELECT * FROM avisos WHERE id = ?').get(id) as Record<string, unknown>;
-    res.status(201).json(parseAviso(created));
+    const parsedAv = parseAviso(created);
+    // Sync com Google Calendar (background)
+    syncAviso({ id, titulo: body.titulo, descricao: body.descricao ?? '', dataLimite: body.dataLimite ?? null })
+      .catch(err => console.error('[google] Erro sync aviso:', err));
+    res.status(201).json(parsedAv);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Erro ao criar aviso.', detail: msg });
@@ -67,7 +72,13 @@ router.put('/:id', (req: Request, res: Response) => {
     );
 
     const updated = db.prepare('SELECT * FROM avisos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
-    res.json(parseAviso(updated));
+    const parsedUpAv = parseAviso(updated);
+    // Sync com Google Calendar (background) — se marcado como lido, não precisa de evento
+    if (!parsedUpAv.lido) {
+      syncAviso({ id: req.params.id, titulo: parsedUpAv.titulo as string, descricao: parsedUpAv.descricao as string, dataLimite: parsedUpAv.dataLimite as string | null })
+        .catch(err => console.error('[google] Erro sync aviso update:', err));
+    }
+    res.json(parsedUpAv);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Erro ao atualizar aviso.', detail: msg });
@@ -79,6 +90,9 @@ router.delete('/:id', (req: Request, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM avisos WHERE id = ?').run(req.params.id);
     if (result.changes === 0) { res.status(404).json({ error: 'Aviso não encontrado.' }); return; }
+    // Remove evento do Google Calendar (background)
+    syncAviso({ id: req.params.id, titulo: '', descricao: '', dataLimite: 'deleted', deleted: true })
+      .catch(err => console.error('[google] Erro sync aviso delete:', err));
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

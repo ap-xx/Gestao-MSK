@@ -1,11 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
+import { syncAudiencia } from '../google/calendar';
+
+function syncAudiencias(processoId: string, clienteNome: string, vara: string, audiencias: Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>) {
+  audiencias.forEach((a, i) => {
+    if (!a.data) return;
+    syncAudiencia({ processoId, audienciaIndex: i, data: a.data, hora: a.hora, tipo: a.tipo, vara: a.vara ?? vara, local: a.local, clienteNome })
+      .catch(err => console.error('[google] Erro sync audiência:', err));
+  });
+}
 
 const router = Router();
 router.use(requireAuth);
 
-function parseProcesso(row: Record<string, unknown>) {
+function parseProcesso(row: Record<string, unknown>): Record<string, unknown> {
   return {
     ...row,
     audiencias:   JSON.parse((row.audiencias   as string) || '[]'),
@@ -51,7 +60,13 @@ router.post('/', (req: Request, res: Response) => {
     );
 
     const created = db.prepare('SELECT * FROM processos WHERE id = ?').get(id) as Record<string, unknown>;
-    res.status(201).json(parseProcesso(created));
+    const parsed = parseProcesso(created);
+    // Sync audiências com Google Calendar (background)
+    const auds = parsed.audiencias as Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>;
+    if (auds?.length) {
+      syncAudiencias(id, body.clienteNome ?? '', body.vara ?? '', auds);
+    }
+    res.status(201).json(parsed);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Erro ao criar processo.', detail: msg });
@@ -109,7 +124,13 @@ router.put('/:id', (req: Request, res: Response) => {
     );
 
     const updated = db.prepare('SELECT * FROM processos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
-    res.json(parseProcesso(updated));
+    const parsedUp = parseProcesso(updated);
+    // Sync audiências com Google Calendar (background)
+    const audsUp = parsedUp.audiencias as Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>;
+    if (audsUp?.length) {
+      syncAudiencias(req.params.id, parsedUp.clienteNome as string, parsedUp.vara as string, audsUp);
+    }
+    res.json(parsedUp);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Erro ao atualizar processo.', detail: msg });

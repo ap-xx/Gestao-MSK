@@ -3,15 +3,16 @@ import {
   Building2, User, Bell, Save, Loader2, MapPin,
   Mail, Phone, Globe, Shield, Users, Database,
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
+  Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
 } from 'lucide-react';
-import { escritorioApi, usersApi, configApi, backupApi } from '../services/api';
+import { escritorioApi, usersApi, configApi, backupApi, googleApi } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCEP, formatTelefone } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 
-type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados';
+type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -84,6 +85,11 @@ export default function Configuracoes() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importando, setImportando] = useState(false);
 
+  // ── Google Calendar ──
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; connectedAt?: string } | null>(null);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [syncingGoogle, setSyncingGoogle] = useState(false);
+
   const isAdmin = user?.role === 'admin';
 
   // Load escritorio on mount
@@ -110,6 +116,68 @@ export default function Configuracoes() {
   useEffect(() => {
     if (tab === 'usuarios') loadUsers();
   }, [tab, loadUsers]);
+
+  // Load google status when tab changes to google
+  const loadGoogleStatus = useCallback(() => {
+    setLoadingGoogle(true);
+    googleApi.status()
+      .then(data => setGoogleStatus(data))
+      .catch(() => setGoogleStatus({ connected: false }))
+      .finally(() => setLoadingGoogle(false));
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'google') loadGoogleStatus();
+  }, [tab, loadGoogleStatus]);
+
+  // Listen for popup message (OAuth callback)
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === 'msk-google-success') {
+        loadGoogleStatus();
+        showToast('success', 'Google Calendar conectado!');
+      } else if (e.data?.type === 'msk-google-error') {
+        showToast('error', 'Erro ao conectar Google Calendar');
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [loadGoogleStatus, showToast]);
+
+  async function conectarGoogle() {
+    try {
+      const { url } = await googleApi.authUrl();
+      const popup = window.open(url, 'google-auth', 'width=520,height=620,scrollbars=yes');
+      if (!popup) {
+        showToast('error', 'Popup bloqueado pelo navegador. Permita popups para este site.');
+      }
+    } catch (err: any) {
+      showToast('error', 'Erro ao obter URL de autenticação', err.message);
+    }
+  }
+
+  async function desconectarGoogle() {
+    if (!confirm('Desconectar Google Calendar? Os eventos já criados no Google Calendar não serão removidos.')) return;
+    try {
+      await googleApi.disconnect();
+      setGoogleStatus({ connected: false });
+      showToast('info', 'Google Calendar desconectado');
+    } catch {
+      showToast('error', 'Erro ao desconectar');
+    }
+  }
+
+  async function sincronizarGoogle() {
+    setSyncingGoogle(true);
+    try {
+      const result = await googleApi.sync();
+      showToast('success', `Sincronização concluída!`, `${result.synced} eventos sincronizados${result.errors > 0 ? `, ${result.errors} erros` : ''}`);
+    } catch (err: any) {
+      showToast('error', 'Erro ao sincronizar', err.message);
+    } finally {
+      setSyncingGoogle(false);
+    }
+  }
 
   // Load email config when tab changes to email
   useEffect(() => {
@@ -324,6 +392,7 @@ export default function Configuracoes() {
     { key: 'escritorio', label: 'Dados do Escritório', icon: Building2 },
     { key: 'responsavel', label: 'OAB & Responsável', icon: User },
     { key: 'notificacoes', label: 'Notificações', icon: Bell },
+    { key: 'google', label: 'Google Calendar', icon: Calendar },
     { key: 'usuarios', label: 'Usuários', icon: Users, adminOnly: true },
     { key: 'email', label: 'E-mail SMTP', icon: Mail, adminOnly: true },
     { key: 'dados', label: 'Dados / Backup', icon: Database, adminOnly: true },
@@ -797,6 +866,136 @@ export default function Configuracoes() {
                 Salvar Configuração
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Google Calendar ───────────────────────────── */}
+      {tab === 'google' && (
+        <div className="space-y-5">
+
+          {/* Status card */}
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <h3 className="font-semibold text-[#f5f5f5] mb-1 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-amber-400" /> Google Calendar
+            </h3>
+            <p className="text-xs text-[#505050] mb-5">
+              Sincroniza audiências, prazos e encerramentos de contratos com o Google Calendar de cada usuário.
+              A sincronização acontece automaticamente ao cadastrar ou editar eventos.
+            </p>
+
+            {loadingGoogle ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-500" /></div>
+            ) : (
+              <div className="space-y-4">
+                {/* Connection status */}
+                <div className={`flex items-center gap-4 p-4 rounded-xl border ${
+                  googleStatus?.connected
+                    ? 'bg-green-500/8 border-green-500/25'
+                    : 'bg-[#1e1e1e] border-[#2a2a2a]'
+                }`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    googleStatus?.connected ? 'bg-green-500/20' : 'bg-[#2a2a2a]'
+                  }`}>
+                    {googleStatus?.connected
+                      ? <CheckCircle2 className="w-5 h-5 text-green-400" />
+                      : <AlertCircle className="w-5 h-5 text-[#505050]" />
+                    }
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-semibold ${googleStatus?.connected ? 'text-green-400' : 'text-[#a0a0a0]'}`}>
+                      {googleStatus?.connected ? 'Conectado' : 'Não conectado'}
+                    </p>
+                    <p className="text-xs text-[#505050]">
+                      {googleStatus?.connected && googleStatus.connectedAt
+                        ? `Desde ${new Date(googleStatus.connectedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                        : 'Clique em "Conectar" para vincular sua conta Google'
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-3">
+                  {!googleStatus?.connected ? (
+                    <button
+                      onClick={conectarGoogle}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      Conectar Google Calendar
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={sincronizarGoogle}
+                        disabled={syncingGoogle}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
+                      >
+                        {syncingGoogle
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <RefreshCw className="w-4 h-4" />
+                        }
+                        Sincronizar agora
+                      </button>
+                      <button
+                        onClick={desconectarGoogle}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-red-500/30 text-[#a0a0a0] hover:text-red-400 rounded-lg text-sm font-medium transition-all"
+                      >
+                        <Link2Off className="w-4 h-4" />
+                        Desconectar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Setup instructions */}
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#f5f5f5] mb-3">Como configurar</h4>
+            <ol className="space-y-3 text-xs text-[#a0a0a0] list-none">
+              {[
+                { n: '1', text: 'Acesse o Google Cloud Console (console.cloud.google.com) e crie um projeto.' },
+                { n: '2', text: 'Em "APIs e Serviços" → "Biblioteca", ative a Google Calendar API.' },
+                { n: '3', text: 'Em "Credenciais", crie uma credencial OAuth 2.0 (tipo: Aplicativo da Web). Adicione http://localhost:3001/api/google/callback como URI de redirecionamento autorizado.' },
+                { n: '4', text: 'Copie o Client ID e o Client Secret para o arquivo .env do servidor:', extra: 'GOOGLE_CLIENT_ID=seu_client_id\nGOOGLE_CLIENT_SECRET=seu_client_secret\nGOOGLE_REDIRECT_URI=http://localhost:3001/api/google/callback' },
+                { n: '5', text: 'Reinicie o servidor e clique em "Conectar Google Calendar" acima.' },
+              ].map(step => (
+                <li key={step.n} className="flex gap-3">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{step.n}</span>
+                  <div>
+                    <p>{step.text}</p>
+                    {step.extra && (
+                      <pre className="mt-2 p-2 bg-[#0a0a0a] rounded text-[11px] text-green-400 overflow-x-auto">
+                        {step.extra}
+                      </pre>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* What gets synced */}
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#f5f5f5] mb-3">O que é sincronizado</h4>
+            <div className="space-y-2">
+              {[
+                { icon: '⚖️', label: 'Audiências', desc: 'Data, hora, tipo e local de cada audiência cadastrada nos processos. Lembrete por e-mail 24h antes e popup 1h antes.' },
+                { icon: '🔔', label: 'Prazos e avisos', desc: 'Avisos não lidos com data-limite definida. Lembrete 8h antes no dia.' },
+                { icon: '📋', label: 'Encerramento de contratos', desc: 'Contratos ativos com data de fim definida. Lembrete por e-mail 7 dias antes.' },
+              ].map(item => (
+                <div key={item.label} className="flex gap-3 p-3 rounded-lg bg-[#1e1e1e]">
+                  <span className="text-lg shrink-0">{item.icon}</span>
+                  <div>
+                    <p className="text-sm font-medium text-[#f5f5f5]">{item.label}</p>
+                    <p className="text-xs text-[#505050] mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

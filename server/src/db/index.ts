@@ -133,6 +133,24 @@ db.exec(`
     lido INTEGER NOT NULL DEFAULT 0,
     criadoEm TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS google_tokens (
+    userId TEXT PRIMARY KEY,
+    accessToken TEXT NOT NULL DEFAULT '',
+    refreshToken TEXT NOT NULL,
+    expiryDate INTEGER NOT NULL DEFAULT 0,
+    calendarId TEXT NOT NULL DEFAULT 'primary',
+    connectedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS google_events (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    entityType TEXT NOT NULL,
+    entityId TEXT NOT NULL,
+    googleEventId TEXT NOT NULL,
+    UNIQUE(userId, entityId)
+  );
 `);
 
 // ─── Helper ────────────────────────────────────────────────────

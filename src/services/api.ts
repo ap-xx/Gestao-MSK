@@ -91,3 +91,10 @@ export const backupApi = {
   exportar: () => req<any>('GET', '/backup'),
   importar: (data: any) => req<{ok: true; summary: Record<string, number>}>('POST', '/backup', data),
 };
+
+export const googleApi = {
+  authUrl:    () => req<{ url: string }>('GET', '/google/auth-url'),
+  status:     () => req<{ connected: boolean; connectedAt?: string; calendarId?: string }>('GET', '/google/status'),
+  disconnect: () => req<{ ok: true }>('DELETE', '/google/disconnect'),
+  sync:       () => req<{ ok: true; synced: number; errors: number }>('POST', '/google/sync'),
+};

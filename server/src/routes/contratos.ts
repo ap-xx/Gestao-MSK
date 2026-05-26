@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
+import { syncContrato } from '../google/calendar';
 
 const router = Router();
 router.use(requireAuth);
@@ -35,7 +36,12 @@ router.post('/', (req: Request, res: Response) => {
       body.criadoEm ?? now
     );
 
-    const created = db.prepare('SELECT * FROM contratos WHERE id = ?').get(id);
+    const created = db.prepare('SELECT * FROM contratos WHERE id = ?').get(id) as Record<string, unknown>;
+    // Sync encerramento com Google Calendar (background)
+    if (created.dataFim) {
+      syncContrato({ id, clienteNome: body.clienteNome, tipo: body.tipo, dataFim: created.dataFim as string })
+        .catch(err => console.error('[google] Erro sync contrato:', err));
+    }
     res.status(201).json(created);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -78,7 +84,12 @@ router.put('/:id', (req: Request, res: Response) => {
       req.params.id
     );
 
-    const updated = db.prepare('SELECT * FROM contratos WHERE id = ?').get(req.params.id);
+    const updated = db.prepare('SELECT * FROM contratos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+    // Sync encerramento com Google Calendar (background)
+    if (updated.dataFim) {
+      syncContrato({ id: req.params.id, clienteNome: updated.clienteNome as string, tipo: updated.tipo as string, dataFim: updated.dataFim as string })
+        .catch(err => console.error('[google] Erro sync contrato update:', err));
+    }
     res.json(updated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -91,6 +102,8 @@ router.delete('/:id', (req: Request, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM contratos WHERE id = ?').run(req.params.id);
     if (result.changes === 0) { res.status(404).json({ error: 'Contrato não encontrado.' }); return; }
+    syncContrato({ id: req.params.id, clienteNome: '', tipo: '', dataFim: 'deleted', deleted: true })
+      .catch(err => console.error('[google] Erro sync contrato delete:', err));
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

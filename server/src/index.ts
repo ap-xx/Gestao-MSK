@@ -13,6 +13,7 @@ import escritorioRoutes from './routes/escritorio';
 import usersRoutes     from './routes/users';
 import configRoutes    from './routes/config';
 import backupRoutes    from './routes/backup';
+import googleRoutes    from './routes/google';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -31,6 +32,7 @@ app.use('/api/escritorio',  escritorioRoutes);
 app.use('/api/users',       usersRoutes);
 app.use('/api/config',      configRoutes);
 app.use('/api/backup',      backupRoutes);
+app.use('/api/google',      googleRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
