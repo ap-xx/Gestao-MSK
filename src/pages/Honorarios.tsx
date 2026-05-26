@@ -6,6 +6,7 @@ import {
 import { LancamentosDB, ClientesDB, generateId } from '../data/db';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
+import { DateInput } from '../components/ui/Input';
 import type { Lancamento, TipoLancamento, StatusPagamento } from '../types';
 
 const STATUS_STYLES: Record<StatusPagamento, string> = {
@@ -140,11 +141,11 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Data de Vencimento *</label>
-              <input type="date" className={inputClass} value={form.dataVencimento} onChange={e => set('dataVencimento', e.target.value)} required />
+              <DateInput className={inputClass} value={form.dataVencimento} onChange={e => set('dataVencimento', e.target.value)} required />
             </div>
             <div>
               <label className={labelClass}>Data de Pagamento</label>
-              <input type="date" className={inputClass} value={form.dataPagamento} onChange={e => set('dataPagamento', e.target.value)} />
+              <DateInput className={inputClass} value={form.dataPagamento} onChange={e => set('dataPagamento', e.target.value)} />
             </div>
           </div>
 

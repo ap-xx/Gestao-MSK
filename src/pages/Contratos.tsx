@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ContratosDB, ClientesDB, generateId } from '../data/db';
 import { useToast } from '../context/ToastContext';
+import { DateInput } from '../components/ui/Input';
 import type { Contrato, TipoContrato, StatusContrato } from '../types';
 
 const TIPOS: TipoContrato[] = ['Mensal', 'Êxito', 'Misto', 'Avulso'];
@@ -173,11 +174,11 @@ function ContratoModal({ contrato, onClose, onSave }: ModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Data de Início *</label>
-              <input type="date" className={inputClass} value={form.dataInicio} onChange={e => set('dataInicio', e.target.value)} required />
+              <DateInput className={inputClass} value={form.dataInicio} onChange={e => set('dataInicio', e.target.value)} required />
             </div>
             <div>
               <label className={labelClass}>Data de Encerramento</label>
-              <input type="date" className={inputClass} value={form.dataFim} onChange={e => set('dataFim', e.target.value)} />
+              <DateInput className={inputClass} value={form.dataFim} onChange={e => set('dataFim', e.target.value)} />
             </div>
           </div>
 

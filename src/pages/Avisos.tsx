@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AvisosDB, generateId } from '../data/db';
 import { useToast } from '../context/ToastContext';
+import { DateInput } from '../components/ui/Input';
 import type { Aviso, UrgenciaAviso, TipoAviso } from '../types';
 
 const urgenciaConfig: Record<UrgenciaAviso, { label: string; border: string; bg: string; text: string; badge: string }> = {
@@ -89,7 +90,7 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModal) {
           </div>
           <div>
             <label className={labelClass}>Data Limite</label>
-            <input type="date" className={inputClass} value={form.dataLimite} onChange={e => setForm(p => ({ ...p, dataLimite: e.target.value }))} />
+            <DateInput className={inputClass} value={form.dataLimite} onChange={e => setForm(p => ({ ...p, dataLimite: e.target.value }))} />
           </div>
           <div className="flex gap-3 pt-2 border-t border-[#2a2a2a]">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>

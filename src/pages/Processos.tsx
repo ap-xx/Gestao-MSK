@@ -6,6 +6,7 @@ import {
 import { ProcessosDB, ClientesDB, generateId } from '../data/db';
 import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
 import { useToast } from '../context/ToastContext';
+import { DateInput } from '../components/ui/Input';
 import type { Processo, FaseProcessual, PoloProcessual } from '../types';
 
 const FASES: FaseProcessual[] = ['Inicial', 'Conhecimento', 'Instrução', 'Sentença', 'Recursal', 'Execução', 'Transitado em Julgado', 'Arquivado'];
@@ -298,7 +299,7 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <input type="date" className={inputClass} value={form.audData} onChange={e => set('audData', e.target.value)} />
+              <DateInput className={inputClass} value={form.audData} onChange={e => set('audData', e.target.value)} />
               <input type="time" className={inputClass} value={form.audHora} onChange={e => set('audHora', e.target.value)} />
               <input className={inputClass} value={form.audTipo} onChange={e => set('audTipo', e.target.value)} placeholder="Tipo de audiência" />
               <input className={inputClass} value={form.audLocal} onChange={e => set('audLocal', e.target.value)} placeholder="Local / Sala" />
