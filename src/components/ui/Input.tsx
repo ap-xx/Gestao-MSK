@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar } from 'lucide-react';
 
 // ─── Utilitários de data ──────────────────────────────────────
 function isoToDisplay(iso: string): string {
@@ -22,18 +23,18 @@ function applyMask(raw: string): string {
 }
 
 // ─── DateInput ────────────────────────────────────────────────
-// Aceita e emite datas no formato ISO (YYYY-MM-DD),
-// mas exibe e recebe entrada do usuário em DD/MM/AAAA.
+// Exibe DD/MM/AAAA com máscara automática + ícone que abre o
+// seletor nativo de data do navegador.
 interface DateInputRawProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export function DateInput({ value = '', onChange, ...props }: DateInputRawProps) {
+export function DateInput({ value = '', onChange, className, style, ...props }: DateInputRawProps) {
   const [display, setDisplay] = useState(() => isoToDisplay(value));
+  const nativeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Só sincroniza se o valor externo mudou de verdade (auto-fill, limpeza, etc.)
     const currentISO = displayToISO(display);
     if (currentISO !== value) {
       setDisplay(isoToDisplay(value));
@@ -41,30 +42,52 @@ export function DateInput({ value = '', onChange, ...props }: DateInputRawProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleTextChange(e: React.ChangeEvent<HTMLInputElement>) {
     const masked = applyMask(e.target.value);
     setDisplay(masked);
-
     const iso = displayToISO(masked);
-    // Cria evento sintético compatível com os handlers existentes
-    const fakeEvent = {
-      ...e,
-      target: { ...e.target, value: iso },
-      currentTarget: { ...e.currentTarget, value: iso },
-    } as React.ChangeEvent<HTMLInputElement>;
-    onChange?.(fakeEvent);
+    const fake = { ...e, target: { ...e.target, value: iso }, currentTarget: { ...e.currentTarget, value: iso } } as React.ChangeEvent<HTMLInputElement>;
+    onChange?.(fake);
   }
 
+  function handleNativePicker(e: React.ChangeEvent<HTMLInputElement>) {
+    const iso = e.target.value; // YYYY-MM-DD
+    if (!iso) return;
+    setDisplay(isoToDisplay(iso));
+    const fake = { ...e, target: { ...e.target, value: iso }, currentTarget: { ...e.currentTarget, value: iso } } as React.ChangeEvent<HTMLInputElement>;
+    onChange?.(fake);
+  }
+
+  const nativeISO = displayToISO(display);
+
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={display}
-      onChange={handleChange}
-      placeholder="DD/MM/AAAA"
-      maxLength={10}
-      {...props}
-    />
+    <div className="relative w-full">
+      {/* Input de texto com máscara DD/MM/AAAA */}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={handleTextChange}
+        placeholder="DD/MM/AAAA"
+        maxLength={10}
+        className={`${className ?? ''} pr-9`}
+        style={style}
+        {...props}
+      />
+
+      {/* Ícone de calendário (visual) */}
+      <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#505050] pointer-events-none" />
+
+      {/* Input nativo invisível sobreposto ao ícone — abre o picker ao clicar */}
+      <input
+        ref={nativeRef}
+        type="date"
+        value={nativeISO}
+        onChange={handleNativePicker}
+        tabIndex={-1}
+        className="absolute right-0 top-0 h-full w-10 opacity-0 cursor-pointer"
+      />
+    </div>
   );
 }
 
@@ -81,7 +104,7 @@ const inputStyle = (error?: string) => ({
   borderColor: error ? 'rgba(239,68,68,0.5)' : '#2e2e2e',
 });
 
-export default function Input({ label, error, hint, className = '', type, value, onChange, ...props }: InputProps) {
+export default function Input({ label, error, hint, className = '', type, value, onChange, style, ...props }: InputProps) {
   if (type === 'date') {
     return (
       <div className="flex flex-col gap-1">
@@ -94,7 +117,7 @@ export default function Input({ label, error, hint, className = '', type, value,
           value={value as string}
           onChange={onChange as (e: React.ChangeEvent<HTMLInputElement>) => void}
           className={`${inputBaseClass} ${error ? 'border-red-500/50' : 'border-dark-600 hover:border-dark-400'} ${className}`}
-          style={inputStyle(error)}
+          style={style ?? inputStyle(error)}
           {...props}
         />
         {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
@@ -115,7 +138,7 @@ export default function Input({ label, error, hint, className = '', type, value,
         value={value}
         onChange={onChange}
         className={`${inputBaseClass} ${error ? 'border-red-500/50' : 'border-dark-600 hover:border-dark-400'} ${className}`}
-        style={inputStyle(error)}
+        style={style ?? inputStyle(error)}
         {...props}
       />
       {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
