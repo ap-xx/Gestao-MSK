@@ -1,82 +1,45 @@
 # ============================================================
 # Render Blueprint — MSK Consultation Backend
-# Docs: https://render.com/docs/blueprint-spec
-#
-# Deploy: conecte o repositório no Render e ele lerá este arquivo.
 # ============================================================
 
 services:
   - type: web
     name: msk-api
     runtime: node
-    region: ohio          # ou frankfurt se preferir Europa
-    plan: free        
+    region: ohio
+    plan: free
 
-    # Build
-    buildCommand: cd server && npm install && npm run build
+    # npm ci --include=dev garante que @types/* sejam instalados para o tsc
+    buildCommand: cd server && npm ci --include=dev && npm run build
 
-    # Start (usa dist/ compilado pelo tsc)
     startCommand: cd server && node dist/index.js
 
-    # Porta exposta
     envVars:
       - key: PORT
         value: 3001
-
       - key: NODE_ENV
         value: production
-
-      # ─ Segredos (preencha no dashboard do Render) ────────────
       - key: JWT_SECRET
-        sync: false           # preenchido manualmente no Render
-
+        sync: false
       - key: FRONTEND_URL
-        sync: false           # ex: https://msk.vercel.app
-
+        sync: false
       - key: CRON_SECRET
-        sync: false           # string aleatória para proteger o endpoint de cron
-
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        sync: false           # ex: https://msk-api.onrender.com/api/google/callback
-
+        sync: false
       - key: GMAIL_USER_ADMIN
         value: gabrielb.arins@gmail.com
       - key: GMAIL_APP_PASSWORD_ADMIN
         sync: false
-
       - key: GMAIL_USER_ADVOGADO
         value: miriamkuchnier.adv@gmail.com
       - key: GMAIL_APP_PASSWORD_ADVOGADO
         sync: false
-
       - key: GMAIL_USER_ASSISTENTE
         value: andreluizbudalarins@gmail.com
       - key: GMAIL_APP_PASSWORD_ASSISTENTE
-        sync: false
-
-      # ─ Caminho do banco SQLite no disco persistente ──────────
-      - key: DATA_DIR
-        value: /opt/render/data
-
-    # Disco persistente — mantém o msk.db entre deploys
-    disk:
-      name: msk-data
-      mountPath: /opt/render/data
-      sizeGB: 1
-
-  # ── Cron Job — gera avisos automáticos uma vez por dia ────────
-  - type: cron
-    name: msk-gerar-avisos
-    runtime: node
-    region: ohio
-    schedule: "0 8 * * *"    # todo dia às 8h (UTC)
-    buildCommand: echo "no build needed"
-    startCommand: >
-      curl -s "https://msk-api.onrender.com/api/cron/gerar-avisos?secret=$CRON_SECRET" | cat
-    envVars:
-      - key: CRON_SECRET
         sync: false
