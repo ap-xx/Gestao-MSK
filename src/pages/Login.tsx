@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@msk.adv.br');
-  const [senha, setSenha] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -109,14 +109,14 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Usuários de acesso rápido */}
+          {/* Acesso rápido */}
           <div className="mt-6 pt-6 border-t border-[#2a2a2a]">
-            <p className="text-xs text-[#505050] text-center mb-3">Acesso rápido (demo)</p>
+            <p className="text-xs text-[#505050] text-center mb-3">Acesso rápido</p>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { nome: 'Admin', email: 'admin@msk.adv.br', senha: 'admin123', role: 'admin' },
-                { nome: 'Advogada', email: 'ana@msk.adv.br', senha: 'ana123', role: 'advogado' },
-                { nome: 'Assistente', email: 'lucas@msk.adv.br', senha: 'lucas123', role: 'assistente' },
+                { nome: 'Admin', email: 'gabrielb.arins@gmail.com', senha: 'budal2005msk', role: 'Admin' },
+                { nome: 'Advogada', email: 'miriamkuchnier.adv@gmail.com', senha: 'advogada3009', role: 'Advogado' },
+                { nome: 'Assistente', email: 'andreluizbudalarins@gmail.com', senha: 'Gorila@2020', role: 'Assistente' },
               ].map(u => (
                 <button
                   key={u.email}
@@ -125,7 +125,7 @@ export default function Login() {
                   className="bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] rounded-lg px-2 py-2 text-center transition-colors group"
                 >
                   <div className="text-xs font-medium text-[#a0a0a0] group-hover:text-amber-400 transition-colors">{u.nome}</div>
-                  <div className="text-[10px] text-[#505050] capitalize mt-0.5">{u.role}</div>
+                  <div className="text-[10px] text-[#505050] mt-0.5">{u.role}</div>
                 </button>
               ))}
             </div>

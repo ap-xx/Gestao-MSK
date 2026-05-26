@@ -16,7 +16,7 @@ const DB_KEYS = {
   lancamentos: 'msk_lancamentos',
   avisos: 'msk_avisos',
   currentUser: 'msk_current_user',
-  initialized: 'msk_initialized_v3',
+  initialized: 'msk_initialized_v4',
 };
 
 // ─── Funções genéricas de CRUD ────────────────────────────────
@@ -147,33 +147,31 @@ export const SessionDB = {
 export function initializeDatabase(): void {
   if (localStorage.getItem(DB_KEYS.initialized)) return;
 
-  // Usuários
+  // Usuários (fallback local — autenticação real via servidor)
   const users: User[] = [
     {
-      id: '1',
-      nome: 'Dr. Marcus Silveira Klemm',
-      email: 'admin@msk.adv.br',
-      senha: 'admin123',
+      id: 'u1',
+      nome: 'Gabriel Budal Arins',
+      email: 'gabrielb.arins@gmail.com',
+      senha: 'budal2005msk',
       role: 'admin',
-      oab: 'SP 123456',
       ativo: true,
       criadoEm: '2024-01-01T00:00:00Z',
     },
     {
-      id: '2',
-      nome: 'Dra. Ana Paula Ferreira',
-      email: 'ana@msk.adv.br',
-      senha: 'ana123',
+      id: 'u2',
+      nome: 'Miriam Kuchnier',
+      email: 'miriamkuchnier.adv@gmail.com',
+      senha: 'advogada3009',
       role: 'advogado',
-      oab: 'SP 234567',
       ativo: true,
       criadoEm: '2024-02-01T00:00:00Z',
     },
     {
-      id: '3',
-      nome: 'Lucas Mendes',
-      email: 'lucas@msk.adv.br',
-      senha: 'lucas123',
+      id: 'u3',
+      nome: 'Andre Luiz Budal Arins',
+      email: 'andreluizbudalarins@gmail.com',
+      senha: 'Gorila@2020',
       role: 'assistente',
       ativo: true,
       criadoEm: '2024-03-01T00:00:00Z',

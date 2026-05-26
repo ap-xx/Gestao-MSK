@@ -4,11 +4,12 @@ import bcrypt from 'bcryptjs';
 
 const DATA_FILE = path.join(__dirname, '..', 'data', 'users.json');
 
-interface StoredUser {
+export interface StoredUser {
   id: string;
   nome: string;
   email: string;
-  perfil: 'admin' | 'advogado' | 'financeiro';
+  role: 'admin' | 'advogado' | 'assistente';
+  oab?: string;
   senhaHash: string;
 }
 
@@ -26,9 +27,28 @@ function writeUsers(users: StoredUser[]): void {
 }
 
 const SEED_USERS: Array<Omit<StoredUser, 'senhaHash'> & { senha: string }> = [
-  { id: 'u1', nome: 'Admin', email: 'admin@msk.com', perfil: 'admin', senha: 'admin123' },
-  { id: 'u2', nome: 'Ana Lima', email: 'ana@msk.com', perfil: 'advogado', senha: 'ana123' },
-  { id: 'u3', nome: 'Lucas Melo', email: 'lucas@msk.com', perfil: 'financeiro', senha: 'lucas123' },
+  {
+    id: 'u1',
+    nome: 'Gabriel Budal Arins',
+    email: 'gabrielb.arins@gmail.com',
+    role: 'admin',
+    senha: 'budal2005msk',
+  },
+  {
+    id: 'u2',
+    nome: 'Miriam Kuchnier',
+    email: 'miriamkuchnier.adv@gmail.com',
+    role: 'advogado',
+    oab: '',
+    senha: 'advogada3009',
+  },
+  {
+    id: 'u3',
+    nome: 'Andre Luiz Budal Arins',
+    email: 'andreluizbudalarins@gmail.com',
+    role: 'assistente',
+    senha: 'Gorila@2020',
+  },
 ];
 
 export async function seedUsersIfEmpty(): Promise<void> {

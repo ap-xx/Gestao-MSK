@@ -8,7 +8,7 @@ export interface User {
   id: string;
   nome: string;
   email: string;
-  senha: string; // hash simulado
+  senha?: string; // usado apenas no fallback local
   role: UserRole;
   oab?: string;
   avatar?: string;
