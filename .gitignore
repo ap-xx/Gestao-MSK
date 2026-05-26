@@ -1,1 +1,7 @@
 node_modules
+dist
+server/node_modules
+server/dist
+server/.env
+server/data/users.json
+.env

@@ -4,7 +4,7 @@ import {
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
 } from 'lucide-react';
 import { ClientesDB, generateId } from '../data/db';
-import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ } from '../services/apis';
+import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import type { Cliente, TipoPessoa, StatusCliente } from '../types';
 
@@ -258,9 +258,11 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                 placeholder="000.000.000-00"
                 maxLength={14}
               />
-              <p className="text-xs text-[#505050] mt-1">
-                ℹ️ Consulta automática de CPF não está disponível (API pública sem suporte).
-              </p>
+              {form.cpf.replace(/\D/g, '').length === 11 && (
+                validarCPF(form.cpf)
+                  ? <p className="text-xs text-green-400 flex items-center gap-1 mt-1"><CheckCircle className="w-3 h-3" /> CPF válido</p>
+                  : <p className="text-xs text-red-400 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> CPF inválido</p>
+              )}
             </div>
           )}
 

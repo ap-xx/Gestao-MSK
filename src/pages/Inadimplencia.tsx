@@ -8,6 +8,8 @@ import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import type { Cliente, Lancamento } from '../types';
 
+const TOKEN_KEY = 'msk_token';
+
 function diasAtraso(dataVencimento: string): number {
   return Math.ceil((Date.now() - new Date(dataVencimento).getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -41,10 +43,35 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
     const mensagem = mensagemCustom || mensagensPadrao[canal];
 
     if (canal === 'email') {
-      const assunto = encodeURIComponent('Notificação de Honorários em Aberto — MSK Consultation');
-      const corpo = encodeURIComponent(mensagem);
-      window.location.href = `mailto:${cliente.email}?subject=${assunto}&body=${corpo}`;
-      showToast('success', 'Cliente de e-mail aberto!', `Para ${cliente.email}`);
+      const assunto = 'Notificação de Honorários em Aberto — MSK Consultation';
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      let enviado = false;
+
+      if (token) {
+        try {
+          const res = await fetch('/api/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ para: cliente.email, assunto, corpo: mensagem }),
+          });
+          if (res.ok) {
+            showToast('success', 'E-mail enviado!', `Para ${cliente.email}`);
+            enviado = true;
+          } else if (res.status !== 503) {
+            const err = await res.json();
+            showToast('error', 'Falha ao enviar e-mail', err.error);
+            enviado = true;
+          }
+        } catch {
+          // Servidor indisponível — cai no fallback
+        }
+      }
+
+      if (!enviado) {
+        const corpo = encodeURIComponent(mensagem);
+        window.location.href = `mailto:${cliente.email}?subject=${encodeURIComponent(assunto)}&body=${corpo}`;
+        showToast('success', 'Cliente de e-mail aberto!', `Para ${cliente.email}`);
+      }
     } else if (canal === 'whatsapp') {
       const tel = (cliente.celular || cliente.telefone).replace(/\D/g, '');
       const texto = encodeURIComponent(mensagem);

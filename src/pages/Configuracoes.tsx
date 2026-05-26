@@ -7,6 +7,7 @@ import { EscritoriooDB, UsersDB } from '../data/db';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCEP, formatTelefone } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+
 import type { Escritorio } from '../types';
 
 type Tab = 'escritorio' | 'responsavel' | 'notificacoes';
@@ -25,7 +26,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export default function Configuracoes() {
   const { showToast } = useToast();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, changePassword } = useAuth();
   const [tab, setTab] = useState<Tab>('escritorio');
   const [loadingCNPJ, setLoadingCNPJ] = useState(false);
   const [loadingCEP, setLoadingCEP] = useState(false);
@@ -133,26 +134,24 @@ export default function Configuracoes() {
   async function salvarUsuario(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await new Promise(r => setTimeout(r, 500));
 
-    if (userForm.novaSenha) {
-      if (!user || user.senha !== userForm.senhaAtual) {
-        showToast('error', 'Senha atual incorreta');
-        setSaving(false);
-        return;
+    try {
+      if (userForm.novaSenha) {
+        if (userForm.novaSenha !== userForm.confirmarSenha) {
+          showToast('error', 'Senhas não conferem');
+          return;
+        }
+        await changePassword(userForm.senhaAtual, userForm.novaSenha);
+        setUserForm(p => ({ ...p, senhaAtual: '', novaSenha: '', confirmarSenha: '' }));
       }
-      if (userForm.novaSenha !== userForm.confirmarSenha) {
-        showToast('error', 'Senhas não conferem');
-        setSaving(false);
-        return;
-      }
-      UsersDB.update(user.id, { nome: userForm.nome, email: userForm.email, oab: userForm.oab, senha: userForm.novaSenha });
-    } else {
       UsersDB.update(user!.id, { nome: userForm.nome, email: userForm.email, oab: userForm.oab });
+      updateUser({ nome: userForm.nome, email: userForm.email, oab: userForm.oab });
+      showToast('success', 'Perfil atualizado!');
+    } catch (err: any) {
+      showToast('error', 'Erro ao salvar', err.message);
+    } finally {
+      setSaving(false);
     }
-    updateUser({ nome: userForm.nome, email: userForm.email, oab: userForm.oab });
-    setSaving(false);
-    showToast('success', 'Perfil atualizado!');
   }
 
   async function salvarNotificacoes(e: React.FormEvent) {
