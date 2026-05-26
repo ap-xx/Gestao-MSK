@@ -41,11 +41,14 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const DURATION = '280ms';
+
 export default function Layout({ currentPage, onNavigate, children }: LayoutProps) {
   const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen]         = useState(false);
+  const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [notifOpen, setNotifOpen]             = useState(false);
+  const [notifOpen,        setNotifOpen]        = useState(false);
 
   const naoLidos = AvisosDB.getNaoLidos().length;
 
@@ -60,6 +63,10 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
     assistente: 'Assistente',
   };
 
+  // Width constants
+  const EXPANDED_W = 256;
+  const COLLAPSED_W = 64;
+
   return (
     <div className="flex h-screen bg-[#0a0a0a] overflow-hidden">
 
@@ -73,36 +80,43 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
       {/* ── Sidebar ── */}
       <aside
-        style={{ width: sidebarCollapsed ? undefined : undefined }}
-        className={[
-          'fixed lg:static inset-y-0 left-0 z-30',
-          'bg-[#141414] border-r border-[#2a2a2a]',
-          'flex flex-col shrink-0',
-          'transition-all duration-300 ease-in-out',
-          'lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-          sidebarCollapsed ? 'w-64 lg:w-[68px]' : 'w-64',
-        ].join(' ')}
+        className={`
+          fixed lg:static inset-y-0 left-0 z-30
+          bg-[#141414] border-r border-[#2a2a2a]
+          flex flex-col shrink-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+        `}
+        style={{
+          // sidebarCollapsed is only set to true via desktop button (lg:block),
+          // so mobile always sees EXPANDED_W naturally.
+          width: sidebarCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
+          transition: `width ${DURATION} ${EASING}, transform ${DURATION} ${EASING}`,
+        }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-[#2a2a2a] overflow-hidden min-h-[72px]">
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-[#2a2a2a] overflow-hidden shrink-0" style={{ minHeight: '72px' }}>
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shrink-0">
             <Scale className="w-5 h-5 text-white" />
           </div>
 
-          {/* Title text — hidden on desktop when collapsed */}
-          <div className={`flex-1 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-            <h1 className="font-playfair text-sm font-bold text-[#f5f5f5] leading-tight whitespace-nowrap">
-              MSK Consultation
-            </h1>
-            <p className="text-[10px] text-[#a0a0a0] leading-tight whitespace-nowrap">
-              Sistema Jurídico
-            </p>
+          {/* Animated title */}
+          <div
+            className="overflow-hidden whitespace-nowrap"
+            style={{
+              maxWidth: sidebarCollapsed ? '0' : `${EXPANDED_W}px`,
+              opacity: sidebarCollapsed ? 0 : 1,
+              transition: `max-width ${DURATION} ${EASING}, opacity 200ms ease`,
+              flex: '1 1 0%',
+            }}
+          >
+            <p className="font-playfair text-sm font-bold text-[#f5f5f5] leading-tight">MSK Consultation</p>
+            <p className="text-[10px] text-[#a0a0a0] leading-tight">Sistema Jurídico</p>
           </div>
 
-          {/* Mobile close button */}
+          {/* Mobile close */}
           <button
-            className={`ml-auto lg:hidden text-[#a0a0a0] hover:text-[#f5f5f5] shrink-0 ${sidebarCollapsed ? 'hidden' : ''}`}
+            className="ml-auto lg:hidden text-[#a0a0a0] hover:text-[#f5f5f5] shrink-0"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="w-5 h-5" />
@@ -110,7 +124,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 overflow-y-auto space-y-0.5">
+        <nav className="flex-1 px-2 py-4 overflow-y-auto overflow-x-hidden space-y-0.5">
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const active = currentPage === item.key;
@@ -120,49 +134,47 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                 title={sidebarCollapsed ? item.label : undefined}
                 onClick={() => { onNavigate(item.key); setSidebarOpen(false); }}
                 className={[
-                  'w-full flex items-center gap-3 rounded-xl text-sm font-medium',
-                  'transition-colors duration-150 group relative',
-                  sidebarCollapsed
-                    ? 'lg:justify-center lg:px-2 px-3 py-2.5'
-                    : 'px-3 py-2.5',
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium',
+                  'transition-colors duration-150 group relative border',
                   active
-                    ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
-                    : 'text-[#a0a0a0] hover:text-white hover:bg-white/5 border border-transparent',
+                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                    : 'text-[#a0a0a0] hover:text-white hover:bg-white/5 border-transparent',
                 ].join(' ')}
+                style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}
               >
-                {/* Icon */}
+                {/* Icon + collapsed dot badge */}
                 <span className="relative shrink-0">
                   <Icon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-[#505050] group-hover:text-[#a0a0a0]'}`} />
-                  {/* Red dot on icon when collapsed + avisos badge */}
                   {sidebarCollapsed && item.key === 'avisos' && naoLidos > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full hidden lg:block" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
                   )}
                 </span>
 
-                {/* Label row — hidden on desktop when collapsed */}
-                {!sidebarCollapsed && (
-                  <>
-                    <span className="flex-1 text-left truncate">{item.label}</span>
-                    {item.key === 'avisos' && naoLidos > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 shrink-0">
-                        {naoLidos > 9 ? '9+' : naoLidos}
-                      </span>
-                    )}
-                    {active && <ChevronRight className="w-3 h-3 text-amber-400 shrink-0" />}
-                  </>
-                )}
+                {/* Animated label + extras */}
+                <span
+                  className="overflow-hidden whitespace-nowrap flex items-center gap-2 shrink-0"
+                  style={{
+                    maxWidth: sidebarCollapsed ? '0' : '200px',
+                    opacity: sidebarCollapsed ? 0 : 1,
+                    transition: `max-width ${DURATION} ${EASING}, opacity 180ms ease`,
+                    pointerEvents: sidebarCollapsed ? 'none' : 'auto',
+                  }}
+                >
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.key === 'avisos' && naoLidos > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                      {naoLidos > 9 ? '9+' : naoLidos}
+                    </span>
+                  )}
+                  {active && <ChevronRight className="w-3 h-3 text-amber-400 shrink-0" />}
+                </span>
 
-                {/* Label row on mobile when collapsed (sidebarCollapsed=true but mobile shows full) */}
+                {/* Hover tooltip (desktop collapsed only) */}
                 {sidebarCollapsed && (
-                  <span className="flex-1 text-left truncate lg:hidden">{item.label}</span>
-                )}
-
-                {/* Tooltip on desktop collapsed */}
-                {sidebarCollapsed && (
-                  <span className="absolute left-full ml-2 px-2.5 py-1.5 bg-[#2a2a2a] text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 hidden lg:block shadow-lg">
+                  <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-[#252525] border border-[#333] text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 shadow-lg hidden lg:flex items-center gap-2">
                     {item.label}
                     {item.key === 'avisos' && naoLidos > 0 && (
-                      <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1">
+                      <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                         {naoLidos}
                       </span>
                     )}
@@ -174,18 +186,25 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         </nav>
 
         {/* User info */}
-        <div className="border-t border-[#2a2a2a] px-2 py-3">
-          <div
-            className={`flex items-center gap-3 px-2 py-2 rounded-lg bg-[#1e1e1e] ${
-              sidebarCollapsed ? 'lg:flex-col lg:gap-2 lg:px-1 lg:py-2' : ''
-            }`}
-            title={sidebarCollapsed ? user?.nome : undefined}
-          >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+        <div className="border-t border-[#2a2a2a] px-2 py-3 shrink-0">
+          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-[#1e1e1e]">
+            <div
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-500/30 flex items-center justify-center shrink-0"
+              title={sidebarCollapsed ? user?.nome : undefined}
+            >
               <UserCircle className="w-5 h-5 text-amber-400" />
             </div>
-            {/* Name / role — hidden on desktop when collapsed */}
-            <div className={`flex-1 min-w-0 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+
+            {/* Animated name / role */}
+            <div
+              className="overflow-hidden whitespace-nowrap min-w-0"
+              style={{
+                maxWidth: sidebarCollapsed ? '0' : '160px',
+                opacity: sidebarCollapsed ? 0 : 1,
+                transition: `max-width ${DURATION} ${EASING}, opacity 180ms ease`,
+                flex: '1 1 0%',
+              }}
+            >
               <p className="text-xs font-medium text-[#f5f5f5] truncate">
                 {user?.nome.split(' ')[0]} {user?.nome.split(' ')[1]}
               </p>
@@ -193,6 +212,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                 {roleLabels[user?.role || 'assistente']}
               </p>
             </div>
+
             <button
               onClick={logout}
               title="Sair"
@@ -207,14 +227,14 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         <div className="border-t border-[#2a2a2a] p-2 hidden lg:block shrink-0">
           <button
             onClick={() => setSidebarCollapsed(c => !c)}
-            className="w-full flex items-center justify-center py-2 rounded-lg text-[#505050] hover:text-amber-400 hover:bg-white/5 transition-colors"
+            className="w-full flex items-center justify-center py-2 rounded-lg text-[#505050] hover:text-amber-400 hover:bg-white/5 transition-colors overflow-hidden"
             title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {sidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 shrink-0" />
             ) : (
-              <span className="flex items-center gap-2 text-xs">
-                <ChevronLeft className="w-4 h-4" />
+              <span className="flex items-center gap-2 text-xs whitespace-nowrap">
+                <ChevronLeft className="w-4 h-4 shrink-0" />
                 Recolher
               </span>
             )}

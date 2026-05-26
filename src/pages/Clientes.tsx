@@ -174,8 +174,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center overflow-y-auto py-6 px-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl max-h-[88vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">
@@ -186,7 +186,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           {/* Tipo de pessoa */}
           <div className="flex gap-3">
             {(['PF', 'PJ'] as TipoPessoa[]).map(t => (
@@ -418,16 +418,17 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
             <textarea className={`${inputClass} resize-none`} rows={2} value={form.observacoes} onChange={e => set('observacoes', e.target.value)} placeholder="Observações sobre o cliente..." />
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2 border-t border-[#2a2a2a]">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium transition-colors">
-              Cancelar
-            </button>
-            <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20">
-              {isEdit ? 'Salvar Alterações' : 'Cadastrar Cliente'}
-            </button>
-          </div>
         </form>
+
+        {/* Sticky footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a] shrink-0">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" form="cliente-form" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20">
+            {isEdit ? 'Salvar Alterações' : 'Cadastrar Cliente'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -81,13 +81,13 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center overflow-y-auto py-6 px-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[88vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <form id="honorario-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           {/* Tipo */}
           <div>
             <label className={labelClass}>Tipo *</label>
@@ -164,13 +164,15 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
             <textarea className={`${inputClass} resize-none`} rows={2} value={form.observacoes} onChange={e => set('observacoes', e.target.value)} />
           </div>
 
-          <div className="flex gap-3 pt-2 border-t border-[#2a2a2a]">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>
-            <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-amber-500/20">
-              {isEdit ? 'Salvar' : 'Registrar'}
-            </button>
-          </div>
         </form>
+
+        {/* Sticky footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a] shrink-0">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>
+          <button type="submit" form="honorario-form" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-amber-500/20">
+            {isEdit ? 'Salvar' : 'Registrar'}
+          </button>
+        </div>
       </div>
     </div>
   );
