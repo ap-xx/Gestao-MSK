@@ -33,7 +33,9 @@ export async function consultarCEP(cep: string): Promise<ViaCEPResponse> {
 }
 
 // ─── DataJud CNJ ──────────────────────────────────────────────
-const DATAJUD_API_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
+const DATAJUD_API_KEY =
+  (import.meta.env?.VITE_DATAJUD_API_KEY as string) ??
+  'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
 
 export const TRIBUNAIS: Record<string, { nome: string; url: string }> = {
   // Superiores
@@ -225,22 +227,15 @@ export function formatTelefone(tel: string): string {
 export function validarCNPJ(cnpj: string): boolean {
   const n = cnpj.replace(/\D/g, '');
   if (n.length !== 14 || /^(\d)\1+$/.test(n)) return false;
-  let soma = 0;
-  let pos = n.length - 7;
-  for (let i = n.length; i >= 1; i--) {
-    soma += parseInt(n[n.length - i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
-  if (resultado !== parseInt(n[12])) return false;
-  soma = 0;
-  pos = n.length - 6;
-  for (let i = n.length; i >= 1; i--) {
-    soma += parseInt(n[n.length - i]) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
-  return resultado === parseInt(n[13]);
+  const calc = (digits: string, weights: number[]): number => {
+    const sum = digits.split('').reduce((acc, d, i) => acc + parseInt(d) * weights[i], 0);
+    const rem = sum % 11;
+    return rem < 2 ? 0 : 11 - rem;
+  };
+  const d1 = calc(n.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  if (d1 !== parseInt(n[12])) return false;
+  const d2 = calc(n.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return d2 === parseInt(n[13]);
 }
 
 export function validarCPF(cpf: string): boolean {

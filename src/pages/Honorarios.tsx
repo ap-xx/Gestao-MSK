@@ -5,11 +5,8 @@ import {
 } from 'lucide-react';
 import { LancamentosDB, ClientesDB, generateId } from '../data/db';
 import { useToast } from '../context/ToastContext';
+import { formatCurrency } from '../utils/cn';
 import type { Lancamento, TipoLancamento, StatusPagamento } from '../types';
-
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-}
 
 const STATUS_STYLES: Record<StatusPagamento, string> = {
   pago: 'bg-green-500/15 text-green-400 border-green-500/30',

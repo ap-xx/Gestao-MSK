@@ -9,12 +9,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ClientesDB, ContratosDB, ProcessosDB, LancamentosDB, AvisosDB } from '../data/db';
+import { formatCurrency } from '../utils/cn';
 
 const CHART_COLORS = ['#f59e0b', '#d97706', '#92400e', '#78350f', '#fbbf24', '#fcd34d'];
-
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-}
 
 function KPICard({ icon: Icon, label, value, sub, color, delta, positivo }: {
   icon: React.ComponentType<{ className?: string }>;
@@ -73,11 +70,19 @@ export default function Dashboard() {
   const avisos = AvisosDB.getAll().filter(a => !a.lido);
 
   const kpis = useMemo(() => {
+    const now = new Date();
+    const curM = now.getMonth();
+    const curY = now.getFullYear();
+
     const ativos = clientes.filter(c => c.status === 'ativo').length;
     const contratosAtivos = contratos.filter(c => c.status === 'ativo').length;
     const processosAtivos = processos.filter(p => p.status === 'ativo').length;
     const recebidoMes = lancamentos
-      .filter(l => l.tipo === 'recebimento' && l.status === 'pago')
+      .filter(l => {
+        if (l.tipo !== 'recebimento' || l.status !== 'pago' || !l.dataPagamento) return false;
+        const d = new Date(l.dataPagamento);
+        return d.getMonth() === curM && d.getFullYear() === curY;
+      })
       .reduce((s, l) => s + l.valor, 0);
     const aReceber = lancamentos
       .filter(l => l.tipo === 'a_receber' && l.status === 'pendente')
@@ -86,15 +91,33 @@ export default function Dashboard() {
     return { ativos, contratosAtivos, processosAtivos, recebidoMes, aReceber };
   }, [clientes, contratos, processos, lancamentos]);
 
-  // Dados gráfico de área (6 meses)
-  const chartData = [
-    { mes: 'Fev', recebido: 32000, previsto: 40000 },
-    { mes: 'Mar', recebido: 45000, previsto: 42000 },
-    { mes: 'Abr', recebido: 38000, previsto: 45000 },
-    { mes: 'Mai', recebido: 52000, previsto: 48000 },
-    { mes: 'Jun', recebido: 61500, previsto: 55000 },
-    { mes: 'Jul', recebido: 14500, previsto: 58000 },
-  ];
+  const mesAtualLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  // Dados gráfico de área (6 meses reais)
+  const chartData = useMemo(() => {
+    const now = new Date();
+    const previstoPorMes = contratos
+      .filter(c => c.status === 'ativo' && c.valorMensal)
+      .reduce((s, c) => s + (c.valorMensal ?? 0), 0);
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const m = d.getMonth();
+      const y = d.getFullYear();
+      const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const recebido = lancamentos
+        .filter(l => {
+          if (l.tipo !== 'recebimento' || l.status !== 'pago' || !l.dataPagamento) return false;
+          const dp = new Date(l.dataPagamento);
+          return dp.getMonth() === m && dp.getFullYear() === y;
+        })
+        .reduce((s, l) => s + l.valor, 0);
+      return {
+        mes: mes.charAt(0).toUpperCase() + mes.slice(1),
+        recebido,
+        previsto: previstoPorMes,
+      };
+    });
+  }, [lancamentos, contratos]);
 
   // Dados pizza por área
   const areaData = useMemo(() => {
@@ -168,7 +191,7 @@ export default function Dashboard() {
           <div className="text-right">
             <p className="text-xs text-[#505050] mb-1">Resumo do mês</p>
             <p className="text-2xl font-bold text-amber-400">{formatCurrency(kpis.recebidoMes)}</p>
-            <p className="text-xs text-[#a0a0a0]">recebido em Julho/2025</p>
+            <p className="text-xs text-[#a0a0a0]">recebido em {mesAtualLabel}</p>
           </div>
         </div>
       </div>

@@ -266,7 +266,7 @@ export default function Configuracoes() {
                       let val = e.target.value.replace(/\D/g, '');
                       if (val.length <= 8) setEnd('cep', formatCEP(val));
                     }}
-                    onBlur={buscarCEP}
+                    onBlur={() => { if ((escritorio.endereco?.cep || '').replace(/\D/g, '').length === 8) buscarCEP(); }}
                     placeholder="00000-000"
                     maxLength={9}
                   />

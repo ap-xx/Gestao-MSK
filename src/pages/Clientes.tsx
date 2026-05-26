@@ -4,7 +4,7 @@ import {
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
 } from 'lucide-react';
 import { ClientesDB, generateId } from '../data/db';
-import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone } from '../services/apis';
+import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import type { Cliente, TipoPessoa, StatusCliente } from '../types';
 
@@ -68,6 +68,11 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
     const cnpjLimpo = form.cnpj.replace(/\D/g, '');
     if (cnpjLimpo.length !== 14) {
       showToast('warning', 'CNPJ inválido', 'Digite os 14 dígitos do CNPJ.');
+      return;
+    }
+    if (!validarCNPJ(form.cnpj)) {
+      showToast('warning', 'CNPJ inválido', 'Os dígitos verificadores não são válidos.');
+      setCnpjStatus('error');
       return;
     }
     setLoadingCNPJ(true);
@@ -320,7 +325,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                       let val = e.target.value.replace(/\D/g, '');
                       if (val.length <= 8) set('cep', formatCEP(val));
                     }}
-                    onBlur={buscarCEP}
+                    onBlur={() => { if (form.cep.replace(/\D/g, '').length === 8) buscarCEP(); }}
                     placeholder="00000-000"
                     maxLength={9}
                   />

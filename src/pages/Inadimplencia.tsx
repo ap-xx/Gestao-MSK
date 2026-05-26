@@ -5,11 +5,8 @@ import {
 } from 'lucide-react';
 import { LancamentosDB, ClientesDB } from '../data/db';
 import { useToast } from '../context/ToastContext';
+import { formatCurrency } from '../utils/cn';
 import type { Cliente, Lancamento } from '../types';
-
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-}
 
 function diasAtraso(dataVencimento: string): number {
   return Math.ceil((Date.now() - new Date(dataVencimento).getTime()) / (1000 * 60 * 60 * 24));
@@ -40,9 +37,27 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
     carta: `Notificação Extrajudicial\n\nAo(À) ${cliente.nome},\n\nPor meio da presente, notificamos V.Sa. acerca de débito(s) em aberto, totalizando ${formatCurrency(totalDevido)}, com ${diasMaxAtraso} dias de inadimplência, referentes a honorários advocatícios conforme contrato firmado com este escritório.\n\nNo prazo de 5 (cinco) dias úteis a contar do recebimento desta notificação, rogamos que V.Sa. efetue a devida quitação, sob pena de adoção das medidas legais cabíveis.\n\nSão Paulo, ${new Date().toLocaleDateString('pt-BR')}\n\nMSK Consultation Advocacia`,
   };
 
-  function enviarNotificacao() {
-    // Simulação — em produção integraria com API de e-mail/WhatsApp
-    showToast('success', `Notificação enviada por ${canal}!`, `Para ${cliente.nome}`);
+  async function enviarNotificacao() {
+    const mensagem = mensagemCustom || mensagensPadrao[canal];
+
+    if (canal === 'email') {
+      const assunto = encodeURIComponent('Notificação de Honorários em Aberto — MSK Consultation');
+      const corpo = encodeURIComponent(mensagem);
+      window.location.href = `mailto:${cliente.email}?subject=${assunto}&body=${corpo}`;
+      showToast('success', 'Cliente de e-mail aberto!', `Para ${cliente.email}`);
+    } else if (canal === 'whatsapp') {
+      const tel = (cliente.celular || cliente.telefone).replace(/\D/g, '');
+      const texto = encodeURIComponent(mensagem);
+      window.open(`https://wa.me/55${tel}?text=${texto}`, '_blank', 'noopener,noreferrer');
+      showToast('success', 'WhatsApp aberto!', `Para ${cliente.nome}`);
+    } else {
+      try {
+        await navigator.clipboard.writeText(mensagem);
+        showToast('success', 'Texto da carta copiado!', 'Cole no Word ou editor de texto.');
+      } catch {
+        showToast('info', 'Copie o texto manualmente', 'Selecione o texto acima e use Ctrl+C.');
+      }
+    }
     onClose();
   }
 
@@ -141,6 +156,7 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
 export default function Inadimplencia() {
   const { showToast } = useToast();
   const [notifTarget, setNotifTarget] = useState<ClienteInadimplente | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const inadimplentes = useMemo(() => {
     const lancamentosVencidos = LancamentosDB.getAll().filter(
@@ -161,7 +177,7 @@ export default function Inadimplencia() {
       const diasMaxAtraso = Math.max(...lancamentos.map(l => diasAtraso(l.dataVencimento)));
       return { cliente, lancamentos, totalDevido, diasMaxAtraso };
     }).filter(Boolean) as ClienteInadimplente[];
-  }, []);
+  }, [refreshKey]);
 
   function regularizar(item: ClienteInadimplente) {
     if (!window.confirm(`Marcar todos os débitos de "${item.cliente.nome}" como pagos?`)) return;
@@ -169,8 +185,7 @@ export default function Inadimplencia() {
       LancamentosDB.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] });
     });
     showToast('success', 'Regularizado!', `${item.lancamentos.length} lançamento(s) de ${item.cliente.nome} marcados como pagos.`);
-    // Força re-render
-    window.location.reload();
+    setRefreshKey(k => k + 1);
   }
 
   const totalGeral = inadimplentes.reduce((s, i) => s + i.totalDevido, 0);

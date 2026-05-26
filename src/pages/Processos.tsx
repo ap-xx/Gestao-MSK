@@ -78,11 +78,21 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
       }
       const hit = result.hits.hits[0]._source;
       setDadosDataJud(hit);
+
+      const ourPolo = form.polo.toUpperCase();
+      const parteAdversaItem = hit.partes?.find(p => p.polo !== ourPolo);
+      const parteAdversaNome = parteAdversaItem?.nome;
+      const advogadoAdversoNome = parteAdversaItem?.advogados?.[0]?.nome;
+
       setForm(prev => ({
         ...prev,
         vara: hit.orgaoJulgador?.nome || prev.vara,
+        parteAdversa: parteAdversaNome || prev.parteAdversa,
+        advogadoAdverso: advogadoAdversoNome || prev.advogadoAdverso,
       }));
-      showToast('success', 'Dados obtidos do DataJud!', `Última atualização: ${new Date(hit.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR')}`);
+
+      const extra = parteAdversaNome ? ` · Parte adversa: ${parteAdversaNome}` : '';
+      showToast('success', 'Dados obtidos do DataJud!', `Atualizado: ${new Date(hit.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR')}${extra}`);
     } catch (err: any) {
       showToast('error', 'Erro DataJud', err.message);
     } finally {
