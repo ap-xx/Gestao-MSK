@@ -67,16 +67,11 @@ export default function Sidebar() {
               <li key={item.key}>
                 <button
                   onClick={() => setActiveModule(item.key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative group
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 relative group border-l-2
                     ${isActive
-                      ? 'text-amber-400'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'text-amber-400 bg-gradient-to-r from-amber-500/20 to-amber-500/5 border-amber-400'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5 border-transparent'
                     }`}
-                  style={isActive ? {
-                    background: 'linear-gradient(90deg, rgba(217,119,6,0.2), rgba(217,119,6,0.05))',
-                    borderLeft: '3px solid #f59e0b',
-                    paddingLeft: '9px',
-                  } : undefined}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
                   <span className="shrink-0">{item.icon}</span>

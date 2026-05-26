@@ -157,13 +157,13 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center overflow-y-auto py-6 px-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl max-h-[88vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Processo' : 'Novo Processo'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           {/* Número CNJ + DataJud */}
           <div>
             <label className={labelClass}>Número CNJ *</label>
