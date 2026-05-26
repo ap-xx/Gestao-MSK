@@ -1,15 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
   Users, FileText, Gavel, TrendingUp, TrendingDown, AlertTriangle,
-  Calendar, DollarSign, Clock,
+  Calendar, DollarSign, Clock, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { ClientesDB, ContratosDB, ProcessosDB, LancamentosDB, AvisosDB } from '../data/db';
+import { clientesApi, contratosApi, processosApi, lancamentosApi, avisosApi } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
+import type { Cliente, Contrato, Processo, Lancamento, Aviso } from '../types';
 
 const CHART_COLORS = ['#f59e0b', '#d97706', '#92400e', '#78350f', '#fbbf24', '#fcd34d'];
 
@@ -60,14 +62,42 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
-  const clientes = ClientesDB.getAll();
-  const contratos = ContratosDB.getAll();
-  const processos = ProcessosDB.getAll();
-  const lancamentos = LancamentosDB.getAll();
-  const avisos = AvisosDB.getAll().filter(a => !a.lido);
+  const [loading, setLoading] = useState(true);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
+  const [processos, setProcessos] = useState<Processo[]>([]);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [avisos, setAvisos] = useState<Aviso[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [c, ct, p, l, av] = await Promise.all([
+        clientesApi.getAll(),
+        contratosApi.getAll(),
+        processosApi.getAll(),
+        lancamentosApi.getAll(),
+        avisosApi.getAll(),
+      ]);
+      setClientes(c);
+      setContratos(ct);
+      setProcessos(p);
+      setLancamentos(l);
+      setAvisos(av.filter(a => !a.lido));
+    } catch {
+      showToast('error', 'Erro ao carregar dados do dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const kpis = useMemo(() => {
     const now = new Date();
@@ -171,6 +201,14 @@ export default function Dashboard() {
     media: 'text-blue-400',
     baixa: 'text-green-400',
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in-up">

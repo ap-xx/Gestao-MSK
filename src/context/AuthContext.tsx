@@ -63,11 +63,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const updateUser = useCallback(async (updates: Partial<User>) => {
+  const updateUser = useCallback((updates: Partial<User>) => {
     if (!user) return;
     const updated = { ...user, ...updates };
-    const { UsersDB } = await import('../data/db');
-    UsersDB.update(user.id, updates);
     SessionDB.set(updated);
     setUser(updated);
   }, [user]);

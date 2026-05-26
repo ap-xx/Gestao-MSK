@@ -1,17 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, Gavel, Search, Edit2, Trash2, Eye,
-  Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight,
+  Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
 } from 'lucide-react';
-import { ProcessosDB, ClientesDB, generateId } from '../data/db';
+import { processosApi, clientesApi } from '../services/api';
 import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { DateInput } from '../components/ui/Input';
-import type { Processo, FaseProcessual, PoloProcessual } from '../types';
+import { LoadingTable } from '../components/ui/LoadingTable';
+import { Pagination } from '../components/ui/Pagination';
+import { useSort } from '../hooks/useSort';
+import { usePagination } from '../hooks/usePagination';
+import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente } from '../types';
 
 const FASES: FaseProcessual[] = ['Inicial', 'Conhecimento', 'Instrução', 'Sentença', 'Recursal', 'Execução', 'Transitado em Julgado', 'Arquivado'];
 const POLOS: PoloProcessual[] = ['Ativo', 'Passivo', 'Terceiro'];
 const AREAS = ['Cível', 'Trabalhista', 'Criminal', 'Empresarial', 'Tributário', 'Imobiliário', 'Família e Sucessões', 'Previdenciário', 'Administrativo', 'Outro'];
+const TIPOS_ANDAMENTO: Andamento['tipo'][] = ['petição', 'decisão', 'despacho', 'certidão', 'audiência', 'recurso', 'outro'];
 
 const FASE_COLORS: Record<string, string> = {
   'Inicial': 'text-blue-400 bg-blue-500/10',
@@ -24,18 +30,111 @@ const FASE_COLORS: Record<string, string> = {
   'Arquivado': 'text-gray-400 bg-gray-500/10',
 };
 
+const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
+const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
+// ─── Andamentos section ────────────────────────────────────────
+function AndamentosSection({ processoId, andamentos, onAdded }: {
+  processoId: string;
+  andamentos: Andamento[];
+  onAdded: () => void;
+}) {
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ tipo: 'petição' as Andamento['tipo'], descricao: '', data: new Date().toISOString().split('T')[0] });
+
+  async function handleAdd() {
+    if (!form.descricao.trim()) { showToast('warning', 'Informe a descrição'); return; }
+    try {
+      await processosApi.addAndamento(processoId, {
+        tipo: form.tipo,
+        descricao: form.descricao,
+        data: form.data,
+        usuarioNome: user?.nome || 'Sistema',
+      });
+      setForm({ tipo: 'petição', descricao: '', data: new Date().toISOString().split('T')[0] });
+      setAdding(false);
+      onAdded();
+      showToast('success', 'Andamento registrado!');
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
+  }
+
+  return (
+    <div className="border-t border-[#2a2a2a] pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-[#505050] font-medium uppercase tracking-wider">Andamentos ({andamentos.length})</p>
+        <button
+          onClick={() => setAdding(a => !a)}
+          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+        >
+          <Plus className="w-3 h-3" /> Adicionar
+        </button>
+      </div>
+
+      {adding && (
+        <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg p-3 mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelClass}>Tipo</label>
+              <select className={inputClass} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Andamento['tipo'] }))}>
+                {TIPOS_ANDAMENTO.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Data</label>
+              <DateInput className={inputClass} value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>Descrição</label>
+            <textarea
+              className={`${inputClass} resize-none`}
+              rows={2}
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              placeholder="Descreva o andamento processual..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setAdding(false)} className="flex-1 py-1.5 text-xs bg-[#141414] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg">Cancelar</button>
+            <button onClick={handleAdd} className="flex-1 py-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-white rounded-lg font-medium">Registrar</button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {andamentos.length === 0 ? (
+          <p className="text-xs text-[#505050] text-center py-4">Nenhum andamento registrado</p>
+        ) : (
+          [...andamentos].reverse().map(a => (
+            <div key={a.id} className="bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-amber-400 font-medium">{new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                <span className="text-[#505050] bg-[#252525] px-1.5 py-0.5 rounded">{a.tipo}</span>
+                <span className="text-[#505050] ml-auto">{a.usuarioNome}</span>
+              </div>
+              <p className="text-[#a0a0a0] leading-relaxed">{a.descricao}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Modal ─────────────────────────────────────────────────────
 interface ModalProps {
   processo?: Processo;
+  clientes: Cliente[];
   onClose: () => void;
   onSave: () => void;
 }
 
-function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
+function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
-  const clientes = ClientesDB.getAll();
   const isEdit = !!processo;
   const tribunaisLista = Object.entries(TRIBUNAIS);
 
@@ -79,19 +178,16 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
       }
       const hit = result.hits.hits[0]._source;
       setDadosDataJud(hit);
-
       const ourPolo = form.polo.toUpperCase();
-      const parteAdversaItem = hit.partes?.find(p => p.polo !== ourPolo);
+      const parteAdversaItem = hit.partes?.find((p: any) => p.polo !== ourPolo);
       const parteAdversaNome = parteAdversaItem?.nome;
       const advogadoAdversoNome = parteAdversaItem?.advogados?.[0]?.nome;
-
       setForm(prev => ({
         ...prev,
         vara: hit.orgaoJulgador?.nome || prev.vara,
         parteAdversa: parteAdversaNome || prev.parteAdversa,
         advogadoAdverso: advogadoAdversoNome || prev.advogadoAdverso,
       }));
-
       const extra = parteAdversaNome ? ` · Parte adversa: ${parteAdversaNome}` : '';
       showToast('success', 'Dados obtidos do DataJud!', `Atualizado: ${new Date(hit.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR')}${extra}`);
     } catch (err: any) {
@@ -103,12 +199,7 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
 
   function addAudiencia() {
     if (!form.audData) { showToast('warning', 'Informe a data da audiência'); return; }
-    setAudiencias(prev => [...prev, {
-      data: form.audData,
-      hora: form.audHora,
-      tipo: form.audTipo,
-      local: form.audLocal,
-    }]);
+    setAudiencias(prev => [...prev, { data: form.audData, hora: form.audHora, tipo: form.audTipo, local: form.audLocal }]);
     setForm(prev => ({ ...prev, audData: '', audHora: '', audLocal: '' }));
   }
 
@@ -116,15 +207,14 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
     setAudiencias(prev => prev.filter((_, idx) => idx !== i));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.clienteId) { showToast('warning', 'Selecione um cliente'); return; }
-    const cliente = ClientesDB.getById(form.clienteId);
+    const cliente = clientes.find(c => c.id === form.clienteId);
     const now = new Date().toISOString();
     const prox = audiencias.filter(a => new Date(a.data) >= new Date()).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())[0]?.data;
 
-    const saved: Processo = {
-      id: processo?.id || generateId(),
+    const payload: Omit<Processo, 'id'> = {
       numeroCNJ: form.numeroCNJ,
       clienteId: form.clienteId,
       clienteNome: cliente?.nome || '',
@@ -146,14 +236,16 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
       criadoEm: processo?.criadoEm || now,
       atualizadoEm: now,
     };
-    if (isEdit) ProcessosDB.update(saved.id, saved);
-    else ProcessosDB.insert(saved);
-    showToast('success', isEdit ? 'Processo atualizado!' : 'Processo cadastrado!', saved.numeroCNJ);
-    onSave();
-  }
 
-  const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
-  const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
+    try {
+      if (isEdit) await processosApi.update(processo.id, payload);
+      else await processosApi.create(payload);
+      showToast('success', isEdit ? 'Processo atualizado!' : 'Processo cadastrado!', payload.numeroCNJ);
+      onSave();
+    } catch (err: any) {
+      showToast('error', 'Erro ao salvar', err.message);
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -168,28 +260,11 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
           <div>
             <label className={labelClass}>Número CNJ *</label>
             <div className="flex gap-2">
-              <input
-                className={inputClass}
-                value={form.numeroCNJ}
-                onChange={e => set('numeroCNJ', e.target.value)}
-                required
-                placeholder="0000000-00.0000.0.00.0000"
-              />
-              <select
-                className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm min-w-28"
-                value={form.tribunalAlias}
-                onChange={e => set('tribunalAlias', e.target.value)}
-              >
-                {tribunaisLista.map(([alias]) => (
-                  <option key={alias} value={alias}>{alias.toUpperCase()}</option>
-                ))}
+              <input className={inputClass} value={form.numeroCNJ} onChange={e => set('numeroCNJ', e.target.value)} required placeholder="0000000-00.0000.0.00.0000" />
+              <select className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm min-w-28" value={form.tribunalAlias} onChange={e => set('tribunalAlias', e.target.value)}>
+                {tribunaisLista.map(([alias]) => <option key={alias} value={alias}>{alias.toUpperCase()}</option>)}
               </select>
-              <button
-                type="button"
-                onClick={consultarDataJud}
-                disabled={consultandoDataJud}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-              >
+              <button type="button" onClick={consultarDataJud} disabled={consultandoDataJud} className="flex items-center gap-2 px-4 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
                 {consultandoDataJud ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 DataJud
               </button>
@@ -197,7 +272,6 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
             <p className="text-xs text-[#505050] mt-1">Use "DataJud" para buscar dados atualizados no CNJ.</p>
           </div>
 
-          {/* DataJud resultado */}
           {dadosDataJud && (
             <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-xs space-y-1">
               <p className="font-semibold text-blue-400 mb-2">✓ Dados do DataJud</p>
@@ -329,8 +403,17 @@ function ProcessoModal({ processo, onClose, onSave }: ModalProps) {
 }
 
 // ─── Detalhe Modal ─────────────────────────────────────────────
-function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: () => void }) {
+function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo; onClose: () => void; onRefresh: (id: string) => void }) {
   const [showDataJud, setShowDataJud] = useState(false);
+  const [currentProcesso, setCurrentProcesso] = useState(processo);
+
+  const handleAndamentoAdded = async () => {
+    try {
+      const updated = await processosApi.getById(currentProcesso.id);
+      setCurrentProcesso(updated);
+      onRefresh(currentProcesso.id);
+    } catch { /* silencioso */ }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -338,29 +421,29 @@ function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: (
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] sticky top-0 bg-[#141414]">
           <div>
             <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Detalhes do Processo</h2>
-            <p className="text-xs text-amber-400 font-mono">{processo.numeroCNJ}</p>
+            <p className="text-xs text-amber-400 font-mono">{currentProcesso.numeroCNJ}</p>
           </div>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-4">
-            <div><p className="text-xs text-[#505050]">Cliente</p><p className="text-[#f5f5f5] font-medium">{processo.clienteNome}</p></div>
-            <div><p className="text-xs text-[#505050]">Tribunal</p><p className="text-[#f5f5f5]">{processo.tribunal}</p></div>
-            <div><p className="text-xs text-[#505050]">Vara / Juízo</p><p className="text-[#f5f5f5]">{processo.vara}</p></div>
-            <div><p className="text-xs text-[#505050]">Área</p><p className="text-[#f5f5f5]">{processo.areaAtuacao}</p></div>
-            <div><p className="text-xs text-[#505050]">Fase</p><span className={`text-xs font-medium px-2 py-1 rounded-full ${FASE_COLORS[processo.fase]}`}>{processo.fase}</span></div>
-            <div><p className="text-xs text-[#505050]">Polo</p><p className="text-[#f5f5f5]">{processo.polo}</p></div>
-            <div><p className="text-xs text-[#505050]">Parte Adversa</p><p className="text-[#f5f5f5]">{processo.parteAdversa}</p></div>
-            {processo.advogadoAdverso && <div><p className="text-xs text-[#505050]">Advogado Adverso</p><p className="text-[#f5f5f5]">{processo.advogadoAdverso}</p></div>}
-            {processo.valorCausa && <div><p className="text-xs text-[#505050]">Valor da Causa</p><p className="text-[#f5f5f5]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(processo.valorCausa)}</p></div>}
+            <div><p className="text-xs text-[#505050]">Cliente</p><p className="text-[#f5f5f5] font-medium">{currentProcesso.clienteNome}</p></div>
+            <div><p className="text-xs text-[#505050]">Tribunal</p><p className="text-[#f5f5f5]">{currentProcesso.tribunal}</p></div>
+            <div><p className="text-xs text-[#505050]">Vara / Juízo</p><p className="text-[#f5f5f5]">{currentProcesso.vara}</p></div>
+            <div><p className="text-xs text-[#505050]">Área</p><p className="text-[#f5f5f5]">{currentProcesso.areaAtuacao}</p></div>
+            <div><p className="text-xs text-[#505050]">Fase</p><span className={`text-xs font-medium px-2 py-1 rounded-full ${FASE_COLORS[currentProcesso.fase]}`}>{currentProcesso.fase}</span></div>
+            <div><p className="text-xs text-[#505050]">Polo</p><p className="text-[#f5f5f5]">{currentProcesso.polo}</p></div>
+            <div><p className="text-xs text-[#505050]">Parte Adversa</p><p className="text-[#f5f5f5]">{currentProcesso.parteAdversa}</p></div>
+            {currentProcesso.advogadoAdverso && <div><p className="text-xs text-[#505050]">Advogado Adverso</p><p className="text-[#f5f5f5]">{currentProcesso.advogadoAdverso}</p></div>}
+            {currentProcesso.valorCausa && <div><p className="text-xs text-[#505050]">Valor da Causa</p><p className="text-[#f5f5f5]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentProcesso.valorCausa)}</p></div>}
           </div>
 
           {/* Audiências */}
-          {processo.audiencias.length > 0 && (
+          {currentProcesso.audiencias.length > 0 && (
             <div className="border-t border-[#2a2a2a] pt-4">
               <p className="text-xs text-[#505050] mb-2 font-medium">Audiências</p>
               <div className="space-y-2">
-                {processo.audiencias.map((a, i) => (
+                {currentProcesso.audiencias.map((a, i) => (
                   <div key={i} className="flex items-center gap-3 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs">
                     <Calendar className="w-3 h-3 text-amber-400" />
                     <span className="text-amber-400 font-medium">{new Date(a.data).toLocaleDateString('pt-BR')}</span>
@@ -373,8 +456,15 @@ function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: (
             </div>
           )}
 
+          {/* Andamentos */}
+          <AndamentosSection
+            processoId={currentProcesso.id}
+            andamentos={currentProcesso.andamentos || []}
+            onAdded={handleAndamentoAdded}
+          />
+
           {/* DataJud */}
-          {processo.dadosDataJud && (
+          {currentProcesso.dadosDataJud && (
             <div className="border-t border-[#2a2a2a] pt-4">
               <button
                 onClick={() => setShowDataJud(!showDataJud)}
@@ -385,9 +475,9 @@ function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: (
               </button>
               {showDataJud && (
                 <div className="mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-1.5 text-xs text-[#a0a0a0]">
-                  <div><span className="text-[#505050]">Classe:</span> {processo.dadosDataJud.classe?.nome}</div>
-                  <div><span className="text-[#505050]">Grau:</span> {processo.dadosDataJud.grau}</div>
-                  {processo.dadosDataJud.movimentos?.map((m: any, i: number) => (
+                  <div><span className="text-[#505050]">Classe:</span> {currentProcesso.dadosDataJud.classe?.nome}</div>
+                  <div><span className="text-[#505050]">Grau:</span> {currentProcesso.dadosDataJud.grau}</div>
+                  {currentProcesso.dadosDataJud.movimentos?.map((m: any, i: number) => (
                     <div key={i}>• {m.nome} — {new Date(m.dataHora).toLocaleDateString('pt-BR')}</div>
                   ))}
                 </div>
@@ -395,10 +485,10 @@ function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: (
             </div>
           )}
 
-          {processo.observacoes && (
+          {currentProcesso.observacoes && (
             <div className="border-t border-[#2a2a2a] pt-4">
               <p className="text-xs text-[#505050] mb-1">Observações</p>
-              <p className="text-[#a0a0a0]">{processo.observacoes}</p>
+              <p className="text-[#a0a0a0]">{currentProcesso.observacoes}</p>
             </div>
           )}
         </div>
@@ -410,7 +500,9 @@ function ProcessoDetalhe({ processo, onClose }: { processo: Processo; onClose: (
 // ─── Página Principal ─────────────────────────────────────────
 export default function Processos() {
   const { showToast } = useToast();
-  const [processos, setProcessos] = useState<Processo[]>(ProcessosDB.getAll());
+  const [processos, setProcessos] = useState<Processo[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterFase, setFilterFase] = useState('todos');
   const [filterArea, setFilterArea] = useState('todos');
@@ -418,7 +510,26 @@ export default function Processos() {
   const [editProcesso, setEditProcesso] = useState<Processo | undefined>();
   const [viewProcesso, setViewProcesso] = useState<Processo | null>(null);
 
-  const reload = () => setProcessos(ProcessosDB.getAll());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [p, c] = await Promise.all([processosApi.getAll(), clientesApi.getAll()]);
+      setProcessos(p);
+      setClientes(c);
+    } catch {
+      showToast('error', 'Erro', 'Não foi possível carregar processos');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const handleRefreshProcesso = useCallback((id: string) => {
+    processosApi.getById(id).then(updated => {
+      setProcessos(prev => prev.map(p => p.id === id ? updated : p));
+    }).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     return processos.filter(p => {
@@ -432,12 +543,23 @@ export default function Processos() {
     });
   }, [processos, search, filterFase, filterArea]);
 
-  function handleDelete(p: Processo) {
+  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
+  const pagination = usePagination(sorted, 15);
+
+  async function handleDelete(p: Processo) {
     if (!window.confirm(`Excluir processo "${p.numeroCNJ}"?`)) return;
-    ProcessosDB.remove(p.id);
-    reload();
-    showToast('info', 'Processo removido');
+    try {
+      await processosApi.remove(p.id);
+      await reload();
+      showToast('info', 'Processo removido');
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
   }
+
+  const SortIcon = ({ col }: { col: keyof Processo }) => (
+    <span className="ml-1 opacity-60">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+  );
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -484,15 +606,21 @@ export default function Processos() {
             <thead>
               <tr className="border-b border-[#2a2a2a]">
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Processo</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Cliente / Parte Adversa</th>
+                <th onClick={() => toggle('clienteNome')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Cliente / Parte Adversa <SortIcon col="clienteNome" />
+                </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Tribunal / Vara</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Fase</th>
+                <th onClick={() => toggle('fase')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Fase <SortIcon col="fase" />
+                </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Próx. Audiência</th>
                 <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e1e1e]">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <LoadingTable cols={6} />
+              ) : pagination.items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-[#505050]">
                     <Gavel className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -500,11 +628,16 @@ export default function Processos() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(p => (
+                pagination.items.map(p => (
                   <tr key={p.id} className="hover:bg-[#1a1a1a] transition-colors">
                     <td className="px-5 py-4">
                       <p className="font-mono text-amber-400 text-xs font-medium">{p.numeroCNJ}</p>
                       <p className="text-[#505050] text-xs mt-0.5">{p.areaAtuacao} · Polo {p.polo}</p>
+                      {(p.andamentos?.length ?? 0) > 0 && (
+                        <p className="text-[10px] text-blue-400 mt-0.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {p.andamentos!.length} andamento(s)
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-4 hidden md:table-cell">
                       <p className="text-sm text-[#f5f5f5] font-medium">{p.clienteNome}</p>
@@ -546,17 +679,23 @@ export default function Processos() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
 
       {modalOpen && (
         <ProcessoModal
           processo={editProcesso}
+          clientes={clientes}
           onClose={() => { setModalOpen(false); setEditProcesso(undefined); }}
           onSave={() => { reload(); setModalOpen(false); setEditProcesso(undefined); }}
         />
       )}
       {viewProcesso && (
-        <ProcessoDetalhe processo={viewProcesso} onClose={() => setViewProcesso(null)} />
+        <ProcessoDetalhe
+          processo={viewProcesso}
+          onClose={() => setViewProcesso(null)}
+          onRefresh={handleRefreshProcesso}
+        />
       )}
     </div>
   );

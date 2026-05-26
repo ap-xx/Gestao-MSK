@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   AlertTriangle, X, Mail, MessageCircle, FileText,
-  CheckCircle, Phone, Calendar, User, Building2,
+  CheckCircle, Phone, Calendar, User, Building2, Loader2,
 } from 'lucide-react';
-import { LancamentosDB, ClientesDB } from '../data/db';
+import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import type { Cliente, Lancamento } from '../types';
@@ -183,10 +183,27 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
 export default function Inadimplencia() {
   const { showToast } = useToast();
   const [notifTarget, setNotifTarget] = useState<ClienteInadimplente | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [l, c] = await Promise.all([lancamentosApi.getAll(), clientesApi.getAll()]);
+      setLancamentos(l);
+      setClientes(c);
+    } catch {
+      showToast('error', 'Erro', 'Não foi possível carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const inadimplentes = useMemo(() => {
-    const lancamentosVencidos = LancamentosDB.getAll().filter(
+    const lancamentosVencidos = lancamentos.filter(
       l => l.status === 'vencido' && l.tipo === 'a_receber' && l.clienteId
     );
 
@@ -197,22 +214,26 @@ export default function Inadimplencia() {
       porCliente[l.clienteId].push(l);
     });
 
-    return Object.entries(porCliente).map(([clienteId, lancamentos]) => {
-      const cliente = ClientesDB.getById(clienteId);
+    return Object.entries(porCliente).map(([clienteId, lans]) => {
+      const cliente = clientes.find(c => c.id === clienteId);
       if (!cliente) return null;
-      const totalDevido = lancamentos.reduce((s, l) => s + l.valor, 0);
-      const diasMaxAtraso = Math.max(...lancamentos.map(l => diasAtraso(l.dataVencimento)));
-      return { cliente, lancamentos, totalDevido, diasMaxAtraso };
+      const totalDevido = lans.reduce((s, l) => s + l.valor, 0);
+      const diasMaxAtraso = Math.max(...lans.map(l => diasAtraso(l.dataVencimento)));
+      return { cliente, lancamentos: lans, totalDevido, diasMaxAtraso };
     }).filter(Boolean) as ClienteInadimplente[];
-  }, [refreshKey]);
+  }, [lancamentos, clientes]);
 
-  function regularizar(item: ClienteInadimplente) {
+  async function regularizar(item: ClienteInadimplente) {
     if (!window.confirm(`Marcar todos os débitos de "${item.cliente.nome}" como pagos?`)) return;
-    item.lancamentos.forEach(l => {
-      LancamentosDB.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] });
-    });
-    showToast('success', 'Regularizado!', `${item.lancamentos.length} lançamento(s) de ${item.cliente.nome} marcados como pagos.`);
-    setRefreshKey(k => k + 1);
+    try {
+      await Promise.all(item.lancamentos.map(l =>
+        lancamentosApi.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] })
+      ));
+      showToast('success', 'Regularizado!', `${item.lancamentos.length} lançamento(s) de ${item.cliente.nome} marcados como pagos.`);
+      await reload();
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
   }
 
   const totalGeral = inadimplentes.reduce((s, i) => s + i.totalDevido, 0);
@@ -233,7 +254,11 @@ export default function Inadimplencia() {
         )}
       </div>
 
-      {inadimplentes.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        </div>
+      ) : inadimplentes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-[#505050]">
           <CheckCircle className="w-12 h-12 mb-3 text-green-500/50" />
           <h3 className="text-lg font-semibold text-[#a0a0a0] mb-1">Sem inadimplências!</h3>
@@ -244,7 +269,7 @@ export default function Inadimplencia() {
           {inadimplentes
             .sort((a, b) => b.diasMaxAtraso - a.diasMaxAtraso)
             .map(item => {
-              const { cliente, lancamentos, totalDevido, diasMaxAtraso } = item;
+              const { cliente, lancamentos: lans, totalDevido, diasMaxAtraso } = item;
               const urgente = diasMaxAtraso > 30;
               return (
                 <div
@@ -280,7 +305,7 @@ export default function Inadimplencia() {
                       <p className="text-[10px] text-[#505050]">Atraso</p>
                     </div>
                     <div className="text-center bg-[#1e1e1e] rounded-lg p-2">
-                      <p className="text-sm font-bold text-[#f5f5f5]">{lancamentos.length}</p>
+                      <p className="text-sm font-bold text-[#f5f5f5]">{lans.length}</p>
                       <p className="text-[10px] text-[#505050]">Parcelas</p>
                     </div>
                     <div className="text-center bg-[#1e1e1e] rounded-lg p-2">
@@ -291,7 +316,7 @@ export default function Inadimplencia() {
 
                   {/* Lançamentos */}
                   <div className="space-y-1.5 mb-4">
-                    {lancamentos.map(l => (
+                    {lans.map(l => (
                       <div key={l.id} className="flex items-center justify-between text-xs bg-[#1e1e1e] rounded px-2.5 py-1.5">
                         <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           <Calendar className="w-3 h-3 text-[#505050] shrink-0" />

@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { initializeDatabase } from './data/db';
+// initializeDatabase() removed — server now manages data
 import Login from './pages/Login';
 import Layout, { type PageKey } from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -10,11 +10,9 @@ import Processos from './pages/Processos';
 import Honorarios from './pages/Honorarios';
 import Inadimplencia from './pages/Inadimplencia';
 import Avisos from './pages/Avisos';
+import Agenda from './pages/Agenda';
 import Configuracoes from './pages/Configuracoes';
 import { useState } from 'react';
-
-// Inicializa o banco de dados local ao carregar
-initializeDatabase();
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -36,13 +34,14 @@ function AppContent() {
   }
 
   const pages: Record<PageKey, React.ReactNode> = {
-    dashboard: <Dashboard />,
-    clientes: <Clientes />,
-    contratos: <Contratos />,
-    processos: <Processos />,
-    honorarios: <Honorarios />,
+    dashboard:     <Dashboard />,
+    clientes:      <Clientes />,
+    contratos:     <Contratos />,
+    processos:     <Processos />,
+    honorarios:    <Honorarios />,
+    agenda:        <Agenda />,
     inadimplencia: <Inadimplencia />,
-    avisos: <Avisos />,
+    avisos:        <Avisos />,
     configuracoes: <Configuracoes />,
   };
 

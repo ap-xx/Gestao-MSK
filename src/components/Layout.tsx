@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Scale, LayoutDashboard, Users, FileText, Gavel, DollarSign,
   AlertTriangle, Bell, Settings, LogOut, Menu, X, ChevronRight,
-  ChevronLeft, UserCircle, TrendingDown,
+  ChevronLeft, UserCircle, TrendingDown, Calendar,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { AvisosDB } from '../data/db';
+import { avisosApi } from '../services/api';
 import NotificacoesPanel from './NotificacoesPanel';
 
 export type PageKey =
@@ -14,6 +14,7 @@ export type PageKey =
   | 'contratos'
   | 'processos'
   | 'honorarios'
+  | 'agenda'
   | 'inadimplencia'
   | 'avisos'
   | 'configuracoes';
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'contratos',     label: 'Contratos',      icon: FileText },
   { key: 'processos',     label: 'Processos',      icon: Gavel },
   { key: 'honorarios',    label: 'Honorários',     icon: DollarSign },
+  { key: 'agenda',        label: 'Agenda',         icon: Calendar },
   { key: 'inadimplencia', label: 'Inadimplência',  icon: TrendingDown },
   { key: 'avisos',        label: 'Avisos',         icon: AlertTriangle },
   { key: 'configuracoes', label: 'Configurações',  icon: Settings },
@@ -49,8 +51,20 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen,        setNotifOpen]        = useState(false);
+  const [naoLidos,         setNaoLidos]         = useState(0);
 
-  const naoLidos = AvisosDB.getNaoLidos().length;
+  useEffect(() => {
+    avisosApi.getAll()
+      .then(data => setNaoLidos(data.filter(a => !a.lido).length))
+      .catch(() => {});
+    // Recheck every 2 minutes
+    const interval = setInterval(() => {
+      avisosApi.getAll()
+        .then(data => setNaoLidos(data.filter(a => !a.lido).length))
+        .catch(() => {});
+    }, 120000);
+    return () => clearInterval(interval);
+  }, []);
 
   const roleColors: Record<string, string> = {
     admin:      'text-amber-400',

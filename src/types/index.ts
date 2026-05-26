@@ -109,6 +109,15 @@ export interface Audiencia {
   vara?: string;
 }
 
+export interface Andamento {
+  id: string;
+  tipo: 'petição' | 'decisão' | 'despacho' | 'certidão' | 'audiência' | 'recurso' | 'outro';
+  descricao: string;
+  data: string;
+  usuarioNome: string;
+  criadoEm: string;
+}
+
 export interface Processo {
   id: string;
   numeroCNJ: string;
@@ -134,6 +143,8 @@ export interface Processo {
   atualizadoEm: string;
   // Dados do DataJud
   dadosDataJud?: any;
+  // Andamentos (movimentações)
+  andamentos?: Andamento[];
 }
 
 export type TipoLancamento = 'recebimento' | 'a_receber' | 'despesa';

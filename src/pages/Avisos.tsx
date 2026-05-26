@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Bell, AlertTriangle, Calendar, DollarSign, FileText, Info,
-  CheckCheck, Trash2, Plus, X,
+  CheckCheck, Trash2, Plus, X, Loader2,
 } from 'lucide-react';
-import { AvisosDB, generateId } from '../data/db';
+import { avisosApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { DateInput } from '../components/ui/Input';
 import type { Aviso, UrgenciaAviso, TipoAviso } from '../types';
@@ -23,13 +23,14 @@ const tipoConfig: Record<TipoAviso, { label: string; icon: any }> = {
   sistema: { label: 'Sistema', icon: Info },
 };
 
-interface NovoAvisoModal {
+interface NovoAvisoModalProps {
   onClose: () => void;
   onSave: () => void;
 }
 
-function NovoAvisoModal({ onClose, onSave }: NovoAvisoModal) {
+function NovoAvisoModal({ onClose, onSave }: NovoAvisoModalProps) {
   const { showToast } = useToast();
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     titulo: '',
     descricao: '',
@@ -38,21 +39,26 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModal) {
     dataLimite: '',
   });
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const aviso: Aviso = {
-      id: generateId(),
-      titulo: form.titulo,
-      descricao: form.descricao,
-      tipo: form.tipo,
-      urgencia: form.urgencia,
-      dataLimite: form.dataLimite || undefined,
-      lido: false,
-      criadoEm: new Date().toISOString(),
-    };
-    AvisosDB.insert(aviso);
-    showToast('success', 'Aviso criado!');
-    onSave();
+    setSaving(true);
+    try {
+      await avisosApi.create({
+        titulo: form.titulo,
+        descricao: form.descricao,
+        tipo: form.tipo,
+        urgencia: form.urgencia,
+        dataLimite: form.dataLimite || undefined,
+        lido: false,
+        criadoEm: new Date().toISOString(),
+      });
+      showToast('success', 'Aviso criado!');
+      onSave();
+    } catch {
+      showToast('error', 'Erro ao criar aviso');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
@@ -94,7 +100,10 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModal) {
           </div>
           <div className="flex gap-3 pt-2 border-t border-[#2a2a2a]">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>
-            <button type="submit" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium shadow-lg shadow-amber-500/20">Criar Aviso</button>
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Criar Aviso
+            </button>
           </div>
         </form>
       </div>
@@ -104,13 +113,35 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModal) {
 
 export default function Avisos() {
   const { showToast } = useToast();
-  const [avisos, setAvisos] = useState<Aviso[]>(AvisosDB.getAll());
+  const [avisos, setAvisos] = useState<Aviso[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterUrgencia, setFilterUrgencia] = useState('todos');
   const [filterTipo, setFilterTipo] = useState('todos');
   const [filterLido, setFilterLido] = useState('todos');
   const [modalOpen, setModalOpen] = useState(false);
 
-  const reload = () => setAvisos(AvisosDB.getAll());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await avisosApi.getAll();
+      setAvisos(data);
+    } catch {
+      showToast('error', 'Erro ao carregar avisos');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Silently generate automatic notices on mount
+  useEffect(() => {
+    avisosApi.gerar().then(({ criados }) => {
+      if (criados > 0) reload();
+    }).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     return avisos.filter(a => {
@@ -126,21 +157,33 @@ export default function Avisos() {
     });
   }, [avisos, filterUrgencia, filterTipo, filterLido]);
 
-  function marcarLido(id: string) {
-    AvisosDB.marcarLido(id);
-    reload();
+  async function marcarLido(id: string) {
+    try {
+      await avisosApi.marcarLido(id);
+      await reload();
+    } catch {
+      showToast('error', 'Erro ao marcar aviso como lido');
+    }
   }
 
-  function marcarTodosLidos() {
-    avisos.filter(a => !a.lido).forEach(a => AvisosDB.marcarLido(a.id));
-    reload();
-    showToast('success', 'Todos marcados como lidos');
+  async function marcarTodosLidos() {
+    try {
+      await Promise.all(avisos.filter(a => !a.lido).map(a => avisosApi.marcarLido(a.id)));
+      await reload();
+      showToast('success', 'Todos marcados como lidos');
+    } catch {
+      showToast('error', 'Erro ao marcar avisos como lidos');
+    }
   }
 
-  function remover(id: string) {
-    AvisosDB.remove(id);
-    reload();
-    showToast('info', 'Aviso removido');
+  async function remover(id: string) {
+    try {
+      await avisosApi.remove(id);
+      await reload();
+      showToast('info', 'Aviso removido');
+    } catch {
+      showToast('error', 'Erro ao remover aviso');
+    }
   }
 
   const naoLidos = avisos.filter(a => !a.lido).length;
@@ -195,7 +238,11 @@ export default function Avisos() {
       </div>
 
       {/* Lista */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-[#505050]">
           <Bell className="w-10 h-10 mb-3 opacity-30" />
           <p>Nenhum aviso encontrado</p>

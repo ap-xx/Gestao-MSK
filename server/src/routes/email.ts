@@ -1,23 +1,41 @@
 import { Router, Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import { requireAuth } from '../middleware/auth';
+import { db } from '../db/index';
 
 const router = Router();
 
 function getCredentials(role: string): { user: string; pass: string } | null {
-  const map: Record<string, { userKey: string; passKey: string }> = {
-    admin:      { userKey: 'GMAIL_USER_ADMIN',      passKey: 'GMAIL_APP_PASSWORD_ADMIN' },
-    advogado:   { userKey: 'GMAIL_USER_ADVOGADO',   passKey: 'GMAIL_APP_PASSWORD_ADVOGADO' },
-    assistente: { userKey: 'GMAIL_USER_ASSISTENTE', passKey: 'GMAIL_APP_PASSWORD_ASSISTENTE' },
+  const userMap: Record<string, string> = {
+    admin:      'GMAIL_USER_ADMIN',
+    advogado:   'GMAIL_USER_ADVOGADO',
+    assistente: 'GMAIL_USER_ASSISTENTE',
+  };
+  const passEnvMap: Record<string, string> = {
+    admin:      'GMAIL_APP_PASSWORD_ADMIN',
+    advogado:   'GMAIL_APP_PASSWORD_ADVOGADO',
+    assistente: 'GMAIL_APP_PASSWORD_ASSISTENTE',
   };
 
-  const entry = map[role];
-  if (!entry) return null;
+  const userKey = userMap[role];
+  if (!userKey) return null;
 
-  const user = process.env[entry.userKey];
-  const pass = process.env[entry.passKey];
-  if (!user || !pass) return null;
+  const user = process.env[userKey];
+  if (!user) return null;
 
+  // 1. Tentar buscar senha na tabela configuracoes
+  let pass = '';
+  try {
+    const row = db.prepare('SELECT valor FROM configuracoes WHERE chave = ?').get(`smtp_${role}_pass`) as { valor: string } | undefined;
+    pass = row?.valor ?? '';
+  } catch { /* db pode não estar pronto — ignorar */ }
+
+  // 2. Fallback para variável de ambiente
+  if (!pass) {
+    pass = process.env[passEnvMap[role]] ?? '';
+  }
+
+  if (!pass) return null;
   return { user, pass };
 }
 
@@ -64,9 +82,10 @@ router.post('/send', requireAuth, async (req: Request, res: Response) => {
 
     console.log(`[email] Enviado por ${creds.user} para ${para} — ID: ${info.messageId}`);
     res.json({ message: 'E-mail enviado com sucesso.', id: info.messageId });
-  } catch (err: any) {
-    console.error(`[email] Erro SMTP (${creds.user}):`, err.message);
-    res.status(502).json({ error: 'Falha ao enviar e-mail.', detail: err.message });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[email] Erro SMTP (${creds.user}):`, msg);
+    res.status(502).json({ error: 'Falha ao enviar e-mail.', detail: msg });
   }
 });
 

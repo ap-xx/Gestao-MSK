@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Bell, AlertTriangle, Calendar, DollarSign, FileText, Info } from 'lucide-react';
-import { AvisosDB } from '../data/db';
+import { avisosApi } from '../services/api';
 import type { PageKey } from './Layout';
 import type { Aviso } from '../types';
 
@@ -37,21 +37,29 @@ export default function NotificacoesPanel({ open, onClose, onNavigate }: Props) 
 
   React.useEffect(() => {
     if (open) {
-      setAvisos(AvisosDB.getAll().sort((a, b) => {
-        const urgOrd = { critica: 0, alta: 1, media: 2, baixa: 3 };
-        return urgOrd[a.urgencia] - urgOrd[b.urgencia];
-      }));
+      avisosApi.getAll()
+        .then(data => {
+          setAvisos(data.sort((a, b) => {
+            const urgOrd = { critica: 0, alta: 1, media: 2, baixa: 3 };
+            return urgOrd[a.urgencia] - urgOrd[b.urgencia];
+          }));
+        })
+        .catch(() => {});
     }
   }, [open]);
 
-  function marcarLido(id: string) {
-    AvisosDB.marcarLido(id);
-    setAvisos(prev => prev.map(a => a.id === id ? { ...a, lido: true } : a));
+  async function marcarLido(id: string) {
+    try {
+      await avisosApi.marcarLido(id);
+      setAvisos(prev => prev.map(a => a.id === id ? { ...a, lido: true } : a));
+    } catch {}
   }
 
-  function marcarTodosLidos() {
-    avisos.forEach(a => AvisosDB.marcarLido(a.id));
-    setAvisos(prev => prev.map(a => ({ ...a, lido: true })));
+  async function marcarTodosLidos() {
+    try {
+      await Promise.all(avisos.filter(a => !a.lido).map(a => avisosApi.marcarLido(a.id)));
+      setAvisos(prev => prev.map(a => ({ ...a, lido: true })));
+    } catch {}
   }
 
   const naoLidos = avisos.filter(a => !a.lido).length;

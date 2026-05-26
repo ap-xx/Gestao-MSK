@@ -1,13 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, DollarSign, CheckCircle, Clock, TrendingDown,
-  Search, Edit2, Trash2, Receipt, CreditCard,
+  Search, Edit2, Trash2, Receipt, CreditCard, Printer,
 } from 'lucide-react';
-import { LancamentosDB, ClientesDB, generateId } from '../data/db';
+import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import { DateInput } from '../components/ui/Input';
-import type { Lancamento, TipoLancamento, StatusPagamento } from '../types';
+import { LoadingTable } from '../components/ui/LoadingTable';
+import { Pagination } from '../components/ui/Pagination';
+import { useSort } from '../hooks/useSort';
+import { usePagination } from '../hooks/usePagination';
+import type { Lancamento, TipoLancamento, StatusPagamento, Cliente } from '../types';
 
 const STATUS_STYLES: Record<StatusPagamento, string> = {
   pago: 'bg-green-500/15 text-green-400 border-green-500/30',
@@ -28,13 +32,13 @@ const FORMAS_PAGAMENTO = ['PIX', 'TED', 'Boleto', 'Cartão', 'Dinheiro', 'Cheque
 interface ModalProps {
   lancamento?: Lancamento;
   tipo?: TipoLancamento;
+  clientes: Cliente[];
   onClose: () => void;
   onSave: () => void;
 }
 
-function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
+function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
-  const clientes = ClientesDB.getAll();
   const isEdit = !!lancamento;
 
   const [form, setForm] = useState({
@@ -53,12 +57,11 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const cliente = ClientesDB.getById(form.clienteId);
+    const cliente = clientes.find(c => c.id === form.clienteId);
     const now = new Date().toISOString();
-    const saved: Lancamento = {
-      id: lancamento?.id || generateId(),
+    const payload: Omit<Lancamento, 'id'> = {
       tipo: form.tipo,
       clienteId: form.clienteId || undefined,
       clienteNome: cliente?.nome,
@@ -71,10 +74,14 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
       observacoes: form.observacoes || undefined,
       criadoEm: lancamento?.criadoEm || now,
     };
-    if (isEdit) LancamentosDB.update(saved.id, saved);
-    else LancamentosDB.insert(saved);
-    showToast('success', isEdit ? 'Lançamento atualizado!' : 'Lançamento registrado!');
-    onSave();
+    try {
+      if (isEdit) await lancamentosApi.update(lancamento.id, payload);
+      else await lancamentosApi.create(payload);
+      showToast('success', isEdit ? 'Lançamento atualizado!' : 'Lançamento registrado!');
+      onSave();
+    } catch (err: any) {
+      showToast('error', 'Erro ao salvar', err.message);
+    }
   }
 
   const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
@@ -180,13 +187,28 @@ function LancamentoModal({ lancamento, tipo, onClose, onSave }: ModalProps) {
 
 export default function Honorarios() {
   const { showToast } = useToast();
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>(LancamentosDB.getAll());
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TipoLancamento>('recebimento');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editLancamento, setEditLancamento] = useState<Lancamento | undefined>();
 
-  const reload = () => setLancamentos(LancamentosDB.getAll());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [l, c] = await Promise.all([lancamentosApi.getAll(), clientesApi.getAll()]);
+      setLancamentos(l);
+      setClientes(c);
+    } catch {
+      showToast('error', 'Erro', 'Não foi possível carregar lançamentos');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {
     return lancamentos.filter(l => {
@@ -198,25 +220,35 @@ export default function Honorarios() {
     });
   }, [lancamentos, tab, search]);
 
+  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'dataVencimento', 'desc');
+  const pagination = usePagination(sorted, 15);
+
   const stats = useMemo(() => {
     const recebido = lancamentos.filter(l => l.tipo === 'recebimento' && l.status === 'pago').reduce((s, l) => s + l.valor, 0);
     const aReceber = lancamentos.filter(l => l.tipo === 'a_receber' && (l.status === 'pendente' || l.status === 'vencido')).reduce((s, l) => s + l.valor, 0);
     const despesas = lancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + l.valor, 0);
-    const vencido = lancamentos.filter(l => l.tipo === 'a_receber' && l.status === 'vencido').reduce((s, l) => s + l.valor, 0);
-    return { recebido, aReceber, despesas, vencido };
+    return { recebido, aReceber, despesas };
   }, [lancamentos]);
 
-  function marcarPago(l: Lancamento) {
-    LancamentosDB.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] });
-    reload();
-    showToast('success', 'Marcado como pago!', formatCurrency(l.valor));
+  async function marcarPago(l: Lancamento) {
+    try {
+      await lancamentosApi.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] });
+      await reload();
+      showToast('success', 'Marcado como pago!', formatCurrency(l.valor));
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
   }
 
-  function handleDelete(l: Lancamento) {
+  async function handleDelete(l: Lancamento) {
     if (!window.confirm('Excluir este lançamento?')) return;
-    LancamentosDB.remove(l.id);
-    reload();
-    showToast('info', 'Lançamento removido');
+    try {
+      await lancamentosApi.remove(l.id);
+      await reload();
+      showToast('info', 'Lançamento removido');
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
   }
 
   const tabs: Array<{ key: TipoLancamento; label: string; icon: any; color: string }> = [
@@ -225,21 +257,37 @@ export default function Honorarios() {
     { key: 'despesa', label: 'Despesas', icon: TrendingDown, color: 'text-red-400' },
   ];
 
+  const SortIcon = ({ col }: { col: keyof Lancamento }) => (
+    <span className="ml-1 opacity-60">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+  );
+
   return (
     <div className="space-y-5 animate-fade-in-up">
+      {/* Print style */}
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 no-print">
         <div>
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Honorários</h1>
           <p className="text-[#a0a0a0] text-sm">Controle financeiro</p>
         </div>
-        <button
-          onClick={() => { setEditLancamento(undefined); setModalOpen(true); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Lançamento
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm font-medium transition-all"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir
+          </button>
+          <button
+            onClick={() => { setEditLancamento(undefined); setModalOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Lançamento
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -277,7 +325,7 @@ export default function Honorarios() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-[#2a2a2a]">
+      <div className="flex gap-2 border-b border-[#2a2a2a] no-print">
         {tabs.map(t => (
           <button
             key={t.key}
@@ -295,7 +343,7 @@ export default function Honorarios() {
       </div>
 
       {/* Busca */}
-      <div className="relative max-w-sm">
+      <div className="relative max-w-sm no-print">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#505050]" />
         <input
           className="w-full bg-[#141414] border border-[#2a2a2a] rounded-lg pl-9 pr-4 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050]"
@@ -311,17 +359,29 @@ export default function Honorarios() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Descrição</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Cliente</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Valor</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Vencimento</th>
+                <th onClick={() => toggle('descricao')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Descrição <SortIcon col="descricao" />
+                </th>
+                <th onClick={() => toggle('clienteNome')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Cliente <SortIcon col="clienteNome" />
+                </th>
+                <th onClick={() => toggle('valor')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Valor <SortIcon col="valor" />
+                </th>
+                <th onClick={() => toggle('dataVencimento')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Vencimento <SortIcon col="dataVencimento" />
+                </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Pagamento</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Status</th>
-                <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
+                <th onClick={() => toggle('status')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
+                  Status <SortIcon col="status" />
+                </th>
+                <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider no-print">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e1e1e]">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <LoadingTable cols={7} />
+              ) : pagination.items.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-[#505050]">
                     <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -329,7 +389,7 @@ export default function Honorarios() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(l => (
+                pagination.items.map(l => (
                   <tr key={l.id} className="hover:bg-[#1a1a1a] transition-colors">
                     <td className="px-5 py-4">
                       <p className="font-medium text-[#f5f5f5] leading-tight">{l.descricao}</p>
@@ -358,7 +418,7 @@ export default function Honorarios() {
                         {STATUS_LABELS[l.status]}
                       </span>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4 no-print">
                       <div className="flex items-center justify-end gap-2">
                         {(l.status === 'pendente' || l.status === 'vencido') && (
                           <button
@@ -379,12 +439,16 @@ export default function Honorarios() {
             </tbody>
           </table>
         </div>
+        <div className="no-print">
+          <Pagination {...pagination} />
+        </div>
       </div>
 
       {modalOpen && (
         <LancamentoModal
           lancamento={editLancamento}
           tipo={tab}
+          clientes={clientes}
           onClose={() => { setModalOpen(false); setEditLancamento(undefined); }}
           onSave={() => { reload(); setModalOpen(false); setEditLancamento(undefined); }}
         />

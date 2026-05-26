@@ -1,8 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import bcrypt from 'bcryptjs';
-
-const DATA_FILE = path.join(__dirname, '..', 'data', 'users.json');
+import { db, generateId } from './db/index';
 
 export interface StoredUser {
   id: string;
@@ -11,62 +8,34 @@ export interface StoredUser {
   role: 'admin' | 'advogado' | 'assistente';
   oab?: string;
   senhaHash: string;
+  ativo: boolean;
 }
 
-function readUsers(): StoredUser[] {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
+function rowToUser(row: Record<string, unknown>): StoredUser {
+  return {
+    id: row.id as string,
+    nome: row.nome as string,
+    email: row.email as string,
+    role: row.role as 'admin' | 'advogado' | 'assistente',
+    oab: (row.oab as string) ?? '',
+    senhaHash: row.senhaHash as string,
+    ativo: Boolean(row.ativo),
+  };
 }
 
-function writeUsers(users: StoredUser[]): void {
-  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
-}
-
-const SEED_USERS: Array<Omit<StoredUser, 'senhaHash'> & { senha: string }> = [
-  {
-    id: 'u1',
-    nome: 'Gabriel Budal Arins',
-    email: 'gabrielb.arins@gmail.com',
-    role: 'admin',
-    senha: 'budal2005msk',
-  },
-  {
-    id: 'u2',
-    nome: 'Miriam Kuchnier',
-    email: 'miriamkuchnier.adv@gmail.com',
-    role: 'advogado',
-    oab: '',
-    senha: 'advogada3009',
-  },
-  {
-    id: 'u3',
-    nome: 'Andre Luiz Budal Arins',
-    email: 'andreluizbudalarins@gmail.com',
-    role: 'assistente',
-    senha: 'Gorila@2020',
-  },
-];
-
-export async function seedUsersIfEmpty(): Promise<void> {
-  const existing = readUsers();
-  if (existing.length > 0) return;
-
-  const hashed: StoredUser[] = await Promise.all(
-    SEED_USERS.map(async ({ senha, ...rest }) => ({
-      ...rest,
-      senhaHash: await bcrypt.hash(senha, 12),
-    }))
-  );
-  writeUsers(hashed);
-  console.log('[users] Seed inicial criado com 3 usuarios.');
+export function findAll(): StoredUser[] {
+  const rows = db.prepare('SELECT * FROM users').all() as Record<string, unknown>[];
+  return rows.map(rowToUser);
 }
 
 export async function findByEmail(email: string): Promise<StoredUser | undefined> {
-  return readUsers().find(u => u.email.toLowerCase() === email.toLowerCase());
+  const row = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(email) as Record<string, unknown> | undefined;
+  return row ? rowToUser(row) : undefined;
+}
+
+export function findById(id: string): StoredUser | undefined {
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  return row ? rowToUser(row) : undefined;
 }
 
 export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
@@ -74,10 +43,40 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
 }
 
 export async function updatePassword(id: string, newPlain: string): Promise<boolean> {
-  const users = readUsers();
-  const idx = users.findIndex(u => u.id === id);
-  if (idx === -1) return false;
-  users[idx].senhaHash = await bcrypt.hash(newPlain, 12);
-  writeUsers(users);
-  return true;
+  const senhaHash = await bcrypt.hash(newPlain, 12);
+  const result = db.prepare('UPDATE users SET senhaHash = ? WHERE id = ?').run(senhaHash, id);
+  return result.changes > 0;
+}
+
+export function createUser(data: { nome: string; email: string; role: 'admin' | 'advogado' | 'assistente'; oab?: string; senhaHash: string }): StoredUser {
+  const id = generateId();
+  const criadoEm = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO users (id, nome, email, senhaHash, role, oab, ativo, criadoEm)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+  ).run(id, data.nome, data.email, data.senhaHash, data.role, data.oab ?? '', criadoEm);
+  return findById(id)!;
+}
+
+export function updateUser(id: string, data: Partial<{ nome: string; email: string; role: string; oab: string; ativo: boolean; senhaHash: string }>): StoredUser | null {
+  const existing = findById(id);
+  if (!existing) return null;
+
+  const nome     = data.nome     ?? existing.nome;
+  const email    = data.email    ?? existing.email;
+  const role     = data.role     ?? existing.role;
+  const oab      = data.oab      ?? existing.oab ?? '';
+  const ativo    = data.ativo    !== undefined ? (data.ativo ? 1 : 0) : (existing.ativo ? 1 : 0);
+  const senhaHash = data.senhaHash ?? existing.senhaHash;
+
+  db.prepare(
+    `UPDATE users SET nome = ?, email = ?, role = ?, oab = ?, ativo = ?, senhaHash = ? WHERE id = ?`
+  ).run(nome, email, role, oab, ativo, senhaHash, id);
+
+  return findById(id)!;
+}
+
+export function deactivateUser(id: string): boolean {
+  const result = db.prepare('UPDATE users SET ativo = 0 WHERE id = ?').run(id);
+  return result.changes > 0;
 }

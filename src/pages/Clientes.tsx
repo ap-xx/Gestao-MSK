@@ -1,11 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, Search, X, Building2, User, Users, Loader2,
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
 } from 'lucide-react';
-import { ClientesDB, generateId } from '../data/db';
+import { clientesApi } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
+import { LoadingTable } from '../components/ui/LoadingTable';
+import { Pagination } from '../components/ui/Pagination';
+import { useSort } from '../hooks/useSort';
+import { usePagination } from '../hooks/usePagination';
 import type { Cliente, TipoPessoa, StatusCliente } from '../types';
 
 const STATUS_BADGE: Record<StatusCliente, string> = {
@@ -23,7 +27,7 @@ const STATUS_LABELS: Record<StatusCliente, string> = {
 interface ModalProps {
   cliente?: Cliente;
   onClose: () => void;
-  onSave: (c: Cliente) => void;
+  onSave: (c: Omit<Cliente, 'id'> | Cliente) => void;
 }
 
 function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
@@ -133,8 +137,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const now = new Date().toISOString();
-    const saved: Cliente = {
-      id: cliente?.id || generateId(),
+    const saved: Omit<Cliente, 'id'> & { id?: string } = {
+      ...(cliente?.id ? { id: cliente.id } : {}),
       tipoPessoa,
       nome: form.nome,
       cpf: tipoPessoa === 'PF' ? form.cpf : undefined,
@@ -161,13 +165,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
       criadoEm: cliente?.criadoEm || now,
       atualizadoEm: now,
     };
-
-    if (isEdit) {
-      ClientesDB.update(saved.id, saved);
-    } else {
-      ClientesDB.insert(saved);
-    }
-    onSave(saved);
+    onSave(saved as any);
   }
 
   const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
@@ -437,7 +435,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
 // ─── Página principal ─────────────────────────────────────────
 export default function Clientes() {
   const { showToast } = useToast();
-  const [clientes, setClientes] = useState<Cliente[]>(ClientesDB.getAll());
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
@@ -445,7 +444,18 @@ export default function Clientes() {
   const [editCliente, setEditCliente] = useState<Cliente | undefined>();
   const [viewCliente, setViewCliente] = useState<Cliente | null>(null);
 
-  const reload = () => setClientes(ClientesDB.getAll());
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      setClientes(await clientesApi.getAll());
+    } catch {
+      showToast('error', 'Erro', 'Não foi possível carregar clientes');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {
     return clientes.filter(c => {
@@ -459,19 +469,39 @@ export default function Clientes() {
     });
   }, [clientes, search, filterStatus, filterTipo]);
 
-  function handleSave(c: Cliente) {
-    reload();
-    setModalOpen(false);
-    setEditCliente(undefined);
-    showToast('success', editCliente ? 'Cliente atualizado!' : 'Cliente cadastrado!', c.nome);
+  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'nome');
+  const pagination = usePagination(sorted, 15);
+
+  async function handleSave(c: Omit<Cliente, 'id'> | Cliente) {
+    try {
+      if (editCliente) {
+        await clientesApi.update(editCliente.id, c);
+      } else {
+        await clientesApi.create(c as Omit<Cliente, 'id'>);
+      }
+      await reload();
+      setModalOpen(false);
+      setEditCliente(undefined);
+      showToast('success', editCliente ? 'Cliente atualizado!' : 'Cliente cadastrado!', (c as any).nome);
+    } catch (err: any) {
+      showToast('error', 'Erro ao salvar', err.message);
+    }
   }
 
-  function handleDelete(c: Cliente) {
+  async function handleDelete(c: Cliente) {
     if (!window.confirm(`Excluir "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
-    ClientesDB.remove(c.id);
-    reload();
-    showToast('info', 'Cliente removido', c.nome);
+    try {
+      await clientesApi.remove(c.id);
+      await reload();
+      showToast('info', 'Cliente removido', c.nome);
+    } catch (err: any) {
+      showToast('error', 'Erro', err.message);
+    }
   }
+
+  const SortIcon = ({ col }: { col: keyof Cliente }) => (
+    <span className="ml-1 opacity-60">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+  );
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -535,16 +565,33 @@ export default function Clientes() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Cliente</th>
+                <th
+                  onClick={() => toggle('nome')}
+                  className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]"
+                >
+                  Cliente <SortIcon col="nome" />
+                </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Documento</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Contato</th>
+                <th
+                  onClick={() => toggle('email')}
+                  className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell cursor-pointer select-none hover:text-[#a0a0a0]"
+                >
+                  Contato <SortIcon col="email" />
+                </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Cidade/UF</th>
-                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Status</th>
+                <th
+                  onClick={() => toggle('status')}
+                  className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]"
+                >
+                  Status <SortIcon col="status" />
+                </th>
                 <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e1e1e]">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <LoadingTable cols={6} />
+              ) : pagination.items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-[#505050]">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -552,7 +599,7 @@ export default function Clientes() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(c => (
+                pagination.items.map(c => (
                   <tr key={c.id} className="hover:bg-[#1a1a1a] transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -619,6 +666,7 @@ export default function Clientes() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
 
       {/* Modal cadastro/edição */}
@@ -686,5 +734,3 @@ export default function Clientes() {
     </div>
   );
 }
-
-
