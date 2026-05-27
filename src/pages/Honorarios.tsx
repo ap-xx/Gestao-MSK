@@ -241,9 +241,34 @@ export default function Honorarios() {
 
   async function marcarPago(l: Lancamento) {
     try {
-      await lancamentosApi.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] });
-      await reload();
-      showToast('success', 'Marcado como pago!', formatCurrency(l.valor));
+      const hoje = new Date().toISOString().split('T')[0];
+      // Atualiza o lançamento original para "pago"
+      await lancamentosApi.update(l.id, { status: 'pago', dataPagamento: hoje });
+
+      // Se era do tipo "a_receber", cria também um lançamento de "recebimento"
+      if (l.tipo === 'a_receber') {
+        await lancamentosApi.create({
+          tipo: 'recebimento',
+          clienteId: l.clienteId,
+          clienteNome: l.clienteNome,
+          processoId: l.processoId,
+          contratoId: l.contratoId,
+          descricao: `Recebimento: ${l.descricao}`,
+          valor: l.valor,
+          dataVencimento: hoje,
+          dataPagamento: hoje,
+          status: 'pago',
+          formaPagamento: l.formaPagamento,
+          observacoes: l.observacoes,
+          criadoEm: new Date().toISOString(),
+        });
+        await reload();
+        setTab('recebimento'); // muda para aba recebimentos
+        showToast('success', 'Pago e lançado em Recebimentos!', formatCurrency(l.valor));
+      } else {
+        await reload();
+        showToast('success', 'Marcado como pago!', formatCurrency(l.valor));
+      }
     } catch (err: any) {
       showToast('error', 'Erro', err.message);
     }
@@ -283,7 +308,64 @@ export default function Honorarios() {
   return (
     <div className="space-y-5 animate-fade-in-up">
       {/* Print style */}
-      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; color: #000 !important; }
+          .print-page { background: #fff !important; color: #000 !important; }
+          table { border-collapse: collapse; width: 100%; }
+          th { background: #f5f5f5 !important; color: #333 !important; border: 1px solid #ddd; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+          td { border: 1px solid #eee; padding: 8px 12px; font-size: 12px; color: #333 !important; }
+          tr:nth-child(even) td { background: #fafafa; }
+          .print-header { display: flex !important; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #f59e0b; padding-bottom: 16px; }
+          .print-title { font-size: 22px; font-weight: bold; color: #333; }
+          .print-subtitle { font-size: 12px; color: #666; margin-top: 4px; }
+          .print-totals { display: grid !important; grid-template-columns: repeat(4,1fr); gap: 12px; margin: 16px 0; }
+          .print-total-card { border: 1px solid #eee; border-radius: 8px; padding: 10px 14px; text-align: center; }
+          .print-total-label { font-size: 10px; color: #888; text-transform: uppercase; }
+          .print-total-value { font-size: 16px; font-weight: bold; margin-top: 2px; }
+          .text-green-400 { color: #16a34a !important; }
+          .text-amber-400 { color: #d97706 !important; }
+          .text-red-400   { color: #dc2626 !important; }
+          .bg-\\[\\#141414\\], .bg-\\[\\#1e1e1e\\], .bg-\\[\\#1a1a1a\\] { background: transparent !important; border-color: #eee !important; }
+          .border-\\[\\#2a2a2a\\] { border-color: #eee !important; }
+          .rounded-xl { border-radius: 0 !important; }
+          .overflow-hidden { overflow: visible !important; }
+        }
+        @media screen {
+          .print-header, .print-totals, .print-total-card, .print-total-label, .print-total-value { display: none; }
+        }
+      `}</style>
+      {/* Print-only header */}
+      <div className="print-header hidden">
+        <div>
+          <div className="print-title">MSK Advocacia — Honorários</div>
+          <div className="print-subtitle">
+            Relatório: {tabs.find(t => t.key === tab)?.label ?? tab} · Gerado em {new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}
+          </div>
+        </div>
+        <div className="print-subtitle" style={{ textAlign: 'right' }}>
+          {pagination.items.length} registro(s)
+        </div>
+      </div>
+      <div className="print-totals hidden">
+        <div className="print-total-card">
+          <div className="print-total-label">Recebido</div>
+          <div className="print-total-value text-green-400">{formatCurrency(stats.recebido)}</div>
+        </div>
+        <div className="print-total-card">
+          <div className="print-total-label">A Receber</div>
+          <div className="print-total-value text-amber-400">{formatCurrency(stats.aReceber)}</div>
+        </div>
+        <div className="print-total-card">
+          <div className="print-total-label">Despesas</div>
+          <div className="print-total-value text-red-400">{formatCurrency(stats.despesas)}</div>
+        </div>
+        <div className="print-total-card">
+          <div className="print-total-label">Saldo</div>
+          <div className="print-total-value">{formatCurrency(stats.recebido - stats.despesas)}</div>
+        </div>
+      </div>
 
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 no-print">

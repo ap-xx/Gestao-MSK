@@ -60,6 +60,7 @@ export interface Cliente {
   status: StatusCliente;
   endereco: Endereco;
   observacoes?: string;
+  avaliacao?: number; // 0-5 estrelas
   criadoEm: string;
   atualizadoEm: string;
   // Dados extras PJ

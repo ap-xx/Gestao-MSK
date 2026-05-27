@@ -185,7 +185,26 @@ db.exec(`
     expiresAt TEXT NOT NULL,
     criadoEm TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS perfis (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL UNIQUE,
+    descricao TEXT DEFAULT '',
+    modulos TEXT NOT NULL DEFAULT '["dashboard","clientes","contratos","processos","honorarios","agenda","inadimplencia","avisos"]',
+    criadoEm TEXT NOT NULL
+  );
 `);
+
+// ─── Migrações não-destrutivas ─────────────────────────────────
+// Adiciona colunas novas em tabelas existentes sem recriar o schema
+const migrations: Array<[string, string]> = [
+  ['clientes',    'ALTER TABLE clientes ADD COLUMN avaliacao INTEGER DEFAULT 0'],
+  ['documentos',  'ALTER TABLE documentos ADD COLUMN categoria TEXT DEFAULT "outros"'],
+  ['users',       'ALTER TABLE users ADD COLUMN perfilId TEXT'],
+];
+for (const [, sql] of migrations) {
+  try { db.exec(sql); } catch { /* coluna já existe — ignora */ }
+}
 
 // ─── Helper ────────────────────────────────────────────────────
 

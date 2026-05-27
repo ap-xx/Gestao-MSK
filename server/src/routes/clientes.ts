@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
+import { auditLog } from '../middleware/auditLogger';
 
 const router = Router();
 router.use(requireAuth);
@@ -47,6 +48,7 @@ router.post('/', (req: Request, res: Response) => {
     );
 
     const created = db.prepare('SELECT * FROM clientes WHERE id = ?').get(id) as Record<string, unknown>;
+    auditLog({ req, acao: 'CREATE', entidade: 'clientes', entidadeId: id, detalhe: `Nome: ${body.nome}` });
     res.status(201).json(parseCliente(created));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -94,6 +96,7 @@ router.put('/:id', (req: Request, res: Response) => {
     );
 
     const updated = db.prepare('SELECT * FROM clientes WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+    auditLog({ req, acao: 'UPDATE', entidade: 'clientes', entidadeId: req.params.id, detalhe: `Nome: ${body.nome ?? existing.nome}` });
     res.json(parseCliente(updated));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -104,8 +107,10 @@ router.put('/:id', (req: Request, res: Response) => {
 // DELETE /api/clientes/:id
 router.delete('/:id', (req: Request, res: Response) => {
   try {
+    const existing2 = db.prepare('SELECT nome FROM clientes WHERE id = ?').get(req.params.id) as { nome: string } | undefined;
     const result = db.prepare('DELETE FROM clientes WHERE id = ?').run(req.params.id);
     if (result.changes === 0) { res.status(404).json({ error: 'Cliente não encontrado.' }); return; }
+    auditLog({ req, acao: 'DELETE', entidade: 'clientes', entidadeId: req.params.id, detalhe: `Nome: ${existing2?.nome ?? ''}` });
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

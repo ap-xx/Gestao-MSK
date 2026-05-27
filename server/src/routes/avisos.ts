@@ -129,8 +129,8 @@ router.post('/gerar', (_req: Request, res: Response) => {
       if (dataAud < hoje || dataAud > limiteData) continue;
 
       const jaExiste = db.prepare(
-        "SELECT id FROM avisos WHERE tipo='audiencia' AND processoId=? AND lido=0"
-      ).get(p.id);
+        "SELECT id FROM avisos WHERE tipo='audiencia' AND processoId=? AND dataLimite=?"
+      ).get(p.id, dataAud);
       if (jaExiste) continue;
 
       const diasAte = Math.ceil((new Date(dataAud).getTime() - agora.getTime()) / (1000 * 60 * 60 * 24));
@@ -154,7 +154,7 @@ router.post('/gerar', (_req: Request, res: Response) => {
 
     for (const l of vencidos) {
       const jaExiste = db.prepare(
-        "SELECT id FROM avisos WHERE tipo='pagamento' AND lancamentoId=? AND lido=0"
+        "SELECT id FROM avisos WHERE tipo='pagamento' AND lancamentoId=?"
       ).get(l.id);
       if (jaExiste) continue;
 
@@ -179,7 +179,7 @@ router.post('/gerar', (_req: Request, res: Response) => {
 
     for (const c of contratosVencendo) {
       const jaExiste = db.prepare(
-        "SELECT id FROM avisos WHERE tipo='contrato' AND lancamentoId=? AND lido=0"
+        "SELECT id FROM avisos WHERE tipo='contrato' AND lancamentoId=?"
       ).get(c.id);
       if (jaExiste) continue;
 

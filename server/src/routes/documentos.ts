@@ -18,7 +18,7 @@ router.get('/', (req: Request, res: Response) => {
 
   try {
     const rows = db.prepare(
-      'SELECT id, entidade, entidadeId, nome, tipo, tamanho, criadoEm, criadoPor FROM documentos WHERE entidade = ? AND entidadeId = ? ORDER BY criadoEm DESC'
+      'SELECT id, entidade, entidadeId, nome, tipo, tamanho, categoria, criadoEm, criadoPor FROM documentos WHERE entidade = ? AND entidadeId = ? ORDER BY criadoEm DESC'
     ).all(entidade, entidadeId);
     res.json(rows);
   } catch (err: unknown) {
@@ -28,14 +28,15 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // POST /api/documentos — cria novo documento
-// Body: { entidade, entidadeId, nome, tipo, conteudo (base64) }
+// Body: { entidade, entidadeId, nome, tipo, conteudo (base64), categoria? }
 router.post('/', (req: Request, res: Response) => {
-  const { entidade, entidadeId, nome, tipo, conteudo } = req.body as {
+  const { entidade, entidadeId, nome, tipo, conteudo, categoria } = req.body as {
     entidade?: string;
     entidadeId?: string;
     nome?: string;
     tipo?: string;
     conteudo?: string;
+    categoria?: string;
   };
 
   if (!entidade || !entidadeId || !nome || !tipo || !conteudo) {
@@ -53,13 +54,13 @@ router.post('/', (req: Request, res: Response) => {
     const id = generateId();
     const now = new Date().toISOString();
 
-    db.prepare(`INSERT INTO documentos (id, entidade, entidadeId, nome, tipo, tamanho, conteudo, criadoEm, criadoPor)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, entidade, entidadeId, nome, tipo, tamanho, conteudo, now, req.user!.id
+    db.prepare(`INSERT INTO documentos (id, entidade, entidadeId, nome, tipo, tamanho, conteudo, categoria, criadoEm, criadoPor)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, entidade, entidadeId, nome, tipo, tamanho, conteudo, categoria ?? 'outros', now, req.user!.id
     );
 
     const created = db.prepare(
-      'SELECT id, entidade, entidadeId, nome, tipo, tamanho, criadoEm, criadoPor FROM documentos WHERE id = ?'
+      'SELECT id, entidade, entidadeId, nome, tipo, tamanho, categoria, criadoEm, criadoPor FROM documentos WHERE id = ?'
     ).get(id);
     res.status(201).json(created);
   } catch (err: unknown) {

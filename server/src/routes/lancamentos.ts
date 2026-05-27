@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
+import { auditLog } from '../middleware/auditLogger';
 
 const router = Router();
 router.use(requireAuth);
@@ -36,6 +37,7 @@ router.post('/', (req: Request, res: Response) => {
     );
 
     const created = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(id);
+    auditLog({ req, acao: 'CREATE', entidade: 'lancamentos', entidadeId: id, detalhe: `${body.tipo}: ${body.descricao} — R$ ${body.valor}` });
     res.status(201).json(created);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -84,6 +86,7 @@ router.put('/:id', (req: Request, res: Response) => {
     );
 
     const updated = db.prepare('SELECT * FROM lancamentos WHERE id = ?').get(req.params.id);
+    auditLog({ req, acao: 'UPDATE', entidade: 'lancamentos', entidadeId: req.params.id, detalhe: `Status: ${body.status ?? existing.status}` });
     res.json(updated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -94,8 +97,10 @@ router.put('/:id', (req: Request, res: Response) => {
 // DELETE /api/lancamentos/:id
 router.delete('/:id', (req: Request, res: Response) => {
   try {
+    const toDelete = db.prepare('SELECT descricao FROM lancamentos WHERE id = ?').get(req.params.id) as { descricao: string } | undefined;
     const result = db.prepare('DELETE FROM lancamentos WHERE id = ?').run(req.params.id);
     if (result.changes === 0) { res.status(404).json({ error: 'Lançamento não encontrado.' }); return; }
+    auditLog({ req, acao: 'DELETE', entidade: 'lancamentos', entidadeId: req.params.id, detalhe: toDelete?.descricao });
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

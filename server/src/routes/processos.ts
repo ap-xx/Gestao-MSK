@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db, generateId } from '../db/index';
 import { requireAuth } from '../middleware/auth';
 import { syncAudiencia } from '../google/calendar';
+import { auditLog } from '../middleware/auditLogger';
 
 function syncAudiencias(processoId: string, clienteNome: string, vara: string, audiencias: Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>) {
   audiencias.forEach((a, i) => {
@@ -61,6 +62,7 @@ router.post('/', (req: Request, res: Response) => {
 
     const created = db.prepare('SELECT * FROM processos WHERE id = ?').get(id) as Record<string, unknown>;
     const parsed = parseProcesso(created);
+    auditLog({ req, acao: 'CREATE', entidade: 'processos', entidadeId: id, detalhe: `${body.numeroCNJ} — ${body.clienteNome}` });
     // Sync audiências com Google Calendar (background)
     const auds = parsed.audiencias as Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>;
     if (auds?.length) {
@@ -147,6 +149,7 @@ router.put('/:id', (req: Request, res: Response) => {
     if (audsUp?.length) {
       syncAudiencias(req.params.id, parsedUp.clienteNome as string, parsedUp.vara as string, audsUp);
     }
+    auditLog({ req, acao: 'UPDATE', entidade: 'processos', entidadeId: req.params.id, detalhe: body.status ? `Status: ${existing.status} → ${body.status}` : `Processo ${existing.numeroCNJ}` });
     res.json(parsedUp);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -157,8 +160,10 @@ router.put('/:id', (req: Request, res: Response) => {
 // DELETE /api/processos/:id
 router.delete('/:id', (req: Request, res: Response) => {
   try {
+    const toDelProc = db.prepare('SELECT numeroCNJ, clienteNome FROM processos WHERE id = ?').get(req.params.id) as { numeroCNJ: string; clienteNome: string } | undefined;
     const result = db.prepare('DELETE FROM processos WHERE id = ?').run(req.params.id);
     if (result.changes === 0) { res.status(404).json({ error: 'Processo não encontrado.' }); return; }
+    auditLog({ req, acao: 'DELETE', entidade: 'processos', entidadeId: req.params.id, detalhe: toDelProc ? `${toDelProc.numeroCNJ} — ${toDelProc.clienteNome}` : undefined });
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

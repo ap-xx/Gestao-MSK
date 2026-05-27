@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Scale, LayoutDashboard, Users, FileText, Gavel, DollarSign,
   AlertTriangle, Bell, Settings, LogOut, Menu, X, ChevronRight,
-  UserCircle, TrendingDown, Calendar, Search,
+  UserCircle, TrendingDown, Calendar, Search, BarChart2,
 } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,7 @@ export type PageKey =
   | 'agenda'
   | 'inadimplencia'
   | 'avisos'
+  | 'relatorios'
   | 'configuracoes';
 
 interface NavItem {
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'agenda',        label: 'Agenda',         icon: Calendar },
   { key: 'inadimplencia', label: 'Inadimplência',  icon: TrendingDown },
   { key: 'avisos',        label: 'Avisos',         icon: AlertTriangle },
+  { key: 'relatorios',   label: 'Relatórios',     icon: BarChart2 },
   { key: 'configuracoes', label: 'Configurações',  icon: Settings },
 ];
 

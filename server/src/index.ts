@@ -17,6 +17,7 @@ import googleRoutes    from './routes/google';
 import auditoriaRoutes from './routes/auditoria';
 import documentosRoutes from './routes/documentos';
 import emailCronRoutes from './routes/email-cron';
+import perfisRoutes from './routes/perfis';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -61,6 +62,7 @@ app.use('/api/google',      googleRoutes);
 app.use('/api/auditoria',   auditoriaRoutes);
 app.use('/api/documentos',  documentosRoutes);
 app.use('/api/cron',        emailCronRoutes);
+app.use('/api/perfis',      perfisRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

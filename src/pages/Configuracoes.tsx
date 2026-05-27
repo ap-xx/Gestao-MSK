@@ -4,10 +4,10 @@ import {
   Mail, Phone, Globe, Shield, Users, Database,
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
   Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
-  ClipboardList,
+  ClipboardList, Clock, Edit2, ShieldCheck, ToggleLeft, ToggleRight,
 } from 'lucide-react';
-import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi } from '../services/api';
-import type { AuditEntry } from '../services/api';
+import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi } from '../services/api';
+import type { AuditEntry, Perfil } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCEP, formatTelefone } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +17,7 @@ import Portal from '../components/ui/Portal';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 
-type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria';
+type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -89,6 +89,44 @@ export default function Configuracoes() {
   // ── Backup ──
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importando, setImportando] = useState(false);
+
+  // ── Backup automático ──
+  type BackupSchedule = 'desabilitado' | 'diario' | 'semanal' | 'mensal';
+  const BACKUP_SCHED_KEY   = 'msk_backup_schedule';
+  const BACKUP_LAST_KEY    = 'msk_backup_last';
+  const [backupSchedule, setBackupSchedule]     = useState<BackupSchedule>(
+    () => (localStorage.getItem(BACKUP_SCHED_KEY) as BackupSchedule) || 'desabilitado',
+  );
+  const [lastAutoBackup, setLastAutoBackup] = useState<string | null>(
+    () => localStorage.getItem(BACKUP_LAST_KEY),
+  );
+  const [autoBackingUp, setAutoBackingUp] = useState(false);
+
+  // ── Editar usuário ──
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [editUserForm, setEditUserForm] = useState({ nome: '', email: '', role: 'assistente' as UserRole, oab: '', novaSenha: '' });
+  const [editUserSaving, setEditUserSaving] = useState(false);
+
+  // ── Permissões / Perfis ──
+  const ALL_MODULES: Array<{ key: string; label: string }> = [
+    { key: 'dashboard',     label: 'Dashboard' },
+    { key: 'clientes',      label: 'Clientes' },
+    { key: 'contratos',     label: 'Contratos' },
+    { key: 'processos',     label: 'Processos' },
+    { key: 'honorarios',    label: 'Honorários' },
+    { key: 'agenda',        label: 'Agenda' },
+    { key: 'inadimplencia', label: 'Inadimplência' },
+    { key: 'avisos',        label: 'Avisos' },
+    { key: 'relatorios',    label: 'Relatórios' },
+    { key: 'configuracoes', label: 'Configurações' },
+  ];
+  const [perfis, setPerfis]             = useState<Perfil[]>([]);
+  const [permissions, setPermissions]   = useState<Record<string, string[]>>({});
+  const [loadingPerms, setLoadingPerms] = useState(false);
+  const [savingPerms, setSavingPerms]   = useState(false);
+  const [novoPerfilForm, setNovoPerfilForm] = useState<{ nome: string; descricao: string; modulos: string[] } | null>(null);
+  const [editandoPerfil, setEditandoPerfil] = useState<Perfil | null>(null);
+  const [editPerfilForm, setEditPerfilForm] = useState<{ nome: string; descricao: string; modulos: string[] }>({ nome: '', descricao: '', modulos: [] });
 
   // ── Google Calendar ──
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; connectedAt?: string } | null>(null);
@@ -257,6 +295,154 @@ export default function Configuracoes() {
       showToast('error', 'Erro ao sincronizar', err.message);
     } finally {
       setSyncingGoogle(false);
+    }
+  }
+
+  // ── Auto-backup check on dados tab open ──
+  useEffect(() => {
+    if (tab !== 'dados' || backupSchedule === 'desabilitado' || autoBackingUp) return;
+    const last = lastAutoBackup ? new Date(lastAutoBackup).getTime() : 0;
+    const now  = Date.now();
+    const thresholds: Record<BackupSchedule, number> = {
+      desabilitado: Infinity,
+      diario:  1 * 24 * 60 * 60 * 1000,
+      semanal: 7 * 24 * 60 * 60 * 1000,
+      mensal:  30 * 24 * 60 * 60 * 1000,
+    };
+    if (now - last >= thresholds[backupSchedule]) {
+      setAutoBackingUp(true);
+      backupApi.exportar()
+        .then(data => {
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `msk-auto-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+          const ts = new Date().toISOString();
+          localStorage.setItem(BACKUP_LAST_KEY, ts);
+          setLastAutoBackup(ts);
+          showToast('success', 'Backup automático realizado!');
+        })
+        .catch(() => showToast('error', 'Falha no backup automático'))
+        .finally(() => setAutoBackingUp(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  function saveBackupSchedule(v: BackupSchedule) {
+    setBackupSchedule(v);
+    localStorage.setItem(BACKUP_SCHED_KEY, v);
+    showToast('info', `Backup automático: ${v === 'desabilitado' ? 'desativado' : v}`);
+  }
+
+  // ── Permissões / Perfis ──
+  const loadPermissions = useCallback(async () => {
+    setLoadingPerms(true);
+    try {
+      const [perfsData, permsData] = await Promise.all([
+        perfisApi.getAll(),
+        perfisApi.getPermissions(),
+      ]);
+      setPerfis(perfsData);
+      // ensure all roles exist in permissions
+      const base: Record<string, string[]> = {
+        admin:      ALL_MODULES.map(m => m.key),
+        advogado:   ['dashboard','clientes','contratos','processos','honorarios','agenda','inadimplencia','avisos','relatorios'],
+        assistente: ['dashboard','clientes','contratos','honorarios','agenda','avisos'],
+        ...permsData,
+      };
+      setPermissions(base);
+    } catch {
+      showToast('error', 'Erro ao carregar permissões');
+    } finally {
+      setLoadingPerms(false);
+    }
+  }, [showToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (tab === 'permissoes') loadPermissions();
+  }, [tab, loadPermissions]);
+
+  async function salvarPermissions() {
+    setSavingPerms(true);
+    try {
+      await perfisApi.setPermissions(permissions);
+      showToast('success', 'Permissões salvas!');
+    } catch {
+      showToast('error', 'Erro ao salvar permissões');
+    } finally {
+      setSavingPerms(false);
+    }
+  }
+
+  function togglePerm(role: string, module: string) {
+    setPermissions(prev => {
+      const cur = prev[role] ?? [];
+      const updated = cur.includes(module) ? cur.filter(m => m !== module) : [...cur, module];
+      return { ...prev, [role]: updated };
+    });
+  }
+
+  async function criarPerfil() {
+    if (!novoPerfilForm || !novoPerfilForm.nome.trim()) return;
+    try {
+      await perfisApi.create({ nome: novoPerfilForm.nome, descricao: novoPerfilForm.descricao, modulos: novoPerfilForm.modulos });
+      showToast('success', 'Perfil criado!');
+      setNovoPerfilForm(null);
+      loadPermissions();
+    } catch (err: any) {
+      showToast('error', 'Erro ao criar perfil', err.message);
+    }
+  }
+
+  async function salvarEditarPerfil() {
+    if (!editandoPerfil) return;
+    try {
+      await perfisApi.update(editandoPerfil.id, editPerfilForm);
+      showToast('success', 'Perfil atualizado!');
+      setEditandoPerfil(null);
+      loadPermissions();
+    } catch (err: any) {
+      showToast('error', 'Erro ao atualizar perfil', err.message);
+    }
+  }
+
+  function removerPerfil(p: Perfil) {
+    openConfirm(
+      'Remover Perfil',
+      `Remover o perfil "${p.nome}"? Usuários com este perfil voltarão ao perfil padrão.`,
+      'Remover',
+      async () => {
+        await perfisApi.remove(p.id);
+        showToast('info', 'Perfil removido');
+        loadPermissions();
+      },
+    );
+  }
+
+  // ── Editar usuário ──
+  function openEditUser(u: UserType) {
+    setEditingUser(u);
+    setEditUserForm({ nome: u.nome, email: u.email, role: u.role, oab: u.oab || '', novaSenha: '' });
+  }
+
+  async function salvarEditarUsuario(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditUserSaving(true);
+    try {
+      const payload: any = { nome: editUserForm.nome, email: editUserForm.email, role: editUserForm.role, oab: editUserForm.oab };
+      if (editUserForm.novaSenha.trim()) payload.senha = editUserForm.novaSenha;
+      await usersApi.update(editingUser.id, payload);
+      showToast('success', 'Usuário atualizado!');
+      setEditingUser(null);
+      loadUsers();
+    } catch (err: any) {
+      showToast('error', 'Erro ao atualizar usuário', err.message);
+    } finally {
+      setEditUserSaving(false);
     }
   }
 
@@ -479,14 +665,15 @@ export default function Configuracoes() {
   };
 
   const tabs: Array<{ key: Tab; label: string; icon: any; adminOnly?: boolean }> = [
-    { key: 'escritorio', label: 'Dados do Escritório', icon: Building2 },
-    { key: 'responsavel', label: 'OAB & Responsável', icon: User },
-    { key: 'notificacoes', label: 'Notificações', icon: Bell },
-    { key: 'google', label: 'Google Calendar', icon: Calendar },
-    { key: 'usuarios', label: 'Usuários', icon: Users, adminOnly: true },
-    { key: 'email', label: 'E-mail SMTP', icon: Mail, adminOnly: true },
-    { key: 'dados', label: 'Dados / Backup', icon: Database, adminOnly: true },
-    { key: 'auditoria', label: 'Auditoria', icon: ClipboardList, adminOnly: true },
+    { key: 'escritorio',  label: 'Dados do Escritório', icon: Building2 },
+    { key: 'responsavel', label: 'OAB & Responsável',   icon: User },
+    { key: 'notificacoes',label: 'Notificações',         icon: Bell },
+    { key: 'google',      label: 'Google Calendar',      icon: Calendar },
+    { key: 'usuarios',    label: 'Usuários',             icon: Users,        adminOnly: true },
+    { key: 'permissoes',  label: 'Permissões',           icon: ShieldCheck,  adminOnly: true },
+    { key: 'email',       label: 'E-mail SMTP',          icon: Mail,         adminOnly: true },
+    { key: 'dados',       label: 'Dados / Backup',       icon: Database,     adminOnly: true },
+    { key: 'auditoria',   label: 'Auditoria',            icon: ClipboardList,adminOnly: true },
   ];
 
   const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
@@ -833,7 +1020,7 @@ export default function Configuracoes() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-[#505050] uppercase">E-mail</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-[#505050] uppercase">Perfil</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-[#505050] uppercase">OAB</th>
-                    <th className="px-4 py-3" />
+                    <th className="px-4 py-3 text-xs font-medium text-[#505050] uppercase text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -848,15 +1035,24 @@ export default function Configuracoes() {
                       </td>
                       <td className="px-4 py-3 text-[#a0a0a0]">{u.oab || '—'}</td>
                       <td className="px-4 py-3 text-right">
-                        {u.id !== user?.id && (
+                        <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => removerUsuario(u)}
-                            className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                            title="Remover"
+                            onClick={() => openEditUser(u)}
+                            className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                            title="Editar"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4" />
                           </button>
-                        )}
+                          {u.id !== user?.id && (
+                            <button
+                              onClick={() => removerUsuario(u)}
+                              className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -925,6 +1121,63 @@ export default function Configuracoes() {
                     <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                       {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                       Criar
+                    </button>
+                  </div>
+                </form>
+              </div>
+              </div>
+            </div>
+            </Portal>
+          )}
+
+          {/* Modal: Editar Usuário */}
+          {editingUser && (
+            <Portal>
+            <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+              <div className="flex justify-center p-4">
+              <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
+                  <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Editar Usuário</h2>
+                  <button onClick={() => setEditingUser(null)} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
+                </div>
+                <form onSubmit={salvarEditarUsuario} className="px-6 py-5 space-y-4">
+                  <div>
+                    <label className={labelClass}>Nome *</label>
+                    <input className={inputClass} value={editUserForm.nome} onChange={e => setEditUserForm(p => ({ ...p, nome: e.target.value }))} required />
+                  </div>
+                  <div>
+                    <label className={labelClass}>E-mail *</label>
+                    <input type="email" className={inputClass} value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass}>Perfil</label>
+                      <select className={inputClass} value={editUserForm.role} onChange={e => setEditUserForm(p => ({ ...p, role: e.target.value as UserRole }))}>
+                        <option value="assistente">Assistente</option>
+                        <option value="advogado">Advogado</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>OAB</label>
+                      <input className={inputClass} value={editUserForm.oab} onChange={e => setEditUserForm(p => ({ ...p, oab: e.target.value }))} placeholder="SP 123456" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Nova Senha <span className="text-[#505050]">(deixe vazio para não alterar)</span></label>
+                    <input
+                      type="password"
+                      className={inputClass}
+                      value={editUserForm.novaSenha}
+                      onChange={e => setEditUserForm(p => ({ ...p, novaSenha: e.target.value }))}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2 border-t border-[#2a2a2a]">
+                    <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>
+                    <button type="submit" disabled={editUserSaving} className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+                      {editUserSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Salvar
                     </button>
                   </div>
                 </form>
@@ -1145,10 +1398,46 @@ export default function Configuracoes() {
       {/* ── Tab: Dados / Backup (admin only) ───────────────── */}
       {tab === 'dados' && isAdmin && (
         <div className="space-y-5">
+
+          {/* Backup Automático */}
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <h3 className="font-semibold text-[#f5f5f5] mb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" /> Backup Automático
+            </h3>
+            <p className="text-xs text-[#505050] mb-4">
+              Quando ativado, um backup JSON é baixado automaticamente ao abrir esta aba, respeitando o intervalo escolhido.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {(['desabilitado','diario','semanal','mensal'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => saveBackupSchedule(v)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    backupSchedule === v
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#a0a0a0] hover:text-[#f5f5f5]'
+                  }`}
+                >
+                  {{ desabilitado: 'Desabilitado', diario: 'Diário', semanal: 'Semanal', mensal: 'Mensal' }[v]}
+                </button>
+              ))}
+            </div>
+            {lastAutoBackup && (
+              <p className="text-xs text-[#505050] mt-3">
+                Último backup automático: {new Date(lastAutoBackup).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+              </p>
+            )}
+            {autoBackingUp && (
+              <div className="flex items-center gap-2 mt-3 text-amber-400 text-xs">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando backup automático…
+              </div>
+            )}
+          </div>
+
           {/* Exportar */}
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
             <h3 className="font-semibold text-[#f5f5f5] mb-2 flex items-center gap-2">
-              <Download className="w-4 h-4 text-amber-400" /> Exportar Backup
+              <Download className="w-4 h-4 text-amber-400" /> Exportar Backup Manual
             </h3>
             <p className="text-xs text-[#505050] mb-4">
               Exporta todos os dados do sistema (clientes, contratos, processos, lançamentos, avisos) em formato JSON.
@@ -1197,6 +1486,219 @@ export default function Configuracoes() {
           </div>
         </div>
       )}
+      {/* ── Tab: Permissões (admin only) ──────────────────────── */}
+      {tab === 'permissoes' && isAdmin && (
+        <div className="space-y-5">
+          {loadingPerms ? (
+            <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-amber-500" /></div>
+          ) : (
+            <>
+              {/* Acesso por perfil */}
+              <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-[#f5f5f5] flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" /> Acesso por Perfil
+                  </h3>
+                  <button
+                    onClick={salvarPermissions}
+                    disabled={savingPerms}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                  >
+                    {savingPerms ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Salvar
+                  </button>
+                </div>
+                <p className="text-xs text-[#505050] mb-5">
+                  Defina quais módulos cada perfil pode acessar. O perfil Admin tem acesso total por padrão.
+                </p>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#2a2a2a]">
+                        <th className="text-left px-3 py-2.5 text-xs text-[#505050] font-medium uppercase">Módulo</th>
+                        {['admin', 'advogado', 'assistente'].map(role => (
+                          <th key={role} className="px-3 py-2.5 text-xs text-[#505050] font-medium uppercase text-center">
+                            <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${roleBadge[role]}`}>{role}</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ALL_MODULES.map(mod => (
+                        <tr key={mod.key} className="border-b border-[#1e1e1e] last:border-0 hover:bg-[#1a1a1a] transition-colors">
+                          <td className="px-3 py-2.5 text-[#f5f5f5] font-medium">{mod.label}</td>
+                          {['admin', 'advogado', 'assistente'].map(role => {
+                            const checked = (permissions[role] ?? []).includes(mod.key);
+                            return (
+                              <td key={role} className="px-3 py-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => role !== 'admin' && togglePerm(role, mod.key)}
+                                  disabled={role === 'admin'}
+                                  title={role === 'admin' ? 'Admin sempre tem acesso total' : ''}
+                                  className={`transition-all ${role === 'admin' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                >
+                                  {checked
+                                    ? <ToggleRight className={`w-6 h-6 mx-auto ${role === 'admin' ? 'text-amber-500' : 'text-green-400'}`} />
+                                    : <ToggleLeft className="w-6 h-6 mx-auto text-[#3a3a3a]" />
+                                  }
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Perfis personalizados */}
+              <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-[#f5f5f5] flex items-center gap-2">
+                    <Users className="w-4 h-4 text-amber-400" /> Perfis Personalizados
+                  </h3>
+                  <button
+                    onClick={() => setNovoPerfilForm({ nome: '', descricao: '', modulos: [] })}
+                    className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-all"
+                  >
+                    <Plus className="w-4 h-4" /> Novo Perfil
+                  </button>
+                </div>
+                <p className="text-xs text-[#505050] mb-4">
+                  Crie perfis customizados com conjuntos específicos de módulos.
+                </p>
+
+                {perfis.length === 0 ? (
+                  <div className="text-center py-8 text-[#505050] text-sm">
+                    Nenhum perfil personalizado criado
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {perfis.map(p => (
+                      <div key={p.id} className="flex items-start gap-3 p-4 bg-[#1e1e1e] rounded-xl border border-[#2a2a2a]">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-semibold text-[#f5f5f5]">{p.nome}</span>
+                            {p.descricao && <span className="text-xs text-[#505050]">— {p.descricao}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {p.modulos.map(m => {
+                              const mod = ALL_MODULES.find(x => x.key === m);
+                              return (
+                                <span key={m} className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                  {mod?.label ?? m}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => { setEditandoPerfil(p); setEditPerfilForm({ nome: p.nome, descricao: p.descricao, modulos: p.modulos }); }}
+                            className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => removerPerfil(p)}
+                            className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Remover"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Inline form: Novo perfil */}
+                {novoPerfilForm && (
+                  <div className="mt-4 p-4 bg-[#1a1a1a] rounded-xl border border-amber-500/20 space-y-3">
+                    <p className="text-sm font-semibold text-[#f5f5f5]">Novo Perfil</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Nome *</label>
+                        <input className={inputClass} value={novoPerfilForm.nome} onChange={e => setNovoPerfilForm(p => p ? ({ ...p, nome: e.target.value }) : null)} placeholder="ex: Estagiário" />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Descrição</label>
+                        <input className={inputClass} value={novoPerfilForm.descricao} onChange={e => setNovoPerfilForm(p => p ? ({ ...p, descricao: e.target.value }) : null)} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Módulos</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ALL_MODULES.map(mod => {
+                          const checked = novoPerfilForm.modulos.includes(mod.key);
+                          return (
+                            <button
+                              key={mod.key}
+                              type="button"
+                              onClick={() => setNovoPerfilForm(p => p ? ({ ...p, modulos: checked ? p.modulos.filter(m => m !== mod.key) : [...p.modulos, mod.key] }) : null)}
+                              className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${checked ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#505050] hover:text-[#a0a0a0]'}`}
+                            >
+                              {mod.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setNovoPerfilForm(null)} className="px-4 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+                      <button type="button" onClick={criarPerfil} className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium">Criar</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline form: Editar perfil */}
+                {editandoPerfil && (
+                  <div className="mt-4 p-4 bg-[#1a1a1a] rounded-xl border border-blue-500/20 space-y-3">
+                    <p className="text-sm font-semibold text-[#f5f5f5]">Editar — {editandoPerfil.nome}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Nome *</label>
+                        <input className={inputClass} value={editPerfilForm.nome} onChange={e => setEditPerfilForm(p => ({ ...p, nome: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Descrição</label>
+                        <input className={inputClass} value={editPerfilForm.descricao} onChange={e => setEditPerfilForm(p => ({ ...p, descricao: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Módulos</label>
+                      <div className="flex flex-wrap gap-2">
+                        {ALL_MODULES.map(mod => {
+                          const checked = editPerfilForm.modulos.includes(mod.key);
+                          return (
+                            <button
+                              key={mod.key}
+                              type="button"
+                              onClick={() => setEditPerfilForm(p => ({ ...p, modulos: checked ? p.modulos.filter(m => m !== mod.key) : [...p.modulos, mod.key] }))}
+                              className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${checked ? 'bg-amber-500/20 border-amber-500/30 text-amber-400' : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#505050] hover:text-[#a0a0a0]'}`}
+                            >
+                              {mod.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditandoPerfil(null)} className="px-4 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+                      <button type="button" onClick={salvarEditarPerfil} className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium">Salvar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Tab: Auditoria (admin only) ─────────────────────── */}
       {tab === 'auditoria' && isAdmin && (
         <div className="space-y-5">

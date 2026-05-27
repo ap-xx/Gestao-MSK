@@ -2,8 +2,10 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, Search, X, Building2, User, Users, Loader2,
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
+  Star, Paperclip, FileText, Download, Upload, Gavel,
 } from 'lucide-react';
-import { clientesApi } from '../services/api';
+import { clientesApi, processosApi, documentosApi } from '../services/api';
+import type { Documento } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -12,7 +14,7 @@ import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
-import type { Cliente, TipoPessoa, StatusCliente } from '../types';
+import type { Cliente, TipoPessoa, StatusCliente, Processo } from '../types';
 
 const STATUS_BADGE: Record<StatusCliente, string> = {
   ativo: 'bg-green-500/15 text-green-400 border-green-500/30',
@@ -24,6 +26,182 @@ const STATUS_LABELS: Record<StatusCliente, string> = {
   inativo: 'Inativo',
   bloqueado: 'Bloqueado',
 };
+
+// ─── Star Rating ──────────────────────────────────────────────
+function StarRating({ value, onChange, readOnly }: { value: number; onChange?: (v: number) => void; readOnly?: boolean }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button
+          key={i}
+          type="button"
+          disabled={readOnly}
+          onClick={() => onChange?.(i === value ? 0 : i)}
+          onMouseEnter={() => !readOnly && setHovered(i)}
+          onMouseLeave={() => !readOnly && setHovered(0)}
+          className={`transition-colors ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+        >
+          <Star
+            className={`w-4 h-4 ${
+              i <= (hovered || value)
+                ? 'text-amber-400 fill-amber-400'
+                : 'text-[#3a3a3a]'
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Documentos do Cliente ─────────────────────────────────────
+function ClienteDocumentosSection({ clienteId }: { clienteId: string }) {
+  const { showToast } = useToast();
+  const [docs, setDocs] = useState<Documento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const carregar = useCallback(async () => {
+    try {
+      setDocs(await documentosApi.getByEntidade('cliente', clienteId));
+    } catch { /* silencioso */ }
+    finally { setLoading(false); }
+  }, [clienteId]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('error', 'Arquivo muito grande', 'Máximo 5 MB'); return; }
+    setUploading(true);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const b64 = (ev.target!.result as string).split(',')[1];
+            await documentosApi.create({ entidade: 'cliente', entidadeId: clienteId, nome: file.name, tipo: file.type || 'application/octet-stream', conteudo: b64 });
+            showToast('success', 'Documento anexado!');
+            await carregar();
+            resolve();
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } catch (err: any) { showToast('error', 'Erro ao enviar', err.message); }
+    finally { setUploading(false); e.target.value = ''; }
+  }
+
+  async function handleDownload(doc: Documento) {
+    try {
+      const r = await documentosApi.download(doc.id);
+      const a = document.createElement('a'); a.href = `data:${r.tipo};base64,${r.conteudo}`; a.download = r.nome; a.click();
+    } catch { showToast('error', 'Erro ao baixar'); }
+  }
+
+  const fmtSize = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(1)} MB`;
+
+  return (
+    <div className="border-t border-[#2a2a2a] pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
+          <Paperclip className="w-3 h-3" /> Documentos ({docs.length})
+        </p>
+        <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
+          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+          Anexar
+          <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
+        </label>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
+      ) : docs.length === 0 ? (
+        <p className="text-xs text-[#505050] text-center py-3">Nenhum documento anexado</p>
+      ) : (
+        <div className="space-y-1.5">
+          {docs.map(doc => (
+            <div key={doc.id} className="flex items-center gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs">
+              <FileText className="w-3 h-3 text-blue-400 shrink-0" />
+              <span className="text-[#a0a0a0] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
+              <span className="text-[#505050] shrink-0">{fmtSize(doc.tamanho)}</span>
+              <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors"><Download className="w-3 h-3" /></button>
+              <button onClick={async () => { await documentosApi.remove(doc.id); carregar(); }} className="p-1 text-[#505050] hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Processos do Cliente ──────────────────────────────────────
+function ClienteProcessosSection({ clienteId }: { clienteId: string }) {
+  const [processos, setProcessos] = useState<Processo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroStatus, setFiltroStatus] = useState<string>('todos');
+
+  useEffect(() => {
+    processosApi.getAll()
+      .then(all => setProcessos(all.filter(p => p.clienteId === clienteId)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [clienteId]);
+
+  const filtrados = useMemo(() => {
+    if (filtroStatus === 'todos') return processos;
+    return processos.filter(p => p.status === filtroStatus);
+  }, [processos, filtroStatus]);
+
+  const statusColors: Record<string, string> = {
+    ativo: 'text-green-400 bg-green-500/10',
+    suspenso: 'text-amber-400 bg-amber-500/10',
+    encerrado: 'text-red-400 bg-red-500/10',
+    arquivado: 'text-gray-400 bg-gray-500/10',
+  };
+
+  return (
+    <div className="border-t border-[#2a2a2a] pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
+          <Gavel className="w-3 h-3" /> Processos ({processos.length})
+        </p>
+        <select
+          value={filtroStatus}
+          onChange={e => setFiltroStatus(e.target.value)}
+          className="bg-[#1e1e1e] border border-[#2a2a2a] rounded text-[10px] text-[#a0a0a0] px-2 py-1"
+        >
+          <option value="todos">Todos</option>
+          <option value="ativo">Ativos</option>
+          <option value="suspenso">Suspensos</option>
+          <option value="encerrado">Encerrados</option>
+          <option value="arquivado">Arquivados</option>
+        </select>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
+      ) : filtrados.length === 0 ? (
+        <p className="text-xs text-[#505050] text-center py-3">Nenhum processo encontrado</p>
+      ) : (
+        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+          {filtrados.map(p => (
+            <div key={p.id} className="flex items-start gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs">
+              <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[p.status] ?? 'text-gray-400 bg-gray-500/10'}`}>
+                {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[#f5f5f5] font-mono truncate">{p.numeroCNJ}</p>
+                <p className="text-[#505050]">{p.areaAtuacao} · {p.fase}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Modal de cadastro/edição ──────────────────────────────────
 interface ModalProps {
@@ -37,6 +215,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const isEdit = !!cliente;
 
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>(cliente?.tipoPessoa || 'PF');
+  const [avaliacao, setAvaliacao] = useState(cliente?.avaliacao ?? 0);
   const [form, setForm] = useState({
     nome: cliente?.nome || '',
     cpf: cliente?.cpf || '',
@@ -142,6 +321,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
     const saved: Omit<Cliente, 'id'> & { id?: string } = {
       ...(cliente?.id ? { id: cliente.id } : {}),
       tipoPessoa,
+      avaliacao,
       nome: form.nome,
       cpf: tipoPessoa === 'PF' ? form.cpf : undefined,
       cnpj: tipoPessoa === 'PJ' ? form.cnpj : undefined,
@@ -312,6 +492,18 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                 <option value="inativo">Inativo</option>
                 <option value="bloqueado">Bloqueado</option>
               </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Avaliação do Cliente</label>
+            <div className="flex items-center gap-3">
+              <StarRating value={avaliacao} onChange={setAvaliacao} />
+              {avaliacao > 0 && (
+                <span className="text-xs text-[#505050]">
+                  {['', 'Muito ruim', 'Ruim', 'Regular', 'Bom', 'Excelente'][avaliacao]}
+                </span>
+              )}
             </div>
           </div>
 
@@ -650,9 +842,14 @@ export default function Clientes() {
                       </p>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_BADGE[c.status]}`}>
-                        {STATUS_LABELS[c.status]}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border w-fit ${STATUS_BADGE[c.status]}`}>
+                          {STATUS_LABELS[c.status]}
+                        </span>
+                        {(c.avaliacao ?? 0) > 0 && (
+                          <StarRating value={c.avaliacao ?? 0} readOnly />
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
@@ -743,12 +940,20 @@ export default function Clientes() {
                   ))}
                 </div>
               )}
+              {(viewCliente.avaliacao ?? 0) > 0 && (
+                <div className="border-t border-[#2a2a2a] pt-4">
+                  <p className="text-xs text-[#505050] mb-2">Avaliação</p>
+                  <StarRating value={viewCliente.avaliacao ?? 0} readOnly />
+                </div>
+              )}
               {viewCliente.observacoes && (
                 <div className="border-t border-[#2a2a2a] pt-4">
                   <p className="text-xs text-[#505050] mb-1">Observações</p>
                   <p className="text-[#a0a0a0]">{viewCliente.observacoes}</p>
                 </div>
               )}
+              <ClienteProcessosSection clienteId={viewCliente.id} />
+              <ClienteDocumentosSection clienteId={viewCliente.id} />
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
               <button onClick={() => { setViewCliente(null); setEditCliente(viewCliente); setModalOpen(true); }} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium transition-colors">

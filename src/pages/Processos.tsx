@@ -5,7 +5,7 @@ import {
   Paperclip, FileText, Download, Upload,
 } from 'lucide-react';
 import { processosApi, clientesApi, documentosApi } from '../services/api';
-import type { Documento } from '../services/api';
+import type { Documento, CategoriaDocumento } from '../services/api';
 import { ModeloDocumento } from '../components/modelos/ModeloDocumento';
 import type { TipoModelo, ModeloDados } from '../components/modelos/ModeloDocumento';
 import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
@@ -131,12 +131,25 @@ function AndamentosSection({ processoId, andamentos, onAdded }: {
   );
 }
 
+const CATEGORIAS: Array<{ value: CategoriaDocumento; label: string; color: string }> = [
+  { value: 'contrato',    label: 'Contrato',    color: 'text-blue-400 bg-blue-500/10' },
+  { value: 'petição',     label: 'Petição',     color: 'text-purple-400 bg-purple-500/10' },
+  { value: 'certidão',    label: 'Certidão',    color: 'text-green-400 bg-green-500/10' },
+  { value: 'procuração',  label: 'Procuração',  color: 'text-amber-400 bg-amber-500/10' },
+  { value: 'decisão',     label: 'Decisão',     color: 'text-red-400 bg-red-500/10' },
+  { value: 'comprovante', label: 'Comprovante', color: 'text-cyan-400 bg-cyan-500/10' },
+  { value: 'identidade',  label: 'Identidade',  color: 'text-orange-400 bg-orange-500/10' },
+  { value: 'outros',      label: 'Outros',      color: 'text-gray-400 bg-gray-500/10' },
+];
+
 // ─── Documentos section ───────────────────────────────────────
 function DocumentosSection({ processoId }: { processoId: string }) {
   const { showToast } = useToast();
   const [docs, setDocs] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [novaCategoria, setNovaCategoria] = useState<CategoriaDocumento>('outros');
+  const [filtroCategoria, setFiltroCategoria] = useState<string>('todos');
 
   const carregarDocs = useCallback(async () => {
     try {
@@ -161,7 +174,7 @@ function DocumentosSection({ processoId }: { processoId: string }) {
             const b64 = (ev.target!.result as string).split(',')[1];
             await documentosApi.create({
               entidade: 'processo', entidadeId: processoId,
-              nome: file.name, tipo: file.type || 'application/octet-stream', conteudo: b64,
+              nome: file.name, tipo: file.type || 'application/octet-stream', conteudo: b64, categoria: novaCategoria,
             });
             showToast('success', 'Documento anexado!');
             await carregarDocs();
@@ -200,38 +213,69 @@ function DocumentosSection({ processoId }: { processoId: string }) {
   const fmtSize = (b: number) =>
     b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 
+  const docsFiltrados = filtroCategoria === 'todos' ? docs : docs.filter(d => d.categoria === filtroCategoria);
+
   return (
     <div className="border-t border-[#2a2a2a] pt-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
           <Paperclip className="w-3 h-3" /> Documentos ({docs.length})
         </p>
-        <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
-          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-          Anexar
-          <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
-        </label>
+        <div className="flex items-center gap-2">
+          <select
+            value={novaCategoria}
+            onChange={e => setNovaCategoria(e.target.value as CategoriaDocumento)}
+            className="bg-[#1e1e1e] border border-[#2a2a2a] rounded text-[10px] text-[#a0a0a0] px-2 py-1"
+          >
+            {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+          <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            Anexar
+            <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
+          </label>
+        </div>
       </div>
+
+      {docs.length > 0 && (
+        <div className="flex gap-1 mb-2 flex-wrap">
+          <button
+            onClick={() => setFiltroCategoria('todos')}
+            className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${filtroCategoria === 'todos' ? 'bg-amber-500/20 text-amber-400' : 'bg-[#1e1e1e] text-[#505050] hover:text-[#a0a0a0]'}`}
+          >Todos</button>
+          {CATEGORIAS.filter(c => docs.some(d => d.categoria === c.value)).map(c => (
+            <button
+              key={c.value}
+              onClick={() => setFiltroCategoria(c.value)}
+              className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${filtroCategoria === c.value ? `${c.color} font-medium` : 'bg-[#1e1e1e] text-[#505050] hover:text-[#a0a0a0]'}`}
+            >{c.label}</button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
-      ) : docs.length === 0 ? (
-        <p className="text-xs text-[#505050] text-center py-3">Nenhum documento anexado</p>
+      ) : docsFiltrados.length === 0 ? (
+        <p className="text-xs text-[#505050] text-center py-3">{docs.length === 0 ? 'Nenhum documento anexado' : 'Nenhum documento nesta categoria'}</p>
       ) : (
         <div className="space-y-1.5">
-          {docs.map(doc => (
-            <div key={doc.id} className="flex items-center gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs group">
-              <FileText className="w-3 h-3 text-blue-400 shrink-0" />
-              <span className="text-[#a0a0a0] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
-              <span className="text-[#505050] shrink-0">{fmtSize(doc.tamanho)}</span>
-              <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors" title="Baixar">
-                <Download className="w-3 h-3" />
-              </button>
-              <button onClick={() => handleRemove(doc.id)} className="p-1 text-[#505050] hover:text-red-400 transition-colors" title="Remover">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+          {docsFiltrados.map(doc => {
+            const cat = CATEGORIAS.find(c => c.value === doc.categoria) ?? CATEGORIAS[CATEGORIAS.length - 1];
+            return (
+              <div key={doc.id} className="flex items-center gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs group">
+                <FileText className="w-3 h-3 text-blue-400 shrink-0" />
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${cat.color}`}>{cat.label}</span>
+                <span className="text-[#a0a0a0] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
+                <span className="text-[#505050] shrink-0">{fmtSize(doc.tamanho)}</span>
+                <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors" title="Baixar">
+                  <Download className="w-3 h-3" />
+                </button>
+                <button onClick={() => handleRemove(doc.id)} className="p-1 text-[#505050] hover:text-red-400 transition-colors" title="Remover">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -666,6 +710,7 @@ export default function Processos() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toDelete,    setToDelete]    = useState<Processo | null>(null);
   const [deleting,    setDeleting]    = useState(false);
+  const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -724,9 +769,36 @@ export default function Processos() {
     }
   }
 
+  async function handleQuickStatus(p: Processo, newStatus: string) {
+    setQuickStatusId(null);
+    if (p.status === newStatus) return;
+    try {
+      await processosApi.update(p.id, { status: newStatus as Processo['status'] });
+      await reload();
+      showToast('success', 'Status atualizado!', `${p.numeroCNJ} → ${newStatus}`);
+    } catch (err: any) {
+      showToast('error', 'Erro ao atualizar status', err.message);
+    }
+  }
+
+  const STATUS_PROC_COLORS: Record<string, string> = {
+    ativo: 'bg-green-500/15 text-green-400 border-green-500/30',
+    suspenso: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    encerrado: 'bg-red-500/15 text-red-400 border-red-500/30',
+    arquivado: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+  };
+
   const SortIcon = ({ col }: { col: keyof Processo }) => (
     <span className="ml-1 opacity-60">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
   );
+
+  // Close quick status dropdown on outside click
+  useEffect(() => {
+    if (!quickStatusId) return;
+    function handleClick() { setQuickStatusId(null); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [quickStatusId]);
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -781,6 +853,7 @@ export default function Processos() {
                   Fase <SortIcon col="fase" />
                 </th>
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Próx. Audiência</th>
+                <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Status</th>
                 <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
@@ -789,7 +862,7 @@ export default function Processos() {
                 <LoadingTable cols={6} />
               ) : pagination.items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-[#505050]">
+                  <td colSpan={7} className="py-12 text-center text-[#505050]">
                     <Gavel className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>Nenhum processo encontrado</p>
                   </td>
@@ -832,6 +905,31 @@ export default function Processos() {
                       ) : (
                         <span className="text-[#505050] text-xs">—</span>
                       )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="relative">
+                        <button
+                          onClick={() => setQuickStatusId(quickStatusId === p.id ? null : p.id)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}
+                          title="Clique para alterar status"
+                        >
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                          <ChevronDown className="w-3 h-3 opacity-60" />
+                        </button>
+                        {quickStatusId === p.id && (
+                          <div className="absolute z-20 top-full left-0 mt-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg shadow-xl overflow-hidden min-w-32">
+                            {(['ativo', 'suspenso', 'encerrado', 'arquivado'] as const).map(s => (
+                              <button
+                                key={s}
+                                onClick={() => handleQuickStatus(p, s)}
+                                className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#252525] ${p.status === s ? 'text-amber-400' : 'text-[#a0a0a0]'}`}
+                              >
+                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">

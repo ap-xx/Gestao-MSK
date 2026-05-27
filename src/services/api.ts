@@ -152,6 +152,8 @@ export const auditoriaApi = {
 
 // ─── Documentos / Anexos ───────────────────────────────────────
 
+export type CategoriaDocumento = 'contrato' | 'petição' | 'certidão' | 'procuração' | 'decisão' | 'comprovante' | 'identidade' | 'outros';
+
 export interface Documento {
   id: string;
   entidade: string;
@@ -159,6 +161,7 @@ export interface Documento {
   nome: string;
   tipo: string;
   tamanho: number;
+  categoria: CategoriaDocumento;
   criadoEm: string;
   criadoPor: string;
 }
@@ -166,12 +169,31 @@ export interface Documento {
 export const documentosApi = {
   getByEntidade: (entidade: string, entidadeId: string) =>
     req<Documento[]>('GET', `/documentos?entidade=${encodeURIComponent(entidade)}&entidadeId=${encodeURIComponent(entidadeId)}`),
-  create: (doc: { entidade: string; entidadeId: string; nome: string; tipo: string; conteudo: string }) =>
+  create: (doc: { entidade: string; entidadeId: string; nome: string; tipo: string; conteudo: string; categoria?: string }) =>
     req<Documento>('POST', '/documentos', doc),
   remove: (id: string) =>
     req<{ ok: true }>('DELETE', `/documentos/${id}`),
   download: (id: string) =>
     req<{ id: string; nome: string; tipo: string; conteudo: string }>('GET', `/documentos/${id}/download`),
+};
+
+// ─── Perfis / Permissões ───────────────────────────────────────
+
+export interface Perfil {
+  id: string;
+  nome: string;
+  descricao: string;
+  modulos: string[];
+  criadoEm: string;
+}
+
+export const perfisApi = {
+  getAll: () => req<Perfil[]>('GET', '/perfis'),
+  create: (p: { nome: string; descricao?: string; modulos: string[] }) => req<Perfil>('POST', '/perfis', p),
+  update: (id: string, p: { nome?: string; descricao?: string; modulos?: string[] }) => req<Perfil>('PUT', `/perfis/${id}`, p),
+  remove: (id: string) => req<{ ok: true }>('DELETE', `/perfis/${id}`),
+  getPermissions: () => req<Record<string, string[]>>('GET', '/perfis/permissions'),
+  setPermissions: (perms: Record<string, string[]>) => req<{ ok: true }>('PUT', '/perfis/permissions', perms),
 };
 
 // ─── Auth refresh ──────────────────────────────────────────────

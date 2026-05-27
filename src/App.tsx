@@ -12,6 +12,7 @@ import Inadimplencia from './pages/Inadimplencia';
 import Avisos from './pages/Avisos';
 import Agenda from './pages/Agenda';
 import Configuracoes from './pages/Configuracoes';
+import Relatorios from './pages/Relatorios';
 import { useState } from 'react';
 
 function AppContent() {
@@ -42,6 +43,7 @@ function AppContent() {
     agenda:        <Agenda />,
     inadimplencia: <Inadimplencia />,
     avisos:        <Avisos />,
+    relatorios:    <Relatorios />,
     configuracoes: <Configuracoes />,
   };
 
