@@ -88,7 +88,8 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
@@ -180,6 +181,7 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
             {isEdit ? 'Salvar' : 'Registrar'}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

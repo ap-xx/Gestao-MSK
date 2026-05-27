@@ -130,7 +130,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
@@ -247,8 +247,8 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
   return (
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] sticky top-0 bg-[#141414]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Detalhes do Contrato</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
