@@ -185,7 +185,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           </button>
         </div>
 
-        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Tipo de pessoa */}
           <div className="flex gap-3">
             {(['PF', 'PJ'] as TipoPessoa[]).map(t => (
@@ -709,7 +709,7 @@ export default function Clientes() {
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{viewCliente.nome}</h2>
               <button onClick={() => setViewCliente(null)} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
             </div>
-            <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1">
+            <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
               <div className="grid grid-cols-2 gap-4">
                 <div><p className="text-xs text-[#505050]">Tipo</p><p className="text-[#f5f5f5]">{viewCliente.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</p></div>
                 <div><p className="text-xs text-[#505050]">Documento</p><p className="text-[#f5f5f5] font-mono">{viewCliente.cpf || viewCliente.cnpj || '—'}</p></div>

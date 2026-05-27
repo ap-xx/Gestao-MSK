@@ -100,7 +100,7 @@ export default function NotificacoesPanel({ open, onClose, onNavigate }: Props) 
         </div>
 
         {/* Lista */}
-        <div className="flex-1 overflow-y-auto py-3 px-3 space-y-2">
+        <div className="flex-1 overflow-y-auto min-h-0 py-3 px-3 space-y-2">
           {avisos.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-[#505050]">
               <Bell className="w-8 h-8 mb-2" />

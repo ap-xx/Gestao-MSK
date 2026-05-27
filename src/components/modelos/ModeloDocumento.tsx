@@ -369,7 +369,7 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
           </div>
 
           {/* Documento scrollável */}
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 min-h-0">
             {tipo === 'procuracao' && <ProcuracaoTemplate dados={dados} />}
             {tipo === 'contrato_honorarios' && <ContratoHonorariosTemplate dados={dados} />}
             {tipo === 'declaracao' && <DeclaracaoTemplate dados={dados} />}

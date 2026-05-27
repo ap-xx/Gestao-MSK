@@ -367,7 +367,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
 
-        <form id="processo-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        <form id="processo-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Número CNJ + DataJud */}
           <div>
             <label className={labelClass}>Número CNJ *</label>
@@ -552,7 +552,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
             <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
           <div className="grid grid-cols-2 gap-4">
             <div><p className="text-xs text-[#505050]">Cliente</p><p className="text-[#f5f5f5] font-medium">{currentProcesso.clienteNome}</p></div>
             <div><p className="text-xs text-[#505050]">Tribunal</p><p className="text-[#f5f5f5]">{currentProcesso.tribunal}</p></div>

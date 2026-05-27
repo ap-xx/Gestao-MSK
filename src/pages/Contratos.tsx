@@ -135,7 +135,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Cliente */}
           <div>
             <label className={labelClass}>Cliente *</label>
@@ -250,7 +250,7 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Detalhes do Contrato</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
           {/* Pipeline */}
           <div>
             <p className="text-xs text-[#505050] mb-1">Status</p>

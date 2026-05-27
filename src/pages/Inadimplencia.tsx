@@ -106,7 +106,7 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
           </div>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           {/* Resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-center">

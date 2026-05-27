@@ -95,7 +95,7 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form id="honorario-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <form id="honorario-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Tipo */}
           <div>
             <label className={labelClass}>Tipo *</label>
