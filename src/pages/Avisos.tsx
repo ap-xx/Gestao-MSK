@@ -66,9 +66,8 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Novo Aviso</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
@@ -108,7 +107,6 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModalProps) {
             </button>
           </div>
         </form>
-      </div>
       </div>
     </div>
   );

@@ -97,9 +97,8 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
   const CanalIcon = canalIcons[canal];
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <div>
             <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Notificação de Inadimplência</h2>
@@ -107,7 +106,7 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
           </div>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           {/* Resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-center">
@@ -176,7 +175,6 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
             </button>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
