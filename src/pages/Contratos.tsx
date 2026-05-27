@@ -249,6 +249,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
 // ─── Modal de visualização ─────────────────────────────────────
 function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClose: () => void; onEdit: () => void }) {
   return (
+    <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
@@ -307,6 +308,7 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
       </div>
       </div>
     </div>
+    </Portal>
   );
 }
 

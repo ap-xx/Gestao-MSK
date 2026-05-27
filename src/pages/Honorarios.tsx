@@ -13,6 +13,7 @@ import { Pagination } from '../components/ui/Pagination';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Lancamento, TipoLancamento, StatusPagamento, Cliente } from '../types';
+import Portal from '../components/ui/Portal';
 
 const STATUS_STYLES: Record<StatusPagamento, string> = {
   pago: 'bg-green-500/15 text-green-400 border-green-500/30',

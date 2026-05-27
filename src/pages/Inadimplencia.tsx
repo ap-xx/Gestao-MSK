@@ -7,6 +7,7 @@ import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import type { Cliente, Lancamento } from '../types';
+import Portal from '../components/ui/Portal';
 
 const TOKEN_KEY = 'msk_token';
 

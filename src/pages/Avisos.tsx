@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { DateInput } from '../components/ui/Input';
 import type { Aviso, UrgenciaAviso, TipoAviso } from '../types';
+import Portal from '../components/ui/Portal';
 
 const urgenciaConfig: Record<UrgenciaAviso, { label: string; border: string; bg: string; text: string; badge: string }> = {
   critica: { label: 'Crítica', border: 'border-red-500', bg: 'bg-red-500/5', text: 'text-red-400', badge: 'bg-red-500/20 text-red-400 border-red-500/30' },
