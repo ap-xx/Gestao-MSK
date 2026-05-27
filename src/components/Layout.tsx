@@ -134,6 +134,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         style={{
           width: sidebarCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
           transition: `width ${DURATION} ${EASING}, transform ${DURATION} ${EASING}`,
+          willChange: 'width',
         }}
       >
         {/* Logo */}
@@ -151,7 +152,10 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             style={{
               maxWidth: sidebarCollapsed ? '0' : `${EXPANDED_W}px`,
               opacity: sidebarCollapsed ? 0 : 1,
-              transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
+              // max-width snaps instantly; only opacity is animated
+              transition: sidebarCollapsed
+                ? 'opacity 80ms ease, max-width 0ms 80ms'
+                : 'opacity 100ms 140ms ease, max-width 0ms 0ms',
               flex: '1 1 0%',
             }}
           >
@@ -223,9 +227,11 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                 <span
                   className="overflow-hidden whitespace-nowrap flex items-center gap-2 shrink-0"
                   style={{
-                    maxWidth:     sidebarCollapsed ? '0' : '200px',
-                    opacity:      sidebarCollapsed ? 0 : 1,
-                    transition:   `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
+                    maxWidth:      sidebarCollapsed ? '0' : '200px',
+                    opacity:       sidebarCollapsed ? 0 : 1,
+                    transition:    sidebarCollapsed
+                      ? 'opacity 80ms ease, max-width 0ms 80ms'
+                      : 'opacity 100ms 140ms ease, max-width 0ms 0ms',
                     pointerEvents: sidebarCollapsed ? 'none' : 'auto',
                   }}
                 >
@@ -269,7 +275,9 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
               style={{
                 maxWidth:   sidebarCollapsed ? '0' : '160px',
                 opacity:    sidebarCollapsed ? 0 : 1,
-                transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
+                transition: sidebarCollapsed
+                  ? 'opacity 80ms ease, max-width 0ms 80ms'
+                  : 'opacity 100ms 140ms ease, max-width 0ms 0ms',
                 flex: '1 1 0%',
               }}
             >
@@ -308,7 +316,9 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
               style={{
                 maxWidth:   sidebarCollapsed ? '0' : '80px',
                 opacity:    sidebarCollapsed ? 0 : 1,
-                transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
+                transition: sidebarCollapsed
+                  ? 'opacity 80ms ease, max-width 0ms 80ms'
+                  : 'opacity 100ms 140ms ease, max-width 0ms 0ms',
               }}
             >
               Recolher

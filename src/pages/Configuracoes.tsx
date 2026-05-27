@@ -94,6 +94,7 @@ export default function Configuracoes() {
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; connectedAt?: string } | null>(null);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [syncingGoogle, setSyncingGoogle] = useState(false);
+  const [conectandoGoogle, setConectandoGoogle] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -185,8 +186,10 @@ export default function Configuracoes() {
       if (e.data?.type === 'msk-google-success') {
         loadGoogleStatus();
         showToast('success', 'Google Calendar conectado!');
+        setConectandoGoogle(false);
       } else if (e.data?.type === 'msk-google-error') {
         showToast('error', 'Erro ao conectar Google Calendar');
+        setConectandoGoogle(false);
       }
     }
     window.addEventListener('message', onMessage);
@@ -194,14 +197,41 @@ export default function Configuracoes() {
   }, [loadGoogleStatus, showToast]);
 
   async function conectarGoogle() {
+    setConectandoGoogle(true);
+    let keepAlive: ReturnType<typeof setInterval> | null = null;
+    let checkClosed: ReturnType<typeof setInterval> | null = null;
+
+    const cleanup = () => {
+      if (keepAlive)   clearInterval(keepAlive);
+      if (checkClosed) clearInterval(checkClosed);
+      setConectandoGoogle(false);
+    };
+
     try {
+      // authUrl request wakes the Render server; only then open the popup
       const { url } = await googleApi.authUrl();
+
       const popup = window.open(url, 'google-auth', 'width=520,height=620,scrollbars=yes');
       if (!popup) {
         showToast('error', 'Popup bloqueado pelo navegador. Permita popups para este site.');
+        cleanup();
+        return;
       }
+
+      // Ping the server every 12 s to prevent Render free tier from sleeping
+      // while the user completes Google's consent screen
+      keepAlive = setInterval(() => {
+        googleApi.status().catch(() => {});
+      }, 12_000);
+
+      // Detect popup close (user cancelled or OAuth completed)
+      checkClosed = setInterval(() => {
+        if (popup.closed) cleanup();
+      }, 1_000);
+
     } catch (err: any) {
       showToast('error', 'Erro ao obter URL de autenticação', err.message);
+      cleanup();
     }
   }
 
@@ -1016,15 +1046,27 @@ export default function Configuracoes() {
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
                   {!googleStatus?.connected ? (
-                    <button
-                      onClick={conectarGoogle}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Conectar Google Calendar
-                    </button>
+                    <>
+                      <button
+                        onClick={conectarGoogle}
+                        disabled={conectandoGoogle}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {conectandoGoogle
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Link2 className="w-4 h-4" />
+                        }
+                        {conectandoGoogle ? 'Aguardando servidor...' : 'Conectar Google Calendar'}
+                      </button>
+                      {conectandoGoogle && (
+                        <p className="text-xs text-[#505050] leading-tight">
+                          O servidor pode levar até 30 s para acordar.<br />
+                          A janela do Google permanece válida.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <>
                       <button
