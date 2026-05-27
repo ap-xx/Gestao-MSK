@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
 import { SessionDB } from '../data/db';
+import { authApi } from '../services/api';
 
-const TOKEN_KEY = 'msk_token';
+const TOKEN_KEY   = 'msk_token';
+const REFRESH_KEY = 'msk_refresh';
 
 interface AuthContextType {
   user: User | null;
@@ -32,7 +34,7 @@ async function tryFetch(email: string, senha: string, timeoutMs: number): Promis
   }
 }
 
-async function apiLogin(email: string, senha: string): Promise<{ token: string; user: User }> {
+async function apiLogin(email: string, senha: string): Promise<{ token: string; refreshToken?: string; user: User }> {
   let res: Response;
   try {
     // Primeira tentativa — 30s
@@ -51,7 +53,7 @@ async function apiLogin(email: string, senha: string): Promise<{ token: string; 
   }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
-  return data as { token: string; user: User };
+  return data as { token: string; refreshToken?: string; user: User };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -66,8 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, senha: string) => {
     try {
-      const { token, user: loggedUser } = await apiLogin(email.toLowerCase().trim(), senha);
+      const { token, refreshToken, user: loggedUser } = await apiLogin(email.toLowerCase().trim(), senha);
       sessionStorage.setItem(TOKEN_KEY, token);
+      if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
       SessionDB.set(loggedUser);
       setUser(loggedUser);
     } catch (err) {
@@ -86,6 +89,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (refreshToken) {
+      authApi.logout(refreshToken).catch(() => {}); // fire-and-forget
+      localStorage.removeItem(REFRESH_KEY);
+    }
     sessionStorage.removeItem(TOKEN_KEY);
     SessionDB.clear();
     setUser(null);

@@ -123,6 +123,23 @@ router.put('/:id', (req: Request, res: Response) => {
       andamentos, dadosDataJud, now, req.params.id
     );
 
+    // Auto-registrar andamento se o status mudou
+    if (body.status && body.status !== existing.status) {
+      const andamentosArr = JSON.parse((existing.andamentos as string) || '[]');
+      const autoAndamento = {
+        id: generateId(),
+        tipo: 'outro',
+        descricao: `Status alterado de "${existing.status}" para "${body.status}"`,
+        data: new Date().toISOString().slice(0, 10),
+        usuarioNome: (req as any).user?.email ?? 'Sistema',
+        criadoEm: new Date().toISOString(),
+      };
+      andamentosArr.push(autoAndamento);
+      db.prepare('UPDATE processos SET andamentos = ? WHERE id = ?').run(
+        JSON.stringify(andamentosArr), req.params.id
+      );
+    }
+
     const updated = db.prepare('SELECT * FROM processos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
     const parsedUp = parseProcesso(updated);
     // Sync audiências com Google Calendar (background)

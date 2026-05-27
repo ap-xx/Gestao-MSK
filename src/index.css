@@ -123,3 +123,12 @@ input:focus, select:focus, textarea:focus {
 .toast-enter {
   animation: toastSlide 0.35s ease-out forwards;
 }
+
+/* Page transition */
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: pageFadeIn 0.18s ease-out forwards;
+}

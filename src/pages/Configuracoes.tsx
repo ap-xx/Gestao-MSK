@@ -4,15 +4,19 @@ import {
   Mail, Phone, Globe, Shield, Users, Database,
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
   Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
+  ClipboardList,
 } from 'lucide-react';
-import { escritorioApi, usersApi, configApi, backupApi, googleApi } from '../services/api';
+import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi } from '../services/api';
+import type { AuditEntry } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCEP, formatTelefone } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 
-type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google';
+type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -92,6 +96,50 @@ export default function Configuracoes() {
 
   const isAdmin = user?.role === 'admin';
 
+  // ── Push Notifications ──
+  const push = usePushNotifications();
+
+  // ── Generic Confirm Dialog ──
+  const [confirmCfg, setConfirmCfg] = useState<null | {
+    title: string; message: string; confirmLabel: string; action: () => Promise<void>;
+  }>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  function openConfirm(title: string, message: string, label: string, action: () => Promise<void>) {
+    setConfirmCfg({ title, message, confirmLabel: label, action });
+  }
+
+  async function handleConfirm() {
+    if (!confirmCfg) return;
+    setConfirmLoading(true);
+    try {
+      await confirmCfg.action();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmCfg(null);
+    }
+  }
+
+  // ── Auditoria ──
+  const [auditorias, setAuditorias] = useState<AuditEntry[]>([]);
+  const [loadingAuditoria, setLoadingAuditoria] = useState(false);
+
+  const loadAuditoria = useCallback(async () => {
+    setLoadingAuditoria(true);
+    try {
+      const data = await auditoriaApi.getAll();
+      setAuditorias(data);
+    } catch {
+      showToast('error', 'Erro ao carregar log de auditoria');
+    } finally {
+      setLoadingAuditoria(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (tab === 'auditoria') loadAuditoria();
+  }, [tab, loadAuditoria]);
+
   // Load escritorio on mount
   useEffect(() => {
     escritorioApi.get()
@@ -156,15 +204,17 @@ export default function Configuracoes() {
     }
   }
 
-  async function desconectarGoogle() {
-    if (!confirm('Desconectar Google Calendar? Os eventos já criados no Google Calendar não serão removidos.')) return;
-    try {
-      await googleApi.disconnect();
-      setGoogleStatus({ connected: false });
-      showToast('info', 'Google Calendar desconectado');
-    } catch {
-      showToast('error', 'Erro ao desconectar');
-    }
+  function desconectarGoogle() {
+    openConfirm(
+      'Desconectar Google Calendar',
+      'Os eventos já criados no Google Calendar não serão removidos. Confirmar desconexão?',
+      'Desconectar',
+      async () => {
+        await googleApi.disconnect();
+        setGoogleStatus({ connected: false });
+        showToast('info', 'Google Calendar desconectado');
+      },
+    );
   }
 
   async function sincronizarGoogle() {
@@ -316,15 +366,17 @@ export default function Configuracoes() {
     }
   }
 
-  async function removerUsuario(id: string) {
-    if (!confirm('Remover este usuário?')) return;
-    try {
-      await usersApi.remove(id);
-      showToast('info', 'Usuário removido');
-      loadUsers();
-    } catch {
-      showToast('error', 'Erro ao remover usuário');
-    }
+  function removerUsuario(u: UserType) {
+    openConfirm(
+      'Remover Usuário',
+      `Tem certeza que deseja remover "${u.nome}" (${u.email})?`,
+      'Remover',
+      async () => {
+        await usersApi.remove(u.id);
+        showToast('info', 'Usuário removido');
+        loadUsers();
+      },
+    );
   }
 
   async function salvarEmail(e: React.FormEvent) {
@@ -361,22 +413,29 @@ export default function Configuracoes() {
     }
   }
 
-  async function importarBackup() {
+  function importarBackup() {
     if (!importFile) return;
-    if (!confirm('Importar dados? Isso substituirá todos os dados atuais.')) return;
-    setImportando(true);
-    try {
-      const text = await importFile.text();
-      const data = JSON.parse(text);
-      const result = await backupApi.importar(data);
-      const summary = Object.entries(result.summary).map(([k, v]) => `${k}: ${v}`).join(', ');
-      showToast('success', `Backup importado! ${summary}`);
-      setImportFile(null);
-    } catch {
-      showToast('error', 'Erro ao importar backup. Verifique o arquivo.');
-    } finally {
-      setImportando(false);
-    }
+    const file = importFile; // capture non-null ref for async closure
+    openConfirm(
+      'Importar Backup',
+      `Isso substituirá TODOS os dados atuais pelo conteúdo de "${file.name}". Esta ação não pode ser desfeita.`,
+      'Importar e Substituir',
+      async () => {
+        setImportando(true);
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          const result = await backupApi.importar(data);
+          const summary = Object.entries(result.summary).map(([k, v]) => `${k}: ${v}`).join(', ');
+          showToast('success', `Backup importado! ${summary}`);
+          setImportFile(null);
+        } catch {
+          showToast('error', 'Erro ao importar backup. Verifique o arquivo.');
+        } finally {
+          setImportando(false);
+        }
+      },
+    );
   }
 
   const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors";
@@ -396,6 +455,7 @@ export default function Configuracoes() {
     { key: 'usuarios', label: 'Usuários', icon: Users, adminOnly: true },
     { key: 'email', label: 'E-mail SMTP', icon: Mail, adminOnly: true },
     { key: 'dados', label: 'Dados / Backup', icon: Database, adminOnly: true },
+    { key: 'auditoria', label: 'Auditoria', icon: ClipboardList, adminOnly: true },
   ];
 
   const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
@@ -669,6 +729,41 @@ export default function Configuracoes() {
                   {[1, 2, 3, 5, 7, 10, 15, 30].map(d => <option key={d} value={d}>{d} dias</option>)}
                 </select>
               </div>
+
+              {/* Browser push notifications */}
+              <div className="flex items-center justify-between py-3 border-t border-[#2a2a2a]">
+                <div className="flex items-start gap-3">
+                  <Bell className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-[#f5f5f5]">Notificações no Navegador</p>
+                    <p className="text-xs text-[#505050] mt-0.5">
+                      Receba alertas como pop-up mesmo com o sistema minimizado.
+                      {push.permission === 'denied' && (
+                        <span className="text-red-400"> (Bloqueado — libere nas configurações do navegador)</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  {!push.supported ? (
+                    <span className="text-xs text-[#505050]">Não suportado</span>
+                  ) : push.permission === 'granted' ? (
+                    <span className="text-xs text-green-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Ativo
+                    </span>
+                  ) : push.permission === 'denied' ? (
+                    <span className="text-xs text-red-400">Bloqueado</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={push.request}
+                      className="text-xs px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 rounded-lg transition-colors"
+                    >
+                      Ativar
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -724,7 +819,7 @@ export default function Configuracoes() {
                       <td className="px-4 py-3 text-right">
                         {u.id !== user?.id && (
                           <button
-                            onClick={() => removerUsuario(u.id)}
+                            onClick={() => removerUsuario(u)}
                             className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                             title="Remover"
                           >
@@ -1057,6 +1152,76 @@ export default function Configuracoes() {
           </div>
         </div>
       )}
+      {/* ── Tab: Auditoria (admin only) ─────────────────────── */}
+      {tab === 'auditoria' && isAdmin && (
+        <div className="space-y-5">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#2a2a2a] flex items-center justify-between">
+              <h3 className="font-semibold text-[#f5f5f5] flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-amber-400" /> Log de Auditoria
+              </h3>
+              <button
+                onClick={loadAuditoria}
+                disabled={loadingAuditoria}
+                className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditoria ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
+            {loadingAuditoria ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+              </div>
+            ) : auditorias.length === 0 ? (
+              <p className="text-center py-8 text-[#505050] text-sm">Nenhum registro de auditoria encontrado</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[#2a2a2a]">
+                      <th className="text-left px-4 py-3 text-[#505050] font-medium uppercase tracking-wider">Ação</th>
+                      <th className="text-left px-4 py-3 text-[#505050] font-medium uppercase tracking-wider">Entidade</th>
+                      <th className="text-left px-4 py-3 text-[#505050] font-medium uppercase tracking-wider hidden md:table-cell">Usuário</th>
+                      <th className="text-left px-4 py-3 text-[#505050] font-medium uppercase tracking-wider hidden lg:table-cell">Detalhe</th>
+                      <th className="text-left px-4 py-3 text-[#505050] font-medium uppercase tracking-wider">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1e1e1e]">
+                    {auditorias.map(a => (
+                      <tr key={a.id} className="hover:bg-[#1a1a1a] transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-amber-400">{a.acao}</span>
+                        </td>
+                        <td className="px-4 py-3 text-[#a0a0a0]">
+                          {a.entidade}
+                          {a.entidadeId && <span className="text-[#505050] ml-1">#{a.entidadeId.slice(0, 6)}</span>}
+                        </td>
+                        <td className="px-4 py-3 text-[#a0a0a0] hidden md:table-cell">{a.userNome}</td>
+                        <td className="px-4 py-3 text-[#505050] hidden lg:table-cell max-w-[200px] truncate">{a.detalhe || '—'}</td>
+                        <td className="px-4 py-3 text-[#505050] whitespace-nowrap">
+                          {new Date(a.criadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Generic Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmCfg !== null}
+        title={confirmCfg?.title ?? ''}
+        message={confirmCfg?.message ?? ''}
+        confirmLabel={confirmCfg?.confirmLabel}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmCfg(null)}
+        loading={confirmLoading}
+      />
     </div>
   );
 }

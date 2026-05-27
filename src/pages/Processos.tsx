@@ -2,11 +2,16 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, Gavel, Search, Edit2, Trash2, Eye,
   Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
+  Paperclip, FileText, Download, Upload,
 } from 'lucide-react';
-import { processosApi, clientesApi } from '../services/api';
+import { processosApi, clientesApi, documentosApi } from '../services/api';
+import type { Documento } from '../services/api';
+import { ModeloDocumento } from '../components/modelos/ModeloDocumento';
+import type { TipoModelo, ModeloDados } from '../components/modelos/ModeloDocumento';
 import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -121,6 +126,113 @@ function AndamentosSection({ processoId, andamentos, onAdded }: {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Documentos section ───────────────────────────────────────
+function DocumentosSection({ processoId }: { processoId: string }) {
+  const { showToast } = useToast();
+  const [docs, setDocs] = useState<Documento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const carregarDocs = useCallback(async () => {
+    try {
+      const data = await documentosApi.getByEntidade('processo', processoId);
+      setDocs(data);
+    } catch { /* silencioso */ }
+    finally { setLoading(false); }
+  }, [processoId]);
+
+  useEffect(() => { carregarDocs(); }, [carregarDocs]);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('error', 'Arquivo muito grande', 'Máximo 5 MB'); return; }
+    setUploading(true);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+          try {
+            const b64 = (ev.target!.result as string).split(',')[1];
+            await documentosApi.create({
+              entidade: 'processo', entidadeId: processoId,
+              nome: file.name, tipo: file.type || 'application/octet-stream', conteudo: b64,
+            });
+            showToast('success', 'Documento anexado!');
+            await carregarDocs();
+            resolve();
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } catch (err: any) {
+      showToast('error', 'Erro ao enviar', err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDownload(doc: Documento) {
+    try {
+      const result = await documentosApi.download(doc.id);
+      const a = document.createElement('a');
+      a.href = `data:${result.tipo};base64,${result.conteudo}`;
+      a.download = result.nome;
+      a.click();
+    } catch { showToast('error', 'Erro ao baixar'); }
+  }
+
+  async function handleRemove(id: string) {
+    try {
+      await documentosApi.remove(id);
+      showToast('info', 'Documento removido');
+      carregarDocs();
+    } catch { showToast('error', 'Erro ao remover'); }
+  }
+
+  const fmtSize = (b: number) =>
+    b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+  return (
+    <div className="border-t border-[#2a2a2a] pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
+          <Paperclip className="w-3 h-3" /> Documentos ({docs.length})
+        </p>
+        <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
+          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+          Anexar
+          <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
+      ) : docs.length === 0 ? (
+        <p className="text-xs text-[#505050] text-center py-3">Nenhum documento anexado</p>
+      ) : (
+        <div className="space-y-1.5">
+          {docs.map(doc => (
+            <div key={doc.id} className="flex items-center gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs group">
+              <FileText className="w-3 h-3 text-blue-400 shrink-0" />
+              <span className="text-[#a0a0a0] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
+              <span className="text-[#505050] shrink-0">{fmtSize(doc.tamanho)}</span>
+              <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors" title="Baixar">
+                <Download className="w-3 h-3" />
+              </button>
+              <button onClick={() => handleRemove(doc.id)} className="p-1 text-[#505050] hover:text-red-400 transition-colors" title="Remover">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -406,8 +518,10 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
 
 // ─── Detalhe Modal ─────────────────────────────────────────────
 function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo; onClose: () => void; onRefresh: (id: string) => void }) {
+  const { user } = useAuth();
   const [showDataJud, setShowDataJud] = useState(false);
   const [currentProcesso, setCurrentProcesso] = useState(processo);
+  const [modeloTipo, setModeloTipo] = useState<TipoModelo | ''>('');
 
   const handleAndamentoAdded = async () => {
     try {
@@ -418,6 +532,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh]">
@@ -426,7 +541,19 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
             <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Detalhes do Processo</h2>
             <p className="text-xs text-amber-400 font-mono">{currentProcesso.numeroCNJ}</p>
           </div>
-          <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
+          <div className="flex items-center gap-2">
+            <select
+              value={modeloTipo}
+              onChange={e => setModeloTipo(e.target.value as TipoModelo | '')}
+              className="bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/30 rounded-lg px-2.5 py-1.5 text-[#a0a0a0] text-xs transition-colors cursor-pointer"
+            >
+              <option value="">📄 Gerar Modelo</option>
+              <option value="procuracao">Procuração</option>
+              <option value="contrato_honorarios">Contrato de Honorários</option>
+              <option value="declaracao">Declaração de Hipossuficiência</option>
+            </select>
+            <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
+          </div>
         </div>
         <div className="px-6 py-5 space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-4">
@@ -466,6 +593,9 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
             onAdded={handleAndamentoAdded}
           />
 
+          {/* Documentos */}
+          <DocumentosSection processoId={currentProcesso.id} />
+
           {/* DataJud */}
           {currentProcesso.dadosDataJud && (
             <div className="border-t border-[#2a2a2a] pt-4">
@@ -498,6 +628,21 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
       </div>
       </div>
     </div>
+
+    {modeloTipo && (
+      <ModeloDocumento
+        open={true}
+        onClose={() => setModeloTipo('')}
+        tipo={modeloTipo as TipoModelo}
+        dados={{
+          clienteNome: currentProcesso.clienteNome,
+          advogadoNome: user?.nome || 'Advogado Responsável',
+          advogadoOAB: user?.oab || '',
+          escritorioNome: 'MSK Advocacia',
+        } as ModeloDados}
+      />
+    )}
+    </>
   );
 }
 
@@ -513,6 +658,9 @@ export default function Processos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editProcesso, setEditProcesso] = useState<Processo | undefined>();
   const [viewProcesso, setViewProcesso] = useState<Processo | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete,    setToDelete]    = useState<Processo | null>(null);
+  const [deleting,    setDeleting]    = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -550,14 +698,24 @@ export default function Processos() {
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
   const pagination = usePagination(sorted, 15);
 
-  async function handleDelete(p: Processo) {
-    if (!window.confirm(`Excluir processo "${p.numeroCNJ}"?`)) return;
+  function handleDelete(p: Processo) {
+    setToDelete(p);
+    setConfirmOpen(true);
+  }
+
+  async function doDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     try {
-      await processosApi.remove(p.id);
+      await processosApi.remove(toDelete.id);
       await reload();
-      showToast('info', 'Processo removido');
+      showToast('info', 'Processo removido', toDelete.numeroCNJ);
     } catch (err: any) {
-      showToast('error', 'Erro', err.message);
+      showToast('error', 'Erro ao excluir', err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   }
 
@@ -685,6 +843,15 @@ export default function Processos() {
         </div>
         <Pagination {...pagination} />
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Excluir Processo"
+        message={`Tem certeza que deseja excluir o processo ${toDelete?.numeroCNJ}? Todos os andamentos serão perdidos.`}
+        onConfirm={doDelete}
+        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
+        loading={deleting}
+      />
 
       {modalOpen && (
         <ProcessoModal

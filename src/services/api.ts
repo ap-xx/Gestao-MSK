@@ -4,8 +4,11 @@ import type { Cliente, Contrato, Processo, Lancamento, Aviso, Escritorio, User, 
 // Em desenvolvimento: Vite proxy encaminha /api → localhost:3001
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
+const TOKEN_KEY    = 'msk_token';
+const REFRESH_KEY  = 'msk_refresh';
+
 function authHeaders(): HeadersInit {
-  const token = sessionStorage.getItem('msk_token');
+  const token = sessionStorage.getItem(TOKEN_KEY);
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -13,11 +16,38 @@ function authHeaders(): HeadersInit {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const serialised = body !== undefined ? JSON.stringify(body) : undefined;
+
+  const doFetch = () => fetch(`${BASE}${path}`, {
     method,
     headers: authHeaders(),
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: serialised,
   });
+
+  let res = await doFetch();
+
+  // Auto-refresh on 401 (skip for auth endpoints to avoid loops)
+  if (res.status === 401 && !path.startsWith('/auth/')) {
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (refreshToken) {
+      try {
+        const rr = await fetch(`${BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (rr.ok) {
+          const tokens = await rr.json();
+          sessionStorage.setItem(TOKEN_KEY, tokens.token);
+          localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
+          res = await doFetch(); // retry original with new token
+        }
+      } catch {
+        // refresh failed — let 401 propagate
+      }
+    }
+  }
+
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error((data as any)?.error ?? `Erro ${res.status}`);
   return data as T;
@@ -99,4 +129,56 @@ export const googleApi = {
   status:     () => req<{ connected: boolean; connectedAt?: string; calendarId?: string }>('GET', '/google/status'),
   disconnect: () => req<{ ok: true }>('DELETE', '/google/disconnect'),
   sync:       () => req<{ ok: true; synced: number; errors: number }>('POST', '/google/sync'),
+};
+
+// ─── Auditoria ─────────────────────────────────────────────────
+
+export interface AuditEntry {
+  id: string;
+  userId: string;
+  userNome: string;
+  acao: string;
+  entidade: string;
+  entidadeId?: string;
+  detalhe?: string;
+  ip?: string;
+  criadoEm: string;
+}
+
+export const auditoriaApi = {
+  getAll: (entidade?: string) =>
+    req<AuditEntry[]>('GET', `/auditoria${entidade ? `?entidade=${encodeURIComponent(entidade)}` : ''}`),
+};
+
+// ─── Documentos / Anexos ───────────────────────────────────────
+
+export interface Documento {
+  id: string;
+  entidade: string;
+  entidadeId: string;
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  criadoEm: string;
+  criadoPor: string;
+}
+
+export const documentosApi = {
+  getByEntidade: (entidade: string, entidadeId: string) =>
+    req<Documento[]>('GET', `/documentos?entidade=${encodeURIComponent(entidade)}&entidadeId=${encodeURIComponent(entidadeId)}`),
+  create: (doc: { entidade: string; entidadeId: string; nome: string; tipo: string; conteudo: string }) =>
+    req<Documento>('POST', '/documentos', doc),
+  remove: (id: string) =>
+    req<{ ok: true }>('DELETE', `/documentos/${id}`),
+  download: (id: string) =>
+    req<{ id: string; nome: string; tipo: string; conteudo: string }>('GET', `/documentos/${id}/download`),
+};
+
+// ─── Auth refresh ──────────────────────────────────────────────
+
+export const authApi = {
+  refresh: (refreshToken: string) =>
+    req<{ token: string; refreshToken: string }>('POST', '/auth/refresh', { refreshToken }),
+  logout:  (refreshToken: string) =>
+    req<{ ok: true }>('POST', '/auth/logout', { refreshToken }),
 };

@@ -153,6 +153,38 @@ db.exec(`
     googleEventId TEXT NOT NULL,
     UNIQUE(userId, entityId)
   );
+
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    userNome TEXT NOT NULL,
+    acao TEXT NOT NULL,
+    entidade TEXT NOT NULL,
+    entidadeId TEXT,
+    detalhe TEXT,
+    ip TEXT,
+    criadoEm TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS documentos (
+    id TEXT PRIMARY KEY,
+    entidade TEXT NOT NULL,
+    entidadeId TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    tamanho INTEGER NOT NULL DEFAULT 0,
+    conteudo TEXT NOT NULL,
+    criadoEm TEXT NOT NULL,
+    criadoPor TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expiresAt TEXT NOT NULL,
+    criadoEm TEXT NOT NULL
+  );
 `);
 
 // ─── Helper ────────────────────────────────────────────────────

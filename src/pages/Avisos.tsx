@@ -4,6 +4,7 @@ import {
   CheckCheck, Trash2, Plus, X, Loader2,
 } from 'lucide-react';
 import { avisosApi } from '../services/api';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { DateInput } from '../components/ui/Input';
 import type { Aviso, UrgenciaAviso, TipoAviso } from '../types';
@@ -119,6 +120,9 @@ export default function Avisos() {
   const [filterTipo, setFilterTipo] = useState('todos');
   const [filterLido, setFilterLido] = useState('todos');
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Aviso | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -176,13 +180,24 @@ export default function Avisos() {
     }
   }
 
-  async function remover(id: string) {
+  function remover(aviso: Aviso) {
+    setToDelete(aviso);
+    setConfirmOpen(true);
+  }
+
+  async function doDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     try {
-      await avisosApi.remove(id);
+      await avisosApi.remove(toDelete.id);
       await reload();
       showToast('info', 'Aviso removido');
     } catch {
       showToast('error', 'Erro ao remover aviso');
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   }
 
@@ -312,7 +327,7 @@ export default function Avisos() {
                       </button>
                     )}
                     <button
-                      onClick={() => remover(aviso.id)}
+                      onClick={() => remover(aviso)}
                       className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Remover"
                     >
@@ -325,6 +340,16 @@ export default function Avisos() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Remover Aviso"
+        message={`Tem certeza que deseja remover "${toDelete?.titulo}"?`}
+        confirmLabel="Remover"
+        onConfirm={doDelete}
+        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
+        loading={deleting}
+      />
 
       {modalOpen && (
         <NovoAvisoModal

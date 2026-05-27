@@ -4,6 +4,7 @@ import {
   Search, Edit2, Trash2, Receipt, CreditCard, Printer,
 } from 'lucide-react';
 import { lancamentosApi, clientesApi } from '../services/api';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import { DateInput } from '../components/ui/Input';
@@ -196,6 +197,9 @@ export default function Honorarios() {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editLancamento, setEditLancamento] = useState<Lancamento | undefined>();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Lancamento | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -242,14 +246,24 @@ export default function Honorarios() {
     }
   }
 
-  async function handleDelete(l: Lancamento) {
-    if (!window.confirm('Excluir este lançamento?')) return;
+  function handleDelete(l: Lancamento) {
+    setToDelete(l);
+    setConfirmOpen(true);
+  }
+
+  async function doDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     try {
-      await lancamentosApi.remove(l.id);
+      await lancamentosApi.remove(toDelete.id);
       await reload();
       showToast('info', 'Lançamento removido');
     } catch (err: any) {
       showToast('error', 'Erro', err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   }
 
@@ -445,6 +459,15 @@ export default function Honorarios() {
           <Pagination {...pagination} />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Excluir Lançamento"
+        message={`Tem certeza que deseja excluir "${toDelete?.descricao}"?`}
+        onConfirm={doDelete}
+        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
+        loading={deleting}
+      />
 
       {modalOpen && (
         <LancamentoModal

@@ -6,6 +6,7 @@ import {
 import { clientesApi } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import { useSort } from '../hooks/useSort';
@@ -445,6 +446,9 @@ export default function Clientes() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editCliente, setEditCliente] = useState<Cliente | undefined>();
   const [viewCliente, setViewCliente] = useState<Cliente | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete,    setToDelete]    = useState<Cliente | null>(null);
+  const [deleting,    setDeleting]    = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -490,14 +494,24 @@ export default function Clientes() {
     }
   }
 
-  async function handleDelete(c: Cliente) {
-    if (!window.confirm(`Excluir "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
+  function handleDelete(c: Cliente) {
+    setToDelete(c);
+    setConfirmOpen(true);
+  }
+
+  async function doDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     try {
-      await clientesApi.remove(c.id);
+      await clientesApi.remove(toDelete.id);
       await reload();
-      showToast('info', 'Cliente removido', c.nome);
+      showToast('info', 'Cliente removido', toDelete.nome);
     } catch (err: any) {
-      showToast('error', 'Erro', err.message);
+      showToast('error', 'Erro ao excluir', err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   }
 
@@ -679,6 +693,15 @@ export default function Clientes() {
           onSave={handleSave}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Excluir Cliente"
+        message={`Tem certeza que deseja excluir "${toDelete?.nome}"? Esta ação não pode ser desfeita.`}
+        onConfirm={doDelete}
+        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
+        loading={deleting}
+      />
 
       {/* Modal visualização */}
       {viewCliente && (

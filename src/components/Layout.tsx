@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Scale, LayoutDashboard, Users, FileText, Gavel, DollarSign,
   AlertTriangle, Bell, Settings, LogOut, Menu, X, ChevronRight,
-  ChevronLeft, UserCircle, TrendingDown, Calendar,
+  UserCircle, TrendingDown, Calendar, Search,
 } from 'lucide-react';
+import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../context/AuthContext';
 import { avisosApi } from '../services/api';
 import NotificacoesPanel from './NotificacoesPanel';
@@ -43,8 +44,9 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
-const DURATION = '280ms';
+const EASING   = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const DURATION = '200ms';
+const PILL_H   = 24; // px — height of the sliding active indicator
 
 export default function Layout({ currentPage, onNavigate, children }: LayoutProps) {
   const { user, logout } = useAuth();
@@ -53,16 +55,40 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
   const [notifOpen,        setNotifOpen]        = useState(false);
   const [naoLidos,         setNaoLidos]         = useState(0);
 
+  // Sliding indicator
+  const navRef      = useRef<HTMLElement>(null);
+  const [indicatorTop, setIndicatorTop] = useState<number | null>(null);
+  const [searchOpen,   setSearchOpen]   = useState(false);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const btn = nav.querySelector<HTMLElement>('[data-active="true"]');
+    if (!btn) return;
+    setIndicatorTop(btn.offsetTop + Math.round((btn.offsetHeight - PILL_H) / 2));
+  }, [currentPage]);
+
+  // Ctrl+K / Cmd+K → abre busca global
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(o => !o);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     avisosApi.getAll()
       .then(data => setNaoLidos(data.filter(a => !a.lido).length))
       .catch(() => {});
-    // Recheck every 2 minutes
     const interval = setInterval(() => {
       avisosApi.getAll()
         .then(data => setNaoLidos(data.filter(a => !a.lido).length))
         .catch(() => {});
-    }, 120000);
+    }, 120_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -77,8 +103,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
     assistente: 'Assistente',
   };
 
-  // Width constants
-  const EXPANDED_W = 256;
+  const EXPANDED_W  = 256;
   const COLLAPSED_W = 64;
 
   return (
@@ -102,15 +127,16 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
           lg:translate-x-0
         `}
         style={{
-          // sidebarCollapsed is only set to true via desktop button (lg:block),
-          // so mobile always sees EXPANDED_W naturally.
           width: sidebarCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
           transition: `width ${DURATION} ${EASING}, transform ${DURATION} ${EASING}`,
         }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-[#2a2a2a] overflow-hidden shrink-0" style={{ minHeight: '72px' }}>
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shrink-0">
+        <div
+          className="flex items-center gap-3 px-4 py-5 border-b border-[#2a2a2a] overflow-hidden shrink-0"
+          style={{ minHeight: '72px' }}
+        >
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
             <Scale className="w-5 h-5 text-white" />
           </div>
 
@@ -120,7 +146,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             style={{
               maxWidth: sidebarCollapsed ? '0' : `${EXPANDED_W}px`,
               opacity: sidebarCollapsed ? 0 : 1,
-              transition: `max-width ${DURATION} ${EASING}, opacity 200ms ease`,
+              transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
               flex: '1 1 0%',
             }}
           >
@@ -130,7 +156,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
           {/* Mobile close */}
           <button
-            className="ml-auto lg:hidden text-[#a0a0a0] hover:text-[#f5f5f5] shrink-0"
+            className="ml-auto lg:hidden text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors shrink-0"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="w-5 h-5" />
@@ -138,13 +164,30 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 overflow-y-auto overflow-x-hidden space-y-0.5">
+        <nav
+          ref={navRef as React.RefObject<HTMLElement>}
+          className="flex-1 px-2 py-4 overflow-y-auto overflow-x-hidden space-y-0.5 relative"
+        >
+          {/* Sliding active indicator pill */}
+          {indicatorTop !== null && (
+            <div
+              className="absolute left-0 w-[3px] rounded-r-full bg-amber-400 pointer-events-none z-10"
+              style={{
+                top: `${indicatorTop}px`,
+                height: `${PILL_H}px`,
+                opacity: sidebarCollapsed ? 0 : 1,
+                transition: `top 200ms ${EASING}, opacity 150ms ease`,
+              }}
+            />
+          )}
+
           {NAV_ITEMS.map(item => {
-            const Icon = item.icon;
+            const Icon  = item.icon;
             const active = currentPage === item.key;
             return (
               <button
                 key={item.key}
+                data-active={active ? 'true' : 'false'}
                 title={sidebarCollapsed ? item.label : undefined}
                 onClick={() => { onNavigate(item.key); setSidebarOpen(false); }}
                 className={[
@@ -156,21 +199,28 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                 ].join(' ')}
                 style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}
               >
-                {/* Icon + collapsed dot badge */}
+                {/* Icon */}
                 <span className="relative shrink-0">
-                  <Icon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-[#505050] group-hover:text-[#a0a0a0]'}`} />
+                  <Icon
+                    className={[
+                      'w-4 h-4 transition-all duration-200',
+                      active
+                        ? 'text-amber-400 scale-110'
+                        : 'text-[#505050] group-hover:text-[#a0a0a0] group-hover:scale-105',
+                    ].join(' ')}
+                  />
                   {sidebarCollapsed && item.key === 'avisos' && naoLidos > 0 && (
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
                   )}
                 </span>
 
-                {/* Animated label + extras */}
+                {/* Animated label + badge */}
                 <span
                   className="overflow-hidden whitespace-nowrap flex items-center gap-2 shrink-0"
                   style={{
-                    maxWidth: sidebarCollapsed ? '0' : '200px',
-                    opacity: sidebarCollapsed ? 0 : 1,
-                    transition: `max-width ${DURATION} ${EASING}, opacity 180ms ease`,
+                    maxWidth:     sidebarCollapsed ? '0' : '200px',
+                    opacity:      sidebarCollapsed ? 0 : 1,
+                    transition:   `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
                     pointerEvents: sidebarCollapsed ? 'none' : 'auto',
                   }}
                 >
@@ -180,10 +230,9 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                       {naoLidos > 9 ? '9+' : naoLidos}
                     </span>
                   )}
-                  {active && <ChevronRight className="w-3 h-3 text-amber-400 shrink-0" />}
                 </span>
 
-                {/* Hover tooltip (desktop collapsed only) */}
+                {/* Hover tooltip — desktop collapsed only */}
                 {sidebarCollapsed && (
                   <span className="absolute left-full ml-3 px-2.5 py-1.5 bg-[#252525] border border-[#333] text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 shadow-lg hidden lg:flex items-center gap-2">
                     {item.label}
@@ -213,9 +262,9 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             <div
               className="overflow-hidden whitespace-nowrap min-w-0"
               style={{
-                maxWidth: sidebarCollapsed ? '0' : '160px',
-                opacity: sidebarCollapsed ? 0 : 1,
-                transition: `max-width ${DURATION} ${EASING}, opacity 180ms ease`,
+                maxWidth:   sidebarCollapsed ? '0' : '160px',
+                opacity:    sidebarCollapsed ? 0 : 1,
+                transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
                 flex: '1 1 0%',
               }}
             >
@@ -241,17 +290,24 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         <div className="border-t border-[#2a2a2a] p-2 hidden lg:block shrink-0">
           <button
             onClick={() => setSidebarCollapsed(c => !c)}
-            className="w-full flex items-center justify-center py-2 rounded-lg text-[#505050] hover:text-amber-400 hover:bg-white/5 transition-colors overflow-hidden"
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[#505050] hover:text-amber-400 hover:bg-white/5 transition-colors overflow-hidden"
             title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
-            {sidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4 shrink-0" />
-            ) : (
-              <span className="flex items-center gap-2 text-xs whitespace-nowrap">
-                <ChevronLeft className="w-4 h-4 shrink-0" />
-                Recolher
-              </span>
-            )}
+            {/* Single chevron that rotates — points right when collapsed, left when expanded */}
+            <ChevronRight
+              className="w-4 h-4 shrink-0 transition-transform duration-200"
+              style={{ transform: sidebarCollapsed ? 'rotate(0deg)' : 'rotate(180deg)' }}
+            />
+            <span
+              className="text-xs whitespace-nowrap overflow-hidden"
+              style={{
+                maxWidth:   sidebarCollapsed ? '0' : '80px',
+                opacity:    sidebarCollapsed ? 0 : 1,
+                transition: `max-width ${DURATION} ${EASING}, opacity 150ms ease`,
+              }}
+            >
+              Recolher
+            </span>
           </button>
         </div>
       </aside>
@@ -275,6 +331,24 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Busca global */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/30 rounded-lg text-[#505050] hover:text-[#a0a0a0] text-xs transition-colors"
+              title="Busca global (Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Buscar</span>
+              <kbd className="ml-1 px-1 py-0.5 bg-[#2a2a2a] rounded text-[10px] font-mono">⌘K</kbd>
+            </button>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="sm:hidden text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors"
+              title="Busca global"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
             <button
               onClick={() => setNotifOpen(true)}
               className="relative text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors"
@@ -292,14 +366,23 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
           </div>
         </header>
 
-        {/* Content */}
+        {/* Content — page-enter triggers a quick fade+slide on every navigation */}
         <main className="flex-1 overflow-y-auto bg-[#0a0a0a] p-5">
-          {children}
+          <div key={currentPage} className="page-enter">
+            {children}
+          </div>
         </main>
       </div>
 
       {/* Notificações panel */}
       <NotificacoesPanel open={notifOpen} onClose={() => setNotifOpen(false)} onNavigate={onNavigate} />
+
+      {/* Busca global */}
+      <GlobalSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onNavigate={(page) => { onNavigate(page); setSearchOpen(false); }}
+      />
     </div>
   );
 }

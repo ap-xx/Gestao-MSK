@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { contratosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -317,6 +318,9 @@ export default function Contratos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editContrato, setEditContrato] = useState<Contrato | undefined>();
   const [viewContrato, setViewContrato] = useState<Contrato | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete,    setToDelete]    = useState<Contrato | null>(null);
+  const [deleting,    setDeleting]    = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -346,14 +350,24 @@ export default function Contratos() {
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
   const pagination = usePagination(sorted, 15);
 
-  async function handleDelete(c: Contrato) {
-    if (!window.confirm(`Excluir contrato de "${c.clienteNome}"?`)) return;
+  function handleDelete(c: Contrato) {
+    setToDelete(c);
+    setConfirmOpen(true);
+  }
+
+  async function doDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
     try {
-      await contratosApi.remove(c.id);
+      await contratosApi.remove(toDelete.id);
       await reload();
-      showToast('info', 'Contrato removido');
+      showToast('info', 'Contrato removido', toDelete.clienteNome);
     } catch (err: any) {
-      showToast('error', 'Erro', err.message);
+      showToast('error', 'Erro ao excluir', err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setToDelete(null);
     }
   }
 
@@ -506,6 +520,15 @@ export default function Contratos() {
         </div>
         <Pagination {...pagination} />
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Excluir Contrato"
+        message={`Tem certeza que deseja excluir o contrato de "${toDelete?.clienteNome}"? Esta ação não pode ser desfeita.`}
+        onConfirm={doDelete}
+        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
+        loading={deleting}
+      />
 
       {modalOpen && (
         <ContratoModal
