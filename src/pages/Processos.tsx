@@ -360,14 +360,15 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Processo' : 'Novo Processo'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
 
-        <form id="processo-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+        <form id="processo-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
           {/* Número CNJ + DataJud */}
           <div>
             <label className={labelClass}>Número CNJ *</label>
@@ -510,6 +511,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
           </button>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -531,7 +533,8 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <div>
@@ -552,7 +555,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
             <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
           </div>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto" style={{ maxHeight: 'calc(100vh - 160px)' }}>
+        <div className="px-6 py-5 space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-4">
             <div><p className="text-xs text-[#505050]">Cliente</p><p className="text-[#f5f5f5] font-medium">{currentProcesso.clienteNome}</p></div>
             <div><p className="text-xs text-[#505050]">Tribunal</p><p className="text-[#f5f5f5]">{currentProcesso.tribunal}</p></div>
@@ -622,6 +625,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
 

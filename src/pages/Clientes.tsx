@@ -173,7 +173,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
@@ -185,7 +186,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           </button>
         </div>
 
-        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
           {/* Tipo de pessoa */}
           <div className="flex gap-3">
             {(['PF', 'PJ'] as TipoPessoa[]).map(t => (
@@ -428,6 +429,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
             {isEdit ? 'Salvar Alterações' : 'Cadastrar Cliente'}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -703,13 +705,14 @@ export default function Clientes() {
 
       {/* Modal visualização */}
       {viewCliente && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{viewCliente.nome}</h2>
               <button onClick={() => setViewCliente(null)} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
             </div>
-            <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            <div className="px-6 py-5 space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div><p className="text-xs text-[#505050]">Tipo</p><p className="text-[#f5f5f5]">{viewCliente.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</p></div>
                 <div><p className="text-xs text-[#505050]">Documento</p><p className="text-[#f5f5f5] font-mono">{viewCliente.cpf || viewCliente.cnpj || '—'}</p></div>
@@ -751,6 +754,7 @@ export default function Clientes() {
                 Fechar
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}

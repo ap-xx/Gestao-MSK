@@ -336,43 +336,45 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
       <style>{PRINT_STYLE}</style>
 
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 overflow-y-auto"
         style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
         onClick={onClose}
       >
-        <div
-          className="relative w-full max-w-4xl rounded-2xl border shadow-2xl"
-          style={{ background: '#141414', borderColor: '#2a2a2a' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
+        <div className="flex min-h-screen items-center justify-center p-4">
           <div
-            className="flex items-center justify-between px-6 py-4 border-b"
-            style={{ borderColor: '#2a2a2a' }}
+            className="relative w-full max-w-4xl rounded-2xl border shadow-2xl"
+            style={{ background: '#141414', borderColor: '#2a2a2a' }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-sm font-semibold text-[#f5f5f5] truncate pr-4">{titulo}</h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 transition-colors"
-              >
-                <Printer className="w-4 h-4" />
-                Imprimir
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-xl text-[#505050] hover:text-[#a0a0a0] hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b"
+              style={{ borderColor: '#2a2a2a' }}
+            >
+              <h2 className="text-sm font-semibold text-[#f5f5f5] truncate pr-4">{titulo}</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 transition-colors"
+                >
+                  <Printer className="w-4 h-4" />
+                  Imprimir
+                </button>
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-xl text-[#505050] hover:text-[#a0a0a0] hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Documento scrollável */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 160px)' }}>
-            {tipo === 'procuracao' && <ProcuracaoTemplate dados={dados} />}
-            {tipo === 'contrato_honorarios' && <ContratoHonorariosTemplate dados={dados} />}
-            {tipo === 'declaracao' && <DeclaracaoTemplate dados={dados} />}
+            {/* Documento */}
+            <div>
+              {tipo === 'procuracao' && <ProcuracaoTemplate dados={dados} />}
+              {tipo === 'contrato_honorarios' && <ContratoHonorariosTemplate dados={dados} />}
+              {tipo === 'declaracao' && <DeclaracaoTemplate dados={dados} />}
+            </div>
           </div>
         </div>
       </div>
