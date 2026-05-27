@@ -67,7 +67,7 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Novo Aviso</h2>

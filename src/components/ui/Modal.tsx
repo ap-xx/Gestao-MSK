@@ -24,7 +24,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
         className="fixed inset-0 bg-black/70"
         onClick={onClose}
       />
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex justify-center p-4">
         <div
           className={`relative w-full ${sizeClasses[size]} rounded-2xl shadow-2xl z-10`}
           style={{ background: '#141414', border: '1px solid #2e2e2e' }}

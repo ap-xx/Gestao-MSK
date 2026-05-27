@@ -340,7 +340,7 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
         style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
         onClick={onClose}
       >
-        <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="flex justify-center p-4">
           <div
             className="relative w-full max-w-4xl rounded-2xl border shadow-2xl"
             style={{ background: '#141414', borderColor: '#2a2a2a' }}
