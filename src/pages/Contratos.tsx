@@ -136,7 +136,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {/* Cliente */}
           <div>
             <label className={labelClass}>Cliente *</label>

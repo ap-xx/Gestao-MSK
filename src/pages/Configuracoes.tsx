@@ -841,8 +841,9 @@ export default function Configuracoes() {
 
           {/* Modal: Novo Usuário */}
           {novoUsuarioModal && (
-            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
+            <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+              <div className="flex min-h-screen items-center justify-center p-4">
+              <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
                   <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Novo Usuário</h2>
                   <button onClick={() => setNovoUsuarioModal(false)} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
@@ -895,6 +896,7 @@ export default function Configuracoes() {
                     </button>
                   </div>
                 </form>
+              </div>
               </div>
             </div>
           )}

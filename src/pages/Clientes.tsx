@@ -186,7 +186,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           </button>
         </div>
 
-        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+        <form id="cliente-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Tipo de pessoa */}
           <div className="flex gap-3">
             {(['PF', 'PJ'] as TipoPessoa[]).map(t => (
