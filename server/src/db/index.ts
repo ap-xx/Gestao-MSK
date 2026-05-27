@@ -223,24 +223,21 @@ function seedEscritorioIfEmpty(): void {
 // Remove entradas inseridas pelo seed inicial caso ainda existam no banco.
 
 function purgeSeedData(): void {
-  const seedIds = {
-    clientes:    ['c1','c2','c3','c4','c5'],
-    contratos:   ['ct1','ct2','ct3','ct4','ct5'],
-    processos:   ['p1','p2','p3'],
-    lancamentos: ['l1','l2','l3','l4','l5','l6','l7','l8','l9','l10'],
-    avisos:      ['av1','av2','av3','av4','av5'],
-  };
+  // Deleta um ID por vez — evita spread variádico que pode falhar em runtime
+  const toDelete: Array<[string, string[]]> = [
+    ['clientes',    ['c1','c2','c3','c4','c5']],
+    ['contratos',   ['ct1','ct2','ct3','ct4','ct5']],
+    ['processos',   ['p1','p2','p3']],
+    ['lancamentos', ['l1','l2','l3','l4','l5','l6','l7','l8','l9','l10']],
+    ['avisos',      ['av1','av2','av3','av4','av5']],
+  ];
 
-  const del = (table: string, ids: string[]) => {
-    const ph = ids.map(() => '?').join(',');
-    db.prepare(`DELETE FROM ${table} WHERE id IN (${ph})`).run(...ids);
-  };
-
-  del('clientes',    seedIds.clientes);
-  del('contratos',   seedIds.contratos);
-  del('processos',   seedIds.processos);
-  del('lancamentos', seedIds.lancamentos);
-  del('avisos',      seedIds.avisos);
+  for (const [table, ids] of toDelete) {
+    const stmt = db.prepare(`DELETE FROM ${table} WHERE id = ?`);
+    for (const id of ids) {
+      stmt.run(id);
+    }
+  }
 
   // Resetar escritório se ainda tem o CNPJ falso do seed
   const esc = db.prepare("SELECT dados FROM escritorio WHERE id = 'escritorio'").get() as { dados: string } | undefined;
