@@ -689,6 +689,16 @@ export default function Clientes() {
     }
   }
 
+  // Auto-save star rating without opening a modal
+  async function updateAvaliacao(clienteId: string, value: number) {
+    try {
+      await clientesApi.update(clienteId, { avaliacao: value });
+      setClientes(prev => prev.map(c => c.id === clienteId ? { ...c, avaliacao: value } : c));
+    } catch {
+      showToast('error', 'Erro ao salvar avaliação');
+    }
+  }
+
   function handleDelete(c: Cliente) {
     setToDelete(c);
     setConfirmOpen(true);
@@ -796,15 +806,16 @@ export default function Clientes() {
                 >
                   Status <SortIcon col="status" />
                 </th>
+                <th className="px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Avaliação</th>
                 <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e1e1e]">
               {loading ? (
-                <LoadingTable cols={6} />
+                <LoadingTable cols={7} />
               ) : pagination.items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-[#505050]">
+                  <td colSpan={7} className="py-12 text-center text-[#505050]">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>Nenhum cliente encontrado</p>
                   </td>
@@ -842,14 +853,15 @@ export default function Clientes() {
                       </p>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border w-fit ${STATUS_BADGE[c.status]}`}>
-                          {STATUS_LABELS[c.status]}
-                        </span>
-                        {(c.avaliacao ?? 0) > 0 && (
-                          <StarRating value={c.avaliacao ?? 0} readOnly />
-                        )}
-                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border w-fit ${STATUS_BADGE[c.status]}`}>
+                        {STATUS_LABELS[c.status]}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <StarRating
+                        value={c.avaliacao ?? 0}
+                        onChange={v => updateAvaliacao(c.id, v)}
+                      />
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">

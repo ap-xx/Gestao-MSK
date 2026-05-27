@@ -225,6 +225,8 @@ export default function Honorarios() {
       const matchTab = l.tipo === tab;
       const matchSearch = !q || l.descricao.toLowerCase().includes(q) ||
         (l.clienteNome || '').toLowerCase().includes(q);
+      // A receber tab: only show unpaid entries (paid ones move to recebimentos)
+      if (tab === 'a_receber' && l.status === 'pago') return false;
       return matchTab && matchSearch;
     });
   }, [lancamentos, tab, search]);

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, Users, FileText, Gavel, Loader2, ArrowRight, Building2 } from 'lucide-react';
+import { Search, X, Users, FileText, Gavel, Loader2, ArrowRight, Building2, Star } from 'lucide-react';
 import type { PageKey } from './Layout';
 import { clientesApi, contratosApi, processosApi } from '../services/api';
 import type { Cliente, Contrato, Processo } from '../types';
+import Portal from './ui/Portal';
 
 interface GlobalSearchProps {
   open: boolean;
@@ -26,13 +27,22 @@ const STATUS_CLS: Record<string, string> = {
   negociando: 'text-blue-400',
 };
 
+const STATUS_DOT: Record<string, string> = {
+  ativo:      'bg-green-400',
+  inativo:    'bg-gray-500',
+  bloqueado:  'bg-red-400',
+  encerrado:  'bg-red-400',
+  suspenso:   'bg-amber-400',
+  arquivado:  'bg-gray-500',
+  negociando: 'bg-blue-400',
+};
+
 export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
   const [query,   setQuery]   = useState('');
   const [data,    setData]    = useState<SearchData>({ clientes: [], contratos: [], processos: [] });
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
-  const listRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -93,174 +103,205 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-      onClick={onClose}
-    >
+    <Portal>
+      {/* Overlay */}
       <div
-        className="relative w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #161616 0%, #121212 100%)', border: '1px solid #2a2a2a' }}
-        onClick={e => e.stopPropagation()}
+        className="fixed inset-0 z-[300]"
+        style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="fixed inset-0 z-[301] flex items-start justify-center pt-[10vh] px-4 pointer-events-none"
       >
-        {/* ── Search input ────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid #222' }}>
-          <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-            <Search className="w-4 h-4 text-amber-400" />
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={e => { setQuery(e.target.value); setFocused(null); }}
-            placeholder="Buscar clientes, contratos, processos..."
-            className="flex-1 bg-transparent text-[15px] text-[#f5f5f5] placeholder-[#3d3d3d] outline-none font-medium"
-          />
-          {loading
-            ? <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
-            : query && <button onClick={() => setQuery('')} className="text-[#505050] hover:text-[#a0a0a0] transition-colors shrink-0"><X className="w-4 h-4" /></button>
-          }
-          <div className="shrink-0 border border-[#2a2a2a] rounded px-1.5 py-0.5">
-            <span className="text-[10px] text-[#505050] font-mono">Esc</span>
-          </div>
-        </div>
-
-        {/* ── Results ──────────────────────────────────────── */}
-        <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: '62vh' }}>
-          {!loading && total === 0 && (
-            <div className="flex flex-col items-center justify-center py-14 gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#1e1e1e] flex items-center justify-center">
-                <Search className="w-5 h-5 text-[#3a3a3a]" />
-              </div>
-              <p className="text-sm text-[#505050]">
-                {q ? `Sem resultados para "${query}"` : 'Nenhum dado disponível'}
-              </p>
+        <div
+          className="relative w-full max-w-xl rounded-2xl shadow-2xl flex flex-col pointer-events-auto"
+          style={{
+            background: '#161616',
+            border: '1px solid #2a2a2a',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,158,11,0.08)',
+            maxHeight: '70vh',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* ── Search input ── */}
+          <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid #222' }}>
+            <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+              {loading
+                ? <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                : <Search className="w-3.5 h-3.5 text-amber-400" />
+              }
             </div>
-          )}
-
-          {!loading && total > 0 && (
-            <>
-              {/* ── Clientes ── */}
-              {filteredClientes.length > 0 && (
-                <section>
-                  <div className="flex items-center justify-between px-5 py-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#444]">
-                      Clientes
-                    </span>
-                    <span className="text-[10px] text-[#333] bg-[#1e1e1e] px-2 py-0.5 rounded-full">
-                      {filteredClientes.length}
-                    </span>
-                  </div>
-                  {filteredClientes.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => handleNavigate('clientes')}
-                      onMouseEnter={() => setFocused(c.id)}
-                      onMouseLeave={() => setFocused(null)}
-                      className="w-full flex items-center gap-3.5 px-5 py-3 transition-all text-left group"
-                      style={{ background: focused === c.id ? 'rgba(245,158,11,0.05)' : 'transparent' }}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold transition-all ${focused === c.id ? 'bg-amber-500/20 text-amber-400' : 'bg-[#1e1e1e] text-[#505050]'}`}>
-                        {c.tipoPessoa === 'PJ' ? <Building2 className="w-4 h-4" /> : c.nome.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#f5f5f5] truncate">{c.nome}</p>
-                        <p className="text-xs text-[#505050] truncate">
-                          {c.tipoPessoa === 'PF' ? c.cpf : c.cnpj}
-                          {(c.cpf || c.cnpj) && ' · '}
-                          <span className={STATUS_CLS[c.status] ?? 'text-[#a0a0a0]'}>
-                            {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
-                          </span>
-                          {' · '}{c.endereco.cidade}/{c.endereco.uf}
-                        </p>
-                      </div>
-                      <ArrowRight className={`w-4 h-4 shrink-0 transition-all ${focused === c.id ? 'text-amber-500 translate-x-0 opacity-100' : 'text-transparent -translate-x-1 opacity-0'}`} />
-                    </button>
-                  ))}
-                </section>
-              )}
-
-              {/* ── Contratos ── */}
-              {filteredContratos.length > 0 && (
-                <section style={{ borderTop: filteredClientes.length > 0 ? '1px solid #1e1e1e' : undefined }}>
-                  <div className="flex items-center justify-between px-5 py-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#444]">Contratos</span>
-                    <span className="text-[10px] text-[#333] bg-[#1e1e1e] px-2 py-0.5 rounded-full">{filteredContratos.length}</span>
-                  </div>
-                  {filteredContratos.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => handleNavigate('contratos')}
-                      onMouseEnter={() => setFocused(c.id)}
-                      onMouseLeave={() => setFocused(null)}
-                      className="w-full flex items-center gap-3.5 px-5 py-3 transition-all text-left"
-                      style={{ background: focused === c.id ? 'rgba(59,130,246,0.05)' : 'transparent' }}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${focused === c.id ? 'bg-blue-500/20' : 'bg-[#1e1e1e]'}`}>
-                        <FileText className={`w-4 h-4 ${focused === c.id ? 'text-blue-400' : 'text-[#505050]'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#f5f5f5] truncate">{c.clienteNome}</p>
-                        <p className="text-xs text-[#505050] truncate">
-                          {c.tipo} · {c.areaAtuacao}
-                          {' · '}<span className={STATUS_CLS[c.status] ?? 'text-[#a0a0a0]'}>{c.status.charAt(0).toUpperCase() + c.status.slice(1)}</span>
-                        </p>
-                      </div>
-                      <ArrowRight className={`w-4 h-4 shrink-0 transition-all ${focused === c.id ? 'text-blue-400 translate-x-0 opacity-100' : 'text-transparent -translate-x-1 opacity-0'}`} />
-                    </button>
-                  ))}
-                </section>
-              )}
-
-              {/* ── Processos ── */}
-              {filteredProcessos.length > 0 && (
-                <section style={{ borderTop: (filteredClientes.length > 0 || filteredContratos.length > 0) ? '1px solid #1e1e1e' : undefined }}>
-                  <div className="flex items-center justify-between px-5 py-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#444]">Processos</span>
-                    <span className="text-[10px] text-[#333] bg-[#1e1e1e] px-2 py-0.5 rounded-full">{filteredProcessos.length}</span>
-                  </div>
-                  {filteredProcessos.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => handleNavigate('processos')}
-                      onMouseEnter={() => setFocused(p.id)}
-                      onMouseLeave={() => setFocused(null)}
-                      className="w-full flex items-center gap-3.5 px-5 py-3 transition-all text-left"
-                      style={{ background: focused === p.id ? 'rgba(168,85,247,0.05)' : 'transparent' }}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${focused === p.id ? 'bg-purple-500/20' : 'bg-[#1e1e1e]'}`}>
-                        <Gavel className={`w-4 h-4 ${focused === p.id ? 'text-purple-400' : 'text-[#505050]'}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-mono text-amber-400 truncate">{p.numeroCNJ}</p>
-                          <span className={`text-[10px] shrink-0 ${STATUS_CLS[p.status] ?? 'text-[#a0a0a0]'}`}>
-                            {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#f5f5f5] font-medium truncate">{p.clienteNome}</p>
-                        <p className="text-[11px] text-[#505050] truncate">{p.areaAtuacao} · {p.fase}</p>
-                      </div>
-                      <ArrowRight className={`w-4 h-4 shrink-0 transition-all ${focused === p.id ? 'text-purple-400 translate-x-0 opacity-100' : 'text-transparent -translate-x-1 opacity-0'}`} />
-                    </button>
-                  ))}
-                </section>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* ── Footer ────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-2.5" style={{ borderTop: '1px solid #1e1e1e' }}>
-          <div className="flex items-center gap-3 text-[10px] text-[#3a3a3a]">
-            <span>↑↓ navegar</span>
-            <span>↵ abrir</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={e => { setQuery(e.target.value); setFocused(null); }}
+              placeholder="Buscar clientes, contratos, processos..."
+              className="flex-1 bg-transparent text-[14px] text-[#f5f5f5] placeholder-[#444] outline-none"
+            />
+            {query
+              ? <button onClick={() => setQuery('')} className="text-[#444] hover:text-[#888] transition-colors shrink-0"><X className="w-4 h-4" /></button>
+              : <kbd className="shrink-0 border border-[#2a2a2a] rounded px-1.5 py-0.5 text-[10px] text-[#444] font-mono">Esc</kbd>
+            }
           </div>
-          {!loading && total > 0 && (
-            <span className="text-[10px] text-[#3a3a3a]">{total} resultado{total !== 1 ? 's' : ''}</span>
-          )}
+
+          {/* ── Results ── */}
+          <div className="overflow-y-auto flex-1">
+            {loading && (
+              <div className="flex items-center justify-center gap-2 py-12 text-[#505050] text-sm">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                Carregando...
+              </div>
+            )}
+
+            {!loading && total === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#1e1e1e] flex items-center justify-center">
+                  <Search className="w-5 h-5 text-[#2a2a2a]" />
+                </div>
+                <p className="text-sm text-[#444]">
+                  {q ? `Nenhum resultado para "${query}"` : 'Nenhum dado disponível'}
+                </p>
+              </div>
+            )}
+
+            {!loading && total > 0 && (
+              <>
+                {/* ── Clientes ── */}
+                {filteredClientes.length > 0 && (
+                  <section className="py-1">
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#3a3a3a]">Clientes</span>
+                      <span className="text-[10px] text-[#2a2a2a] tabular-nums">{filteredClientes.length}</span>
+                    </div>
+                    {filteredClientes.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleNavigate('clientes')}
+                        onMouseEnter={() => setFocused(c.id)}
+                        onMouseLeave={() => setFocused(null)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left group"
+                        style={{ background: focused === c.id ? 'rgba(245,158,11,0.06)' : 'transparent' }}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold transition-all ${focused === c.id ? 'bg-amber-500/20 text-amber-400' : 'bg-[#1e1e1e] text-[#505050]'}`}>
+                          {c.tipoPessoa === 'PJ' ? <Building2 className="w-3.5 h-3.5" /> : c.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-[#f5f5f5] truncate">{c.nome}</p>
+                            {(c.avaliacao ?? 0) > 0 && (
+                              <div className="flex gap-0.5 shrink-0">
+                                {[1,2,3,4,5].map(i => (
+                                  <Star key={i} className={`w-2.5 h-2.5 ${i <= (c.avaliacao ?? 0) ? 'text-amber-400 fill-amber-400' : 'text-[#2a2a2a]'}`} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[c.status] ?? 'bg-gray-500'}`} />
+                            <span className={`text-[11px] ${STATUS_CLS[c.status] ?? 'text-[#505050]'}`}>
+                              {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                            </span>
+                            {(c.cpf || c.cnpj) && <span className="text-[11px] text-[#3a3a3a]">· {c.cpf || c.cnpj}</span>}
+                            {c.endereco?.cidade && <span className="text-[11px] text-[#3a3a3a]">· {c.endereco.cidade}/{c.endereco.uf}</span>}
+                          </div>
+                        </div>
+                        <ArrowRight className={`w-3.5 h-3.5 shrink-0 transition-all ${focused === c.id ? 'text-amber-400 opacity-100' : 'text-transparent opacity-0'}`} />
+                      </button>
+                    ))}
+                  </section>
+                )}
+
+                {/* ── Contratos ── */}
+                {filteredContratos.length > 0 && (
+                  <section className="py-1" style={{ borderTop: filteredClientes.length > 0 ? '1px solid #1e1e1e' : undefined }}>
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#3a3a3a]">Contratos</span>
+                      <span className="text-[10px] text-[#2a2a2a] tabular-nums">{filteredContratos.length}</span>
+                    </div>
+                    {filteredContratos.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleNavigate('contratos')}
+                        onMouseEnter={() => setFocused(c.id)}
+                        onMouseLeave={() => setFocused(null)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
+                        style={{ background: focused === c.id ? 'rgba(59,130,246,0.06)' : 'transparent' }}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${focused === c.id ? 'bg-blue-500/20' : 'bg-[#1e1e1e]'}`}>
+                          <FileText className={`w-3.5 h-3.5 ${focused === c.id ? 'text-blue-400' : 'text-[#505050]'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#f5f5f5] truncate">{c.clienteNome}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[c.status] ?? 'bg-gray-500'}`} />
+                            <span className={`text-[11px] ${STATUS_CLS[c.status] ?? 'text-[#505050]'}`}>
+                              {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                            </span>
+                            <span className="text-[11px] text-[#3a3a3a]">· {c.tipo} · {c.areaAtuacao}</span>
+                          </div>
+                        </div>
+                        <ArrowRight className={`w-3.5 h-3.5 shrink-0 transition-all ${focused === c.id ? 'text-blue-400 opacity-100' : 'text-transparent opacity-0'}`} />
+                      </button>
+                    ))}
+                  </section>
+                )}
+
+                {/* ── Processos ── */}
+                {filteredProcessos.length > 0 && (
+                  <section className="py-1" style={{ borderTop: (filteredClientes.length > 0 || filteredContratos.length > 0) ? '1px solid #1e1e1e' : undefined }}>
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#3a3a3a]">Processos</span>
+                      <span className="text-[10px] text-[#2a2a2a] tabular-nums">{filteredProcessos.length}</span>
+                    </div>
+                    {filteredProcessos.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleNavigate('processos')}
+                        onMouseEnter={() => setFocused(p.id)}
+                        onMouseLeave={() => setFocused(null)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
+                        style={{ background: focused === p.id ? 'rgba(168,85,247,0.06)' : 'transparent' }}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${focused === p.id ? 'bg-purple-500/20' : 'bg-[#1e1e1e]'}`}>
+                          <Gavel className={`w-3.5 h-3.5 ${focused === p.id ? 'text-purple-400' : 'text-[#505050]'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-mono text-amber-400 truncate">{p.numeroCNJ}</p>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[p.status] ?? 'bg-gray-500'}`} />
+                              <span className={`text-[10px] ${STATUS_CLS[p.status] ?? 'text-[#505050]'}`}>
+                                {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-[#e0e0e0] font-medium truncate">{p.clienteNome}</p>
+                          <p className="text-[11px] text-[#3a3a3a] truncate">{p.areaAtuacao} · {p.fase}</p>
+                        </div>
+                        <ArrowRight className={`w-3.5 h-3.5 shrink-0 transition-all ${focused === p.id ? 'text-purple-400 opacity-100' : 'text-transparent opacity-0'}`} />
+                      </button>
+                    ))}
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* ── Footer ── */}
+          <div className="flex items-center justify-between px-4 py-2" style={{ borderTop: '1px solid #1e1e1e' }}>
+            <div className="flex items-center gap-3 text-[10px] text-[#2a2a2a]">
+              <span>↵ abrir</span>
+              <span>Esc fechar</span>
+            </div>
+            {!loading && total > 0 && (
+              <span className="text-[10px] text-[#2a2a2a] tabular-nums">{total} resultado{total !== 1 ? 's' : ''}</span>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 }

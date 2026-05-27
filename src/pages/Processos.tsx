@@ -711,6 +711,7 @@ export default function Processos() {
   const [toDelete,    setToDelete]    = useState<Processo | null>(null);
   const [deleting,    setDeleting]    = useState(false);
   const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
+  const [quickStatusPos, setQuickStatusPos] = useState<{ x: number; y: number; above: boolean } | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -795,10 +796,23 @@ export default function Processos() {
   // Close quick status dropdown on outside click
   useEffect(() => {
     if (!quickStatusId) return;
-    function handleClick() { setQuickStatusId(null); }
+    function handleClick() { setQuickStatusId(null); setQuickStatusPos(null); }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [quickStatusId]);
+
+  function openQuickStatus(e: React.MouseEvent<HTMLButtonElement>, p: Processo) {
+    e.stopPropagation();
+    if (quickStatusId === p.id) { setQuickStatusId(null); setQuickStatusPos(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const above = window.innerHeight - rect.bottom < 170;
+    setQuickStatusPos({
+      x: rect.left,
+      y: above ? rect.top - 4 : rect.bottom + 4,
+      above,
+    });
+    setQuickStatusId(p.id);
+  }
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -907,29 +921,14 @@ export default function Processos() {
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="relative">
-                        <button
-                          onClick={() => setQuickStatusId(quickStatusId === p.id ? null : p.id)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}
-                          title="Clique para alterar status"
-                        >
-                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                          <ChevronDown className="w-3 h-3 opacity-60" />
-                        </button>
-                        {quickStatusId === p.id && (
-                          <div className="absolute z-20 top-full left-0 mt-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg shadow-xl overflow-hidden min-w-32">
-                            {(['ativo', 'suspenso', 'encerrado', 'arquivado'] as const).map(s => (
-                              <button
-                                key={s}
-                                onClick={() => handleQuickStatus(p, s)}
-                                className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#252525] ${p.status === s ? 'text-amber-400' : 'text-[#a0a0a0]'}`}
-                              >
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <button
+                        onClick={e => openQuickStatus(e, p)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}
+                        title="Clique para alterar status"
+                      >
+                        {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        <ChevronDown className="w-3 h-3 opacity-60" />
+                      </button>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
@@ -971,6 +970,37 @@ export default function Processos() {
           onRefresh={handleRefreshProcesso}
         />
       )}
+
+      {/* Quick status dropdown — rendered via Portal to avoid overflow clipping */}
+      {quickStatusId && quickStatusPos && (() => {
+        const proc = processos.find(p => p.id === quickStatusId);
+        if (!proc) return null;
+        const ITEM_H = 32;
+        const ITEMS = 4;
+        const dropH = ITEMS * ITEM_H + 8;
+        return (
+          <Portal>
+            <div
+              className="fixed z-[200] bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg shadow-xl overflow-hidden min-w-[140px] py-1"
+              style={quickStatusPos.above
+                ? { top: quickStatusPos.y - dropH, left: quickStatusPos.x }
+                : { top: quickStatusPos.y, left: quickStatusPos.x }
+              }
+              onMouseDown={e => e.stopPropagation()}
+            >
+              {(['ativo', 'suspenso', 'encerrado', 'arquivado'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => { handleQuickStatus(proc, s); setQuickStatusId(null); setQuickStatusPos(null); }}
+                  className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#252525] ${proc.status === s ? 'text-amber-400 font-medium' : 'text-[#a0a0a0]'}`}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+          </Portal>
+        );
+      })()}
     </div>
   );
 }
