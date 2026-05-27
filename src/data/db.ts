@@ -181,7 +181,7 @@ export function initializeDatabase(): void {
 
   // Escritório
   const escritorio: Escritorio = {
-    nome: 'MSK Consultation Advocacia',
+    nome: 'MSK Gestor',
     cnpj: '12.345.678/0001-90',
     telefone: '(11) 3456-7890',
     email: 'contato@msk.adv.br',

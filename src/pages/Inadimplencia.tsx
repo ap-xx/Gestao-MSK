@@ -34,16 +34,16 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
   const [mensagemCustom, setMensagemCustom] = useState('');
 
   const mensagensPadrao: Record<string, string> = {
-    email: `Prezado(a) ${cliente.nome},\n\nIdentificamos que existem débitos em aberto referentes aos nossos honorários advocatícios no valor total de ${formatCurrency(totalDevido)}, com ${diasMaxAtraso} dia(s) de atraso.\n\nSolicitamos que entre em contato conosco para regularização. Caso já tenha efetuado o pagamento, por favor desconsidere este comunicado.\n\nAtenciosamente,\nMSK Consultation Advocacia`,
-    whatsapp: `Olá ${cliente.nome}! Identificamos débitos em aberto: ${formatCurrency(totalDevido)} (${diasMaxAtraso} dias em atraso). Por favor, entre em contato para regularização. — MSK Consultation`,
-    carta: `Notificação Extrajudicial\n\nAo(À) ${cliente.nome},\n\nPor meio da presente, notificamos V.Sa. acerca de débito(s) em aberto, totalizando ${formatCurrency(totalDevido)}, com ${diasMaxAtraso} dias de inadimplência, referentes a honorários advocatícios conforme contrato firmado com este escritório.\n\nNo prazo de 5 (cinco) dias úteis a contar do recebimento desta notificação, rogamos que V.Sa. efetue a devida quitação, sob pena de adoção das medidas legais cabíveis.\n\nSão Paulo, ${new Date().toLocaleDateString('pt-BR')}\n\nMSK Consultation Advocacia`,
+    email: `Prezado(a) ${cliente.nome},\n\nIdentificamos que existem débitos em aberto referentes aos nossos honorários advocatícios no valor total de ${formatCurrency(totalDevido)}, com ${diasMaxAtraso} dia(s) de atraso.\n\nSolicitamos que entre em contato conosco para regularização. Caso já tenha efetuado o pagamento, por favor desconsidere este comunicado.\n\nAtenciosamente,\nMSK Gestor Advocacia`,
+    whatsapp: `Olá ${cliente.nome}! Identificamos débitos em aberto: ${formatCurrency(totalDevido)} (${diasMaxAtraso} dias em atraso). Por favor, entre em contato para regularização. — MSK Gestor`,
+    carta: `Notificação Extrajudicial\n\nAo(À) ${cliente.nome},\n\nPor meio da presente, notificamos V.Sa. acerca de débito(s) em aberto, totalizando ${formatCurrency(totalDevido)}, com ${diasMaxAtraso} dias de inadimplência, referentes a honorários advocatícios conforme contrato firmado com este escritório.\n\nNo prazo de 5 (cinco) dias úteis a contar do recebimento desta notificação, rogamos que V.Sa. efetue a devida quitação, sob pena de adoção das medidas legais cabíveis.\n\nSão Paulo, ${new Date().toLocaleDateString('pt-BR')}\n\nMSK Gestor Advocacia`,
   };
 
   async function enviarNotificacao() {
     const mensagem = mensagemCustom || mensagensPadrao[canal];
 
     if (canal === 'email') {
-      const assunto = 'Notificação de Honorários em Aberto — MSK Consultation';
+      const assunto = 'Notificação de Honorários em Aberto — MSK Gestor';
       const token = sessionStorage.getItem(TOKEN_KEY);
       let enviado = false;
 

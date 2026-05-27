@@ -124,7 +124,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
               flex: '1 1 0%',
             }}
           >
-            <p className="font-playfair text-sm font-bold text-[#f5f5f5] leading-tight">MSK Consultation</p>
+            <p className="font-playfair text-sm font-bold text-[#f5f5f5] leading-tight">MSK Gestor</p>
             <p className="text-[10px] text-[#a0a0a0] leading-tight">Sistema Jurídico</p>
           </div>
 

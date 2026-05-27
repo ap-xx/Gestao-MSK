@@ -18,14 +18,26 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
 async function apiLogin(email: string, senha: string): Promise<{ token: string; user: User }> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, senha }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
-  return data as { token: string; user: User };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha }),
+      signal: controller.signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
+    return data as { token: string; user: User };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('O servidor está iniciando. Aguarde alguns instantes e tente novamente.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

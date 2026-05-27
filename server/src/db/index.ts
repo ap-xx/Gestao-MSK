@@ -210,7 +210,7 @@ function seedEscritorioIfEmpty(): void {
   const row = db.prepare("SELECT COUNT(*) as n FROM escritorio").get() as { n: number };
   if (row.n > 0) return;
   const escritorio = {
-    nome: 'MSK Consultation Advocacia',
+    nome: 'MSK Gestor',
     cnpj: '', telefone: '', email: '', site: '',
     endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
     oabPrincipal: '', responsavel: '',
@@ -249,7 +249,7 @@ function purgeSeedData(): void {
       const dados = JSON.parse(esc.dados);
       if (dados.cnpj === '12.345.678/0001-90') {
         const fresh = {
-          nome: 'MSK Consultation Advocacia',
+          nome: 'MSK Gestor',
           cnpj: '', telefone: '', email: '', site: '',
           endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
           oabPrincipal: '', responsavel: '',

@@ -39,7 +39,7 @@ export default function Login() {
             <Scale className="w-10 h-10 text-white" />
           </div>
           <h1 className="font-playfair text-3xl font-bold text-[#f5f5f5] tracking-tight">
-            MSK Consultation
+            MSK Gestor
           </h1>
           <p className="text-[#a0a0a0] mt-2 text-sm">Sistema Jurídico Integrado</p>
         </div>
@@ -133,7 +133,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-[#505050] text-xs mt-6">
-          © 2025 MSK Consultation Advocacia. Todos os direitos reservados.
+          © 2025 MSK Gestor Advocacia. Todos os direitos reservados.
         </p>
       </div>
     </div>
