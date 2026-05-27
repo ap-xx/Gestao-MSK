@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import Portal from '../components/ui/Portal';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 
@@ -841,6 +842,7 @@ export default function Configuracoes() {
 
           {/* Modal: Novo Usuário */}
           {novoUsuarioModal && (
+            <Portal>
             <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
               <div className="flex justify-center p-4">
               <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl">
@@ -899,6 +901,7 @@ export default function Configuracoes() {
               </div>
               </div>
             </div>
+            </Portal>
           )}
         </div>
       )}

@@ -98,6 +98,7 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
   const CanalIcon = canalIcons[canal];
 
   return (
+    <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
@@ -180,6 +181,7 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
       </div>
       </div>
     </div>
+    </Portal>
   );
 }
 

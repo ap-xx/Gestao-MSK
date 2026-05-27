@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
+import Portal from '../ui/Portal';
 
 export type TipoModelo = 'procuracao' | 'contrato_honorarios' | 'declaracao';
 
@@ -332,6 +333,7 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
   const titulo = TituloPorTipo(tipo);
 
   return (
+    <Portal>
     <>
       <style>{PRINT_STYLE}</style>
 
@@ -379,5 +381,6 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
         </div>
       </div>
     </>
+    </Portal>
   );
 }
