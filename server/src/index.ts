@@ -23,10 +23,20 @@ const allowedOrigins = [
   'http://localhost:4173',
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 ];
+
+function isOriginAllowed(origin: string): boolean {
+  if (allowedOrigins.includes(origin)) return true;
+  // Permite qualquer deploy do Vercel (*.vercel.app) e do próprio Render
+  if (origin.endsWith('.vercel.app')) return true;
+  if (origin.endsWith('.onrender.com')) return true;
+  return false;
+}
+
 app.use(cors({
   origin: (origin, cb) => {
     // Permitir requisições sem origin (mobile, Postman, cron) e origens conhecidas
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin || isOriginAllowed(origin)) return cb(null, true);
+    console.warn(`[cors] bloqueado: ${origin}`);
     cb(new Error(`CORS bloqueado: ${origin}`));
   },
   credentials: true,
