@@ -17,27 +17,41 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
-async function apiLogin(email: string, senha: string): Promise<{ token: string; user: User }> {
+async function tryFetch(email: string, senha: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    return await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, senha }),
       signal: controller.signal,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
-    return data as { token: string; user: User };
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('O servidor está iniciando. Aguarde alguns instantes e tente novamente.');
-    }
-    throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function apiLogin(email: string, senha: string): Promise<{ token: string; user: User }> {
+  let res: Response;
+  try {
+    // Primeira tentativa — 30s
+    res = await tryFetch(email, senha, 30_000);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      // Servidor estava dormindo — tenta mais uma vez (já acordou)
+      try {
+        res = await tryFetch(email, senha, 30_000);
+      } catch {
+        throw new Error('O servidor demorou para responder. Tente novamente em instantes.');
+      }
+    } else {
+      throw err;
+    }
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
+  return data as { token: string; user: User };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

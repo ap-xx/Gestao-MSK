@@ -266,6 +266,6 @@ function purgeSeedData(): void {
 export async function initializeDatabase(): Promise<void> {
   await seedUsers();
   seedEscritorioIfEmpty();
-  purgeSeedData();
+  try { purgeSeedData(); } catch (e) { console.warn('[db] purgeSeedData não crítico:', e); }
   console.log('[db] Banco de dados inicializado em', DB_PATH);
 }

@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, Scale, Lock, Mail, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, Scale, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+
+const SLOW_MSGS = [
+  { delay: 5,  text: 'Conectando ao servidor...' },
+  { delay: 15, text: 'O servidor está acordando (pode levar até 1 minuto no primeiro acesso)...' },
+  { delay: 40, text: 'Quase lá, aguarde mais um instante...' },
+];
 
 export default function Login() {
   const { login } = useAuth();
@@ -9,17 +15,36 @@ export default function Login() {
   const [showSenha, setShowSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [slowMsg, setSlowMsg] = useState('');
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  function clearTimers() {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  }
+
+  useEffect(() => () => clearTimers(), []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSlowMsg('');
     setLoading(true);
+    clearTimers();
+
+    // Mensagens progressivas enquanto aguarda o servidor
+    SLOW_MSGS.forEach(({ delay, text }) => {
+      timers.current.push(setTimeout(() => setSlowMsg(text), delay * 1000));
+    });
+
     try {
       await login(email, senha);
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login.');
     } finally {
+      clearTimers();
       setLoading(false);
+      setSlowMsg('');
     }
   }
 
@@ -52,6 +77,13 @@ export default function Login() {
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mb-5 text-red-400 text-sm">
               <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
+            </div>
+          )}
+
+          {slowMsg && !error && (
+            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 mb-5 text-amber-400 text-sm">
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+              {slowMsg}
             </div>
           )}
 
