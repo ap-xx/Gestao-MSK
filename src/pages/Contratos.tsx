@@ -130,12 +130,12 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           {/* Cliente */}
           <div>
             <label className={labelClass}>Cliente *</label>
@@ -230,7 +230,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
         </form>
 
         {/* Sticky footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a] shrink-0">
+        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium transition-colors">Cancelar</button>
           <button type="submit" form="contrato-form" className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20">
             {isEdit ? 'Salvar Alterações' : 'Criar Contrato'}
@@ -245,12 +245,12 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
 function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClose: () => void; onEdit: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Detalhes do Contrato</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1 min-h-0">
+        <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           {/* Pipeline */}
           <div>
             <p className="text-xs text-[#505050] mb-1">Status</p>
@@ -294,7 +294,7 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
             </div>
           )}
         </div>
-        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a] shrink-0">
+        <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
           <button onClick={onEdit} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium">Editar</button>
           <button onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Fechar</button>
         </div>

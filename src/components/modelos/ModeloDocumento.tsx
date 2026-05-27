@@ -341,17 +341,17 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
         onClick={onClose}
       >
         <div
-          className="relative w-full max-w-4xl flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
-          style={{ background: '#141414', borderColor: '#2a2a2a', maxHeight: '90vh' }}
+          className="relative w-full max-w-4xl rounded-2xl border shadow-2xl"
+          style={{ background: '#141414', borderColor: '#2a2a2a' }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div
-            className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+            className="flex items-center justify-between px-6 py-4 border-b"
             style={{ borderColor: '#2a2a2a' }}
           >
             <h2 className="text-sm font-semibold text-[#f5f5f5] truncate pr-4">{titulo}</h2>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 transition-colors"
@@ -369,7 +369,7 @@ export function ModeloDocumento({ open, onClose, tipo, dados }: ModeloDocumentoP
           </div>
 
           {/* Documento scrollável */}
-          <div className="overflow-y-auto flex-1 min-h-0">
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 160px)' }}>
             {tipo === 'procuracao' && <ProcuracaoTemplate dados={dados} />}
             {tipo === 'contrato_honorarios' && <ContratoHonorariosTemplate dados={dados} />}
             {tipo === 'declaracao' && <DeclaracaoTemplate dados={dados} />}

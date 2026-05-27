@@ -25,11 +25,11 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${sizeClasses[size]} flex flex-col rounded-2xl shadow-2xl z-10`}
-        style={{ background: '#141414', border: '1px solid #2e2e2e', maxHeight: 'calc(100vh - 2rem)' }}
+        className={`relative w-full ${sizeClasses[size]} rounded-2xl shadow-2xl z-10`}
+        style={{ background: '#141414', border: '1px solid #2e2e2e' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+        <div className="flex items-center justify-between px-6 py-4 border-b"
           style={{ borderColor: '#2e2e2e' }}>
           <h2 className="text-lg font-semibold text-white" style={{ fontFamily: 'Playfair Display, serif' }}>
             {title}
@@ -42,7 +42,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
           </button>
         </div>
         {/* Body */}
-        <div className="overflow-y-auto flex-1 min-h-0 px-6 py-5">
+        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(100vh - 160px)' }}>
           {children}
         </div>
       </div>
