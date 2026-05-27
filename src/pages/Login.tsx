@@ -133,7 +133,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-[#505050] text-xs mt-6">
-          © 2025 MSK Gestor Advocacia. Todos os direitos reservados.
+          © 2026 MSK Gestor Advocacia. Todos os direitos reservados.
         </p>
       </div>
     </div>
