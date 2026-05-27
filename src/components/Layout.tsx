@@ -57,6 +57,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
   // Sliding indicator
   const navRef      = useRef<HTMLElement>(null);
+  const mainRef     = useRef<HTMLElement>(null);
   const [indicatorTop, setIndicatorTop] = useState<number | null>(null);
   const [searchOpen,   setSearchOpen]   = useState(false);
 
@@ -66,6 +67,10 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
     const btn = nav.querySelector<HTMLElement>('[data-active="true"]');
     if (!btn) return;
     setIndicatorTop(btn.offsetTop + Math.round((btn.offsetHeight - PILL_H) / 2));
+  }, [currentPage]);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
   }, [currentPage]);
 
   // Ctrl+K / Cmd+K → abre busca global
@@ -367,7 +372,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
         </header>
 
         {/* Content — page-enter triggers a quick fade+slide on every navigation */}
-        <main className="flex-1 overflow-y-auto bg-[#0a0a0a] p-5">
+        <main ref={mainRef as React.RefObject<HTMLElement>} className="flex-1 overflow-y-auto bg-[#0a0a0a] p-5">
           <div key={currentPage} className="page-enter">
             {children}
           </div>

@@ -707,12 +707,12 @@ export default function Clientes() {
       {viewCliente && (
         <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
-          <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] shrink-0">
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{viewCliente.nome}</h2>
               <button onClick={() => setViewCliente(null)} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
             </div>
-            <div className="px-6 py-5 space-y-4 text-sm">
+            <div className="px-6 py-5 space-y-4 text-sm overflow-y-auto flex-1">
               <div className="grid grid-cols-2 gap-4">
                 <div><p className="text-xs text-[#505050]">Tipo</p><p className="text-[#f5f5f5]">{viewCliente.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}</p></div>
                 <div><p className="text-xs text-[#505050]">Documento</p><p className="text-[#f5f5f5] font-mono">{viewCliente.cpf || viewCliente.cnpj || '—'}</p></div>
@@ -746,7 +746,7 @@ export default function Clientes() {
                 </div>
               )}
             </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
+            <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a] shrink-0">
               <button onClick={() => { setViewCliente(null); setEditCliente(viewCliente); setModalOpen(true); }} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium transition-colors">
                 Editar
               </button>
