@@ -15,8 +15,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+
 async function apiLogin(email: string, senha: string): Promise<{ token: string; user: User }> {
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, senha }),
@@ -74,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = sessionStorage.getItem(TOKEN_KEY);
 
     if (token) {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch(`${API_BASE}/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
