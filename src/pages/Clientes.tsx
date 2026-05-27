@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
+import Portal from '../components/ui/Portal';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Cliente, TipoPessoa, StatusCliente } from '../types';
@@ -173,6 +174,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const labelClass = "block text-xs font-medium text-[#a0a0a0] mb-1.5";
 
   return (
+    <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
@@ -432,6 +434,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
       </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -705,6 +708,7 @@ export default function Clientes() {
 
       {/* Modal visualização */}
       {viewCliente && (
+        <Portal>
         <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
           <div className="flex justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
@@ -757,6 +761,7 @@ export default function Clientes() {
           </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

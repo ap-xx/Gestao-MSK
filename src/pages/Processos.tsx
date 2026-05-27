@@ -15,6 +15,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
+import Portal from '../components/ui/Portal';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente } from '../types';
@@ -360,6 +361,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex justify-center p-4">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-2xl shadow-2xl">
@@ -513,6 +515,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
       </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -532,6 +535,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
   };
 
   return (
+    <Portal>
     <>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
       <div className="flex justify-center p-4">
@@ -643,6 +647,7 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
       />
     )}
     </>
+    </Portal>
   );
 }
 
