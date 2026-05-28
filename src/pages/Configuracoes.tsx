@@ -716,12 +716,17 @@ export default function Configuracoes() {
     { key: 'google',      label: 'Google Calendar',      icon: Calendar },
     { key: 'usuarios',    label: 'Usuários',             icon: Users,        adminOnly: true },
     { key: 'permissoes',  label: 'Permissões',           icon: ShieldCheck,  adminOnly: true },
-    { key: 'email',       label: 'E-mail SMTP',          icon: Mail,         adminOnly: true },
-    { key: 'dados',       label: 'Dados / Backup',       icon: Database,     adminOnly: true },
-    { key: 'auditoria',   label: 'Auditoria',            icon: ClipboardList,adminOnly: true },
+    { key: 'email',       label: 'E-mail SMTP',          icon: Mail },
+    { key: 'dados',       label: 'Dados / Backup',       icon: Database },
+    { key: 'auditoria',   label: 'Auditoria',            icon: ClipboardList },
   ];
 
-  const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
+  // admin: all tabs; advogado: all except adminOnly; assistente: can't reach this page
+  const visibleTabs = tabs.filter(t => {
+    if (t.adminOnly) return isAdmin;
+    if (user?.role === 'assistente') return !['email', 'dados', 'auditoria', 'usuarios', 'permissoes'].includes(t.key);
+    return true;
+  });
 
   return (
     <div className="space-y-5 animate-fade-in-up max-w-3xl">
@@ -1234,8 +1239,8 @@ export default function Configuracoes() {
         </div>
       )}
 
-      {/* ── Tab: E-mail SMTP (admin only) ──────────────────── */}
-      {tab === 'email' && isAdmin && (
+      {/* ── Tab: E-mail SMTP ──────────────────────────────── */}
+      {tab === 'email' && (
         <div className="space-y-5">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
             <h3 className="font-semibold text-[#f5f5f5] mb-2 flex items-center gap-2">
@@ -1440,8 +1445,8 @@ export default function Configuracoes() {
         </div>
       )}
 
-      {/* ── Tab: Dados / Backup (admin only) ───────────────── */}
-      {tab === 'dados' && isAdmin && (
+      {/* ── Tab: Dados / Backup ─────────────────────────────── */}
+      {tab === 'dados' && (
         <div className="space-y-5">
 
           {/* Backup Automático */}
@@ -1616,37 +1621,39 @@ export default function Configuracoes() {
             </div>
           </div>
 
-          {/* ── Zona de Perigo ── */}
-          <div className="bg-[#141414] border border-red-500/20 rounded-xl p-5">
-            <h3 className="font-semibold text-red-400 mb-2 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> Zona de Perigo
-            </h3>
-            <p className="text-xs text-[#505050] mb-4 leading-relaxed">
-              Remove <strong className="text-red-400">permanentemente</strong> todos os clientes,
-              contratos, processos, lançamentos, avisos e log de auditoria.
-              Usuários, configurações do escritório e licença são mantidos.
-              Esta ação <strong className="text-red-400">não pode ser desfeita</strong>.
-            </p>
-            <button
-              onClick={() => openConfirm(
-                'Zerar Banco de Dados',
-                'Isso apagará PERMANENTEMENTE todos os clientes, contratos, processos, lançamentos e avisos. Usuários e configurações do escritório serão mantidos. Não é possível desfazer.',
-                'Zerar Banco',
-                async () => {
-                  [
-                    'msk_clientes', 'msk_contratos', 'msk_processos',
-                    'msk_lancamentos', 'msk_avisos', 'msk_auditoria',
-                    'msk_perfis', 'msk_permissions',
-                  ].forEach(k => localStorage.removeItem(k));
-                  window.location.reload();
-                },
-              )}
-              className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all"
-            >
-              <Trash2 className="w-4 h-4" />
-              Zerar Banco de Dados
-            </button>
-          </div>
+          {/* ── Zona de Perigo (somente admin) ── */}
+          {isAdmin && (
+            <div className="bg-[#141414] border border-red-500/20 rounded-xl p-5">
+              <h3 className="font-semibold text-red-400 mb-2 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Zona de Perigo
+              </h3>
+              <p className="text-xs text-[#505050] mb-4 leading-relaxed">
+                Remove <strong className="text-red-400">permanentemente</strong> todos os clientes,
+                contratos, processos, lançamentos, avisos e log de auditoria.
+                Usuários, configurações do escritório e licença são mantidos.
+                Esta ação <strong className="text-red-400">não pode ser desfeita</strong>.
+              </p>
+              <button
+                onClick={() => openConfirm(
+                  'Zerar Banco de Dados',
+                  'Isso apagará PERMANENTEMENTE todos os clientes, contratos, processos, lançamentos e avisos. Usuários e configurações do escritório serão mantidos. Não é possível desfazer.',
+                  'Zerar Banco',
+                  async () => {
+                    [
+                      'msk_clientes', 'msk_contratos', 'msk_processos',
+                      'msk_lancamentos', 'msk_avisos', 'msk_auditoria',
+                      'msk_perfis', 'msk_permissions',
+                    ].forEach(k => localStorage.removeItem(k));
+                    window.location.reload();
+                  },
+                )}
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+                Zerar Banco de Dados
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1863,8 +1870,8 @@ export default function Configuracoes() {
         </div>
       )}
 
-      {/* ── Tab: Auditoria (admin only) ─────────────────────── */}
-      {tab === 'auditoria' && isAdmin && (
+      {/* ── Tab: Auditoria ──────────────────────────────────── */}
+      {tab === 'auditoria' && (
         <div className="space-y-5">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-[#2a2a2a] flex items-center justify-between">

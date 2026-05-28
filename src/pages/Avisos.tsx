@@ -6,6 +6,7 @@ import {
 import { avisosApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { DateInput } from '../components/ui/Input';
 import type { Aviso, UrgenciaAviso, TipoAviso } from '../types';
 import Portal from '../components/ui/Portal';
@@ -119,6 +120,8 @@ function NovoAvisoModal({ onClose, onSave }: NovoAvisoModalProps) {
 
 export default function Avisos() {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterUrgencia, setFilterUrgencia] = useState('todos');
@@ -232,13 +235,15 @@ export default function Avisos() {
               Marcar tudo lido
             </button>
           )}
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-          >
-            <Plus className="w-4 h-4" />
-            Novo Aviso
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Aviso
+            </button>
+          )}
         </div>
       </div>
 
@@ -333,13 +338,15 @@ export default function Avisos() {
                         <CheckCheck className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => remover(aviso)}
-                      className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                      title="Remover"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => remover(aviso)}
+                        className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Remover"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

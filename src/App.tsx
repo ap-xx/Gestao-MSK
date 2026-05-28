@@ -47,7 +47,8 @@ import Configuracoes from './pages/Configuracoes';
 import Relatorios    from './pages/Relatorios';
 import Licencas      from './pages/Licencas';
 import Documentos    from './pages/Documentos';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { canAccessPage } from './utils/permissions';
 
 /** Roda o hook de backup + recorrência apenas quando o usuário está autenticado. */
 function AutoBackupChecker() {
@@ -59,6 +60,13 @@ function AutoBackupChecker() {
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageKey>('dashboard');
+
+  // Redirect to dashboard if the user's role doesn't allow the current page
+  useEffect(() => {
+    if (user && !canAccessPage(user.role, currentPage)) {
+      setCurrentPage('dashboard');
+    }
+  }, [user?.role, currentPage]);
 
   // License check — shown before login if no valid license in localStorage
   const [licensed, setLicensed] = useState<boolean>(

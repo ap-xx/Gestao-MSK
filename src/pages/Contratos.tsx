@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { contratosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -247,7 +248,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
 }
 
 // ─── Modal de visualização ─────────────────────────────────────
-function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClose: () => void; onEdit: () => void }) {
+function ContratoView({ contrato, onClose, onEdit, canEdit = true }: { contrato: Contrato; onClose: () => void; onEdit: () => void; canEdit?: boolean }) {
   return (
     <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
@@ -302,7 +303,7 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
           )}
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
-          <button onClick={onEdit} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium">Editar</button>
+          {canEdit && <button onClick={onEdit} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium">Editar</button>}
           <button onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Fechar</button>
         </div>
       </div>
@@ -314,6 +315,8 @@ function ContratoView({ contrato, onClose, onEdit }: { contrato: Contrato; onClo
 
 export default function Contratos() {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -393,13 +396,15 @@ export default function Contratos() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Contratos</h1>
           <p className="text-[#a0a0a0] text-sm">{stats.ativos} ativos · Receita mensal: {formatCurrency(stats.valorMensalTotal)}</p>
         </div>
-        <button
-          onClick={() => { setEditContrato(undefined); setModalOpen(true); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Contrato
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => { setEditContrato(undefined); setModalOpen(true); }}
+            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Contrato
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -508,12 +513,16 @@ export default function Contratos() {
                           <button onClick={() => setViewContrato(c)} className="p-1.5 text-[#505050] hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Visualizar">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button onClick={() => { setEditContrato(c); setModalOpen(true); }} className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors" title="Editar">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDelete(c)} className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Excluir">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!isReadOnly && (
+                            <button onClick={() => { setEditContrato(c); setModalOpen(true); }} className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors" title="Editar">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {!isReadOnly && (
+                            <button onClick={() => handleDelete(c)} className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Excluir">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -549,6 +558,7 @@ export default function Contratos() {
           contrato={viewContrato}
           onClose={() => setViewContrato(null)}
           onEdit={() => { setEditContrato(viewContrato); setViewContrato(null); setModalOpen(true); }}
+          canEdit={!isReadOnly}
         />
       )}
     </div>

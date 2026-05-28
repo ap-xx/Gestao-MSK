@@ -9,6 +9,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../context/AuthContext';
 import { avisosApi } from '../services/api';
 import NotificacoesPanel from './NotificacoesPanel';
+import { canAccessPage } from '../utils/permissions';
 
 export type PageKey =
   | 'dashboard'
@@ -215,7 +216,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             />
           )}
 
-          {NAV_ITEMS.filter(item => !item.adminOnly || user?.role === 'admin').map(item => {
+          {NAV_ITEMS.filter(item => canAccessPage(user?.role, item.key)).map(item => {
             const Icon  = item.icon;
             const active = currentPage === item.key;
             return (

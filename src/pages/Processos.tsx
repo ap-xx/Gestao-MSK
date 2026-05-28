@@ -698,6 +698,8 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
 // ─── Página Principal ─────────────────────────────────────────
 export default function Processos() {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [processos, setProcessos] = useState<Processo[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -822,13 +824,15 @@ export default function Processos() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Processos</h1>
           <p className="text-[#a0a0a0] text-sm">{filtered.length} processos encontrados</p>
         </div>
-        <button
-          onClick={() => { setEditProcesso(undefined); setModalOpen(true); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Processo
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => { setEditProcesso(undefined); setModalOpen(true); }}
+            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Processo
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -921,20 +925,26 @@ export default function Processos() {
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <button
-                        onClick={e => openQuickStatus(e, p)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}
-                        title="Clique para alterar status"
-                      >
-                        {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        <ChevronDown className="w-3 h-3 opacity-60" />
-                      </button>
+                      {isReadOnly ? (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}>
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={e => openQuickStatus(e, p)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${STATUS_PROC_COLORS[p.status] ?? STATUS_PROC_COLORS.ativo}`}
+                          title="Clique para alterar status"
+                        >
+                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                          <ChevronDown className="w-3 h-3 opacity-60" />
+                        </button>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => setViewProcesso(p)} className="p-1.5 text-[#505050] hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
-                        <button onClick={() => { setEditProcesso(p); setModalOpen(true); }} className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(p)} className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        {!isReadOnly && <button onClick={() => { setEditProcesso(p); setModalOpen(true); }} className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>}
+                        {!isReadOnly && <button onClick={() => handleDelete(p)} className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>}
                       </div>
                     </td>
                   </tr>

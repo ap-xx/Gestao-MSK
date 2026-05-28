@@ -8,6 +8,7 @@ import { clientesApi, processosApi, documentosApi } from '../services/api';
 import type { Documento } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -620,6 +621,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
 // ─── Página principal ─────────────────────────────────────────
 export default function Clientes() {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -719,13 +722,15 @@ export default function Clientes() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Clientes</h1>
           <p className="text-[#a0a0a0] text-sm">{filtered.length} clientes encontrados</p>
         </div>
-        <button
-          onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Cliente
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
+            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Cliente
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -859,20 +864,24 @@ export default function Clientes() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => { setEditCliente(c); setModalOpen(true); }}
-                          className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(c)}
-                          className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => { setEditCliente(c); setModalOpen(true); }}
+                            className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => handleDelete(c)}
+                            className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -955,9 +964,11 @@ export default function Clientes() {
               <ClienteDocumentosSection clienteId={viewCliente.id} />
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
-              <button onClick={() => { setViewCliente(null); setEditCliente(viewCliente); setModalOpen(true); }} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium transition-colors">
-                Editar
-              </button>
+              {!isReadOnly && (
+                <button onClick={() => { setViewCliente(null); setEditCliente(viewCliente); setModalOpen(true); }} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium transition-colors">
+                  Editar
+                </button>
+              )}
               <button onClick={() => setViewCliente(null)} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium transition-colors">
                 Fechar
               </button>
