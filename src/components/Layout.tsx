@@ -57,6 +57,19 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
   const [notifOpen,        setNotifOpen]        = useState(false);
   const [naoLidos,         setNaoLidos]         = useState(0);
 
+  // Delayed "icons centered" state — only flips to true AFTER the label has
+  // finished fading out (80 ms), so the icon never jumps while text is visible.
+  const [iconsCentered, setIconsCentered] = useState(false);
+  const centeredTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    clearTimeout(centeredTimer.current);
+    if (sidebarCollapsed) {
+      centeredTimer.current = setTimeout(() => setIconsCentered(true), 85);
+    } else {
+      setIconsCentered(false);
+    }
+  }, [sidebarCollapsed]);
+
   // Sliding indicator
   const navRef      = useRef<HTMLElement>(null);
   const mainRef     = useRef<HTMLElement>(null);
@@ -208,7 +221,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
                     ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
                     : 'text-[#a0a0a0] hover:text-white hover:bg-white/5 border-transparent',
                 ].join(' ')}
-                style={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}
+                style={{ justifyContent: iconsCentered ? 'center' : 'flex-start' }}
               >
                 {/* Icon */}
                 <span className="relative shrink-0">
@@ -263,7 +276,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
         {/* User info */}
         <div className="border-t border-[#2a2a2a] px-2 py-3 shrink-0">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-[#1e1e1e]">
+          <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-[#1e1e1e] overflow-hidden">
             <div
               className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-700/20 border border-amber-500/30 flex items-center justify-center shrink-0"
               title={sidebarCollapsed ? user?.nome : undefined}
@@ -291,10 +304,20 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
               </p>
             </div>
 
+            {/* Logout — fades out together with the label so it never overflows */}
             <button
               onClick={logout}
               title="Sair"
               className="text-[#505050] hover:text-red-400 transition-colors shrink-0"
+              style={{
+                maxWidth:      sidebarCollapsed ? '0'   : '24px',
+                opacity:       sidebarCollapsed ? 0     : 1,
+                pointerEvents: sidebarCollapsed ? 'none' : 'auto',
+                overflow:      'hidden',
+                transition:    sidebarCollapsed
+                  ? 'opacity 80ms ease, max-width 0ms 80ms'
+                  : 'opacity 100ms 140ms ease, max-width 0ms 0ms',
+              }}
             >
               <LogOut className="w-4 h-4" />
             </button>
