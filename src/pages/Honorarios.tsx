@@ -9,6 +9,8 @@ import { lancamentosApi, clientesApi, escritorioApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
+import { printRecibo } from '../utils/printRecibo';
+import { printHonorarios } from '../utils/printRelatorio';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -671,75 +673,21 @@ export default function Honorarios() {
 
   return (
     <div className="space-y-5 animate-fade-in-up">
-      {/* Print style */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: #fff !important; color: #000 !important; }
-          .print-page { background: #fff !important; color: #000 !important; }
-          table { border-collapse: collapse; width: 100%; }
-          th { background: #f5f5f5 !important; color: #333 !important; border: 1px solid #ddd; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-          td { border: 1px solid #eee; padding: 8px 12px; font-size: 12px; color: #333 !important; }
-          tr:nth-child(even) td { background: #fafafa; }
-          .print-header { display: flex !important; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #f59e0b; padding-bottom: 16px; }
-          .print-title { font-size: 22px; font-weight: bold; color: #333; }
-          .print-subtitle { font-size: 12px; color: #666; margin-top: 4px; }
-          .print-totals { display: grid !important; grid-template-columns: repeat(4,1fr); gap: 12px; margin: 16px 0; }
-          .print-total-card { border: 1px solid #eee; border-radius: 8px; padding: 10px 14px; text-align: center; }
-          .print-total-label { font-size: 10px; color: #888; text-transform: uppercase; }
-          .print-total-value { font-size: 16px; font-weight: bold; margin-top: 2px; }
-          .text-green-400 { color: #16a34a !important; }
-          .text-amber-400 { color: #d97706 !important; }
-          .text-red-400   { color: #dc2626 !important; }
-          .bg-\\[\\#141414\\], .bg-\\[\\#1e1e1e\\], .bg-\\[\\#1a1a1a\\] { background: transparent !important; border-color: #eee !important; }
-          .border-\\[\\#2a2a2a\\] { border-color: #eee !important; }
-          .rounded-xl { border-radius: 0 !important; }
-          .overflow-hidden { overflow: visible !important; }
-        }
-        @media screen {
-          .print-header, .print-totals, .print-total-card, .print-total-label, .print-total-value { display: none; }
-        }
-      `}</style>
-      {/* Print-only header */}
-      <div className="print-header hidden">
-        <div>
-          <div className="print-title">MSK Advocacia — Honorários</div>
-          <div className="print-subtitle">
-            Relatório: {tabs.find(t => t.key === tab)?.label ?? tab} · Gerado em {new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' })}
-          </div>
-        </div>
-        <div className="print-subtitle" style={{ textAlign: 'right' }}>
-          {pagination.items.length} registro(s)
-        </div>
-      </div>
-      <div className="print-totals hidden">
-        <div className="print-total-card">
-          <div className="print-total-label">Recebido</div>
-          <div className="print-total-value text-green-400">{formatCurrency(stats.recebido)}</div>
-        </div>
-        <div className="print-total-card">
-          <div className="print-total-label">A Receber</div>
-          <div className="print-total-value text-amber-400">{formatCurrency(stats.aReceber)}</div>
-        </div>
-        <div className="print-total-card">
-          <div className="print-total-label">Despesas</div>
-          <div className="print-total-value text-red-400">{formatCurrency(stats.despesas)}</div>
-        </div>
-        <div className="print-total-card">
-          <div className="print-total-label">Saldo</div>
-          <div className="print-total-value">{formatCurrency(stats.recebido - stats.despesas)}</div>
-        </div>
-      </div>
 
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 no-print">
+      <div className="flex flex-wrap items-center gap-3">
         <div>
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Honorários</h1>
           <p className="text-[#a0a0a0] text-sm">Controle financeiro</p>
         </div>
         <div className="ml-auto flex gap-2">
           <button
-            onClick={() => window.print()}
+            onClick={() => printHonorarios({
+              items: sorted,
+              tabLabel: tabs.find(t => t.key === tab)?.label ?? tab,
+              stats,
+              escritorio,
+            })}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm font-medium transition-all"
           >
             <Printer className="w-4 h-4" />
@@ -790,7 +738,7 @@ export default function Honorarios() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-[#2a2a2a] no-print">
+      <div className="flex gap-2 border-b border-[#2a2a2a]">
         {tabs.map(t => (
           <button
             key={t.key}
@@ -808,7 +756,7 @@ export default function Honorarios() {
       </div>
 
       {/* Busca */}
-      <div className="relative max-w-sm no-print">
+      <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#505050]" />
         <input
           className="w-full bg-[#141414] border border-[#2a2a2a] rounded-lg pl-9 pr-4 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050]"
@@ -840,7 +788,7 @@ export default function Honorarios() {
                 <th onClick={() => toggle('status')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
                   Status <SortIcon col="status" />
                 </th>
-                <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider no-print">Ações</th>
+                <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e1e1e]">
@@ -922,7 +870,7 @@ export default function Honorarios() {
                         {STATUS_LABELS[l.status]}
                       </span>
                     </td>
-                    <td className="px-5 py-4 no-print">
+                    <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
                         {(l.status === 'pendente' || l.status === 'vencido') && (
                           <button
@@ -1004,38 +952,38 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [l.id]);
 
-  function handlePrint() {
-    window.print();
-  }
-
   const enc = calcEncargos(l);
   const valorFinal = enc ? enc.valorFinal : l.valor;
 
+  function handlePrint() {
+    printRecibo({ numero: num, lancamento: l, escritorio: esc, enc });
+  }
+
   return (
     <Portal>
-      <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto no-print">
+      <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
         <div className="flex justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
             {/* Cabeçalho do modal */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] no-print">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Recibo Nº {num}</h2>
               <div className="flex gap-2">
                 <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium">
-                  <Printer className="w-4 h-4" /> Imprimir
+                  <Printer className="w-4 h-4" /> Imprimir / PDF
                 </button>
                 <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
               </div>
             </div>
 
-            {/* Conteúdo imprimível */}
-            <div id="recibo-print" className="px-8 py-6 print-recibo space-y-4">
+            {/* Preview do recibo — apenas visual, impressão usa nova janela */}
+            <div className="px-8 py-6 space-y-4">
               {/* Cabeçalho escritório */}
-              <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4">
+              <div className="flex items-start justify-between border-b border-[#2a2a2a] pb-4">
                 <div>
                   <h1 className="font-playfair text-xl font-bold text-[#f5f5f5]">{esc?.nome || 'MSK Gestor'}</h1>
                   {esc?.cnpj && <p className="text-xs text-[#505050] mt-0.5">CNPJ: {esc.cnpj}</p>}
                   {esc?.oabPrincipal && <p className="text-xs text-[#505050]">OAB: {esc.oabPrincipal}</p>}
-                  {(esc?.endereco?.logradouro) && (
+                  {esc?.endereco?.logradouro && (
                     <p className="text-xs text-[#505050] mt-0.5">
                       {esc.endereco.logradouro}, {esc.endereco.numero} — {esc.endereco.cidade}/{esc.endereco.uf}
                     </p>
@@ -1050,30 +998,18 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
 
               {/* Corpo do recibo */}
               <div className="bg-[#1a1a1a] rounded-xl p-5 space-y-3 text-sm border border-[#2a2a2a]">
-                <div className="flex gap-2">
-                  <span className="text-[#505050] w-28 shrink-0">Recebemos de</span>
-                  <span className="font-semibold text-[#f5f5f5]">{l.clienteNome || '—'}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-[#505050] w-28 shrink-0">Referente a</span>
-                  <span className="text-[#a0a0a0]">{l.descricao}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-[#505050] w-28 shrink-0">Forma pgto.</span>
-                  <span className="text-[#a0a0a0]">{l.formaPagamento || 'Não informado'}</span>
-                </div>
-                {l.dataPagamento && (
-                  <div className="flex gap-2">
-                    <span className="text-[#505050] w-28 shrink-0">Data pgto.</span>
-                    <span className="text-[#a0a0a0]">{new Date(l.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                {[
+                  ['Recebemos de',     l.clienteNome || '—'],
+                  ['Referente a',      l.descricao],
+                  ['Forma de pgto.',   l.formaPagamento || 'Não informado'],
+                  ...(l.dataPagamento ? [['Data de pagamento', new Date(l.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')]] : []),
+                  ...(l.observacoes   ? [['Observações', l.observacoes]] : []),
+                ].map(([k, v]) => (
+                  <div key={k} className="flex gap-3">
+                    <span className="text-[#505050] w-36 shrink-0">{k}</span>
+                    <span className="text-[#a0a0a0] flex-1">{v}</span>
                   </div>
-                )}
-                {l.observacoes && (
-                  <div className="flex gap-2">
-                    <span className="text-[#505050] w-28 shrink-0">Obs.</span>
-                    <span className="text-[#505050] text-xs">{l.observacoes}</span>
-                  </div>
-                )}
+                ))}
               </div>
 
               {/* Valor de destaque */}
@@ -1082,13 +1018,13 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
                 <span className="text-2xl font-bold text-amber-400 font-playfair">{formatCurrency(valorFinal)}</span>
               </div>
 
-              {/* Encargos (se houver) */}
+              {/* Composição de encargos */}
               {enc && (
                 <div className="text-xs text-[#505050] space-y-1 bg-[#1a1a1a] rounded-lg px-4 py-3 border border-[#2a2a2a]">
-                  <p className="font-medium text-[#a0a0a0] mb-1">Composição do valor</p>
+                  <p className="font-medium text-[#a0a0a0] mb-2">Composição do valor</p>
                   <div className="flex justify-between"><span>Valor original</span><span>{formatCurrency(l.valor)}</span></div>
-                  {enc.multa > 0 && <div className="flex justify-between text-red-400"><span>+ Multa</span><span>+{formatCurrency(enc.multa)}</span></div>}
-                  {enc.juros > 0 && <div className="flex justify-between text-amber-400"><span>+ Juros ({enc.dias}d)</span><span>+{formatCurrency(enc.juros)}</span></div>}
+                  {enc.multa    > 0 && <div className="flex justify-between text-red-400"><span>+ Multa por atraso</span><span>+{formatCurrency(enc.multa)}</span></div>}
+                  {enc.juros    > 0 && <div className="flex justify-between text-amber-400"><span>+ Juros de mora ({enc.dias}d)</span><span>+{formatCurrency(enc.juros)}</span></div>}
                   {enc.desconto > 0 && <div className="flex justify-between text-green-400"><span>− Desconto{l.motivoDesconto ? ` (${l.motivoDesconto})` : ''}</span><span>-{formatCurrency(enc.desconto)}</span></div>}
                 </div>
               )}
@@ -1102,6 +1038,11 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
                   </div>
                 </div>
               </div>
+
+              {/* Nota sobre impressão */}
+              <p className="text-center text-[10px] text-[#505050] pt-2">
+                Clique em "Imprimir / PDF" para gerar o documento com fundo branco
+              </p>
             </div>
           </div>
         </div>

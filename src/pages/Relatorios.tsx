@@ -4,10 +4,11 @@ import {
   DollarSign, Calendar, AlertTriangle, Download, Printer, RefreshCw,
   CheckCircle, Clock, Star,
 } from 'lucide-react';
-import { clientesApi, processosApi, lancamentosApi, contratosApi } from '../services/api';
+import { clientesApi, processosApi, lancamentosApi, contratosApi, escritorioApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
-import type { Cliente, Processo, Lancamento, Contrato } from '../types';
+import { printRelatorios } from '../utils/printRelatorio';
+import type { Cliente, Processo, Lancamento, Contrato, Escritorio } from '../types';
 
 // ─── Card KPI ──────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, color }: {
@@ -58,17 +59,18 @@ export default function Relatorios() {
   const [processos,  setProcessos]  = useState<Processo[]>([]);
   const [lancamentos,setLancamentos]= useState<Lancamento[]>([]);
   const [contratos,  setContratos]  = useState<Contrato[]>([]);
+  const [escritorio, setEscritorio] = useState<Escritorio | null>(null);
   const [periodo, setPeriodo] = useState<'mes' | 'trimestre' | 'ano'>('mes');
-  const [printingSectionId, setPrintingSectionId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, p, l, ct] = await Promise.all([
+      const [c, p, l, ct, e] = await Promise.all([
         clientesApi.getAll(), processosApi.getAll(),
         lancamentosApi.getAll(), contratosApi.getAll(),
+        escritorioApi.get().catch(() => null),
       ]);
-      setClientes(c); setProcessos(p); setLancamentos(l); setContratos(ct);
+      setClientes(c); setProcessos(p); setLancamentos(l); setContratos(ct); setEscritorio(e);
     } catch {
       showToast('error', 'Erro ao carregar dados');
     } finally {
@@ -180,30 +182,26 @@ export default function Relatorios() {
     );
   }
 
-  // ── Print per section ──────────────────────────────────────
+  // ── Dados para impressão ────────────────────────────────────
+  function relatorioData() {
+    return {
+      periodoLabel,
+      clientes, processos, contratos, fin,
+      mesesData, porArea, porStatus,
+      topInadimplentes, topClientes,
+      escritorio,
+    };
+  }
+
   function printSection(id: string) {
-    setPrintingSectionId(id);
-    setTimeout(() => {
-      window.print();
-      window.addEventListener('afterprint', () => setPrintingSectionId(null), { once: true });
-    }, 80);
+    printRelatorios(id, relatorioData());
   }
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      {/* Dynamic print style — hides all sections except the targeted one */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: #fff !important; color: #000 !important; }
-          ${printingSectionId
-            ? `.report-section:not(#${printingSectionId}) { display: none !important; }`
-            : ''}
-        }
-      `}</style>
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center gap-3 no-print">
+      <div className="flex flex-wrap items-center gap-3">
         <div>
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Relatórios</h1>
           <p className="text-[#a0a0a0] text-sm">Visão geral do escritório</p>
@@ -223,7 +221,7 @@ export default function Relatorios() {
           <button onClick={reload} className="p-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#505050] hover:text-amber-400 rounded-lg transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#505050] hover:text-amber-400 rounded-lg text-sm font-medium transition-all">
+          <button onClick={() => printRelatorios(null, relatorioData())} className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#505050] hover:text-amber-400 rounded-lg text-sm font-medium transition-all">
             <Printer className="w-4 h-4" /> Imprimir
           </button>
         </div>

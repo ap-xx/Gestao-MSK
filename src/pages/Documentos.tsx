@@ -11,6 +11,7 @@ import { formatCurrency } from '../utils/cn';
 import Portal from '../components/ui/Portal';
 import type { Lancamento, Cliente, Escritorio, BoletoRegistrado, NotaFiscalEmitida, StatusBoleto, StatusNF } from '../types';
 import { calcEncargos } from './Honorarios';
+import { printRecibo } from '../utils/printRecibo';
 
 // ── localStorage / session keys ───────────────────────────────
 const ASAAS_KEY    = 'msk_asaas_config';
@@ -1307,7 +1308,7 @@ function NovaNotaModal({ config, clientes, escritorio, onClose, onSaved, showToa
 }
 
 // ══════════════════════════════════════════════════════════════
-// Modal: Recibo (print-ready)
+// Modal: Recibo
 // ══════════════════════════════════════════════════════════════
 function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
   lancamento: Lancamento;
@@ -1320,14 +1321,14 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
 
   return (
     <Portal>
-      <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto no-print">
+      <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
         <div className="flex justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] no-print">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
               <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Recibo Nº {num}</h2>
               <div className="flex gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printRecibo({ numero: num, lancamento: l, escritorio: esc, enc })}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium"
                 >
                   <Printer className="w-4 h-4" /> Imprimir / PDF
@@ -1336,6 +1337,7 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
               </div>
             </div>
 
+            {/* Preview — apenas visual, a impressão usa nova janela */}
             <div className="px-8 py-6 space-y-5">
               {/* Cabeçalho */}
               <div className="flex items-start justify-between border-b border-[#2a2a2a] pb-5">
@@ -1363,19 +1365,14 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
                   ['Recebemos de', l.clienteNome || '—'],
                   ['Referente a',  l.descricao],
                   ['Forma de pgto.', l.formaPagamento || 'Não informado'],
-                  l.dataPagamento ? ['Data de pagamento', new Date(l.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')] : null,
-                ].filter(Boolean).map(([k, v]) => (
+                  ...(l.dataPagamento ? [['Data de pagamento', new Date(l.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')]] : []),
+                  ...(l.observacoes  ? [['Observações', l.observacoes]] : []),
+                ].map(([k, v]) => (
                   <div key={k} className="flex gap-3">
                     <span className="text-[#505050] w-32 shrink-0">{k}</span>
                     <span className="text-[#a0a0a0] flex-1">{v}</span>
                   </div>
                 ))}
-                {l.observacoes && (
-                  <div className="flex gap-3">
-                    <span className="text-[#505050] w-32 shrink-0">Observações</span>
-                    <span className="text-[#505050] text-xs flex-1">{l.observacoes}</span>
-                  </div>
-                )}
               </div>
 
               {/* Valor */}
@@ -1389,14 +1386,9 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
                 <div className="text-xs text-[#505050] space-y-1 bg-[#1a1a1a] rounded-lg px-4 py-3 border border-[#2a2a2a]">
                   <p className="font-medium text-[#a0a0a0] mb-2">Composição do valor</p>
                   <div className="flex justify-between"><span>Valor original</span><span>{formatCurrency(l.valor)}</span></div>
-                  {enc.multa > 0 && <div className="flex justify-between text-red-400"><span>+ Multa por atraso</span><span>+{formatCurrency(enc.multa)}</span></div>}
-                  {enc.juros > 0 && <div className="flex justify-between text-amber-400"><span>+ Juros de mora ({enc.dias}d)</span><span>+{formatCurrency(enc.juros)}</span></div>}
-                  {enc.desconto > 0 && (
-                    <div className="flex justify-between text-green-400">
-                      <span>− Desconto{l.motivoDesconto ? ` (${l.motivoDesconto})` : ''}</span>
-                      <span>-{formatCurrency(enc.desconto)}</span>
-                    </div>
-                  )}
+                  {enc.multa    > 0 && <div className="flex justify-between text-red-400"><span>+ Multa por atraso</span><span>+{formatCurrency(enc.multa)}</span></div>}
+                  {enc.juros    > 0 && <div className="flex justify-between text-amber-400"><span>+ Juros de mora ({enc.dias}d)</span><span>+{formatCurrency(enc.juros)}</span></div>}
+                  {enc.desconto > 0 && <div className="flex justify-between text-green-400"><span>− Desconto{l.motivoDesconto ? ` (${l.motivoDesconto})` : ''}</span><span>-{formatCurrency(enc.desconto)}</span></div>}
                 </div>
               )}
 
@@ -1409,6 +1401,10 @@ function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
                   </div>
                 </div>
               </div>
+
+              <p className="text-center text-[10px] text-[#505050] pt-1">
+                Clique em "Imprimir / PDF" para gerar o documento com fundo branco
+              </p>
             </div>
           </div>
         </div>
