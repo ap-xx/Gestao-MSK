@@ -12,12 +12,32 @@ import Portal from '../components/ui/Portal';
 import type { Lancamento, Cliente, Escritorio, BoletoRegistrado, NotaFiscalEmitida, StatusBoleto, StatusNF } from '../types';
 import { calcEncargos } from './Honorarios';
 
-// ── localStorage keys ──────────────────────────────────────────
-const ASAAS_KEY   = 'msk_asaas_config';
-const NFEIO_KEY   = 'msk_nfeio_config';
-const BOLETOS_KEY = 'msk_boletos';
-const NFS_KEY     = 'msk_notas_fiscais';
-const RECIBO_KEY  = 'msk_recibo_counter';
+// ── localStorage / session keys ───────────────────────────────
+const ASAAS_KEY    = 'msk_asaas_config';
+const NFEIO_KEY    = 'msk_nfeio_config';
+const BOLETOS_KEY  = 'msk_boletos';
+const NFS_KEY      = 'msk_notas_fiscais';
+const RECIBO_KEY   = 'msk_recibo_counter';
+const PROVIDER_KEY = 'msk_boleto_provider'; // 'asaas' | 'bradesco'
+const TOKEN_KEY    = 'msk_token';
+const SERVER_BASE  = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+
+type BoletoProvider = 'asaas' | 'bradesco';
+
+async function serverFetch(path: string, method = 'GET', body?: object) {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const r = await fetch(`${SERVER_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type':  'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((json as any).error || `Erro ${r.status}`);
+  return json;
+}
 
 // ── Helpers ────────────────────────────────────────────────────
 function getAll<T>(key: string): T[] {
@@ -105,9 +125,13 @@ export default function Documentos() {
 
   // Boletos
   const [boletos, setBoletos]         = useState<BoletoRegistrado[]>(() => getAll<BoletoRegistrado>(BOLETOS_KEY));
+  const [boletoProvider, setBoletoProvider] = useState<BoletoProvider>(
+    () => (localStorage.getItem(PROVIDER_KEY) as BoletoProvider) || 'bradesco',
+  );
   const [asaasConfig, setAsaasConfig] = useState<AsaasConfig | null>(() => {
     try { return JSON.parse(localStorage.getItem(ASAAS_KEY) || 'null'); } catch { return null; }
   });
+  const [bradescoConfigured, setBradescoConfigured] = useState<boolean | null>(null);
   const [showAsaasForm, setShowAsaasForm] = useState(false);
   const [novoBoletoOpen, setNovoBoletoOpen] = useState(false);
 
@@ -136,6 +160,14 @@ export default function Documentos() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Verifica se as env vars do Bradesco estão presentes no servidor
+  useEffect(() => {
+    if (boletoProvider !== 'bradesco') return;
+    serverFetch('/boleto/bradesco/config-status')
+      .then((d: any) => setBradescoConfigured(d.configured))
+      .catch(() => setBradescoConfigured(false));
+  }, [boletoProvider]);
+
   // Lançamentos pagos para recibos
   const pagos = useMemo(() => {
     const q = search.toLowerCase();
@@ -163,19 +195,23 @@ export default function Documentos() {
     });
   }
 
-  // ── Atualizar status do boleto (consulta Asaas) ──
+  // ── Atualizar status do boleto ──
   async function atualizarBoleto(boleto: BoletoRegistrado) {
-    if (!asaasConfig || !boleto.asaasId) return;
     try {
-      const data = await asaasFetch(asaasConfig, `/payments/${boleto.asaasId}`);
-      const updated: BoletoRegistrado = {
-        ...boleto,
-        status: data.status as StatusBoleto,
-        bankSlipUrl: data.bankSlipUrl || boleto.bankSlipUrl,
-        invoiceUrl: data.invoiceUrl || boleto.invoiceUrl,
-        nossoNumero: data.nossoNumero || boleto.nossoNumero,
-        linhaDigitavel: data.bankSlipUrl ? undefined : boleto.linhaDigitavel,
-      };
+      let newStatus: StatusBoleto = boleto.status;
+
+      if (boletoProvider === 'bradesco' && boleto.nossoNumero) {
+        const d = await serverFetch(`/boleto/bradesco/status/${encodeURIComponent(boleto.nossoNumero)}`);
+        newStatus = (d as any).status as StatusBoleto;
+      } else if (boletoProvider === 'asaas' && asaasConfig && boleto.asaasId) {
+        const d = await asaasFetch(asaasConfig, `/payments/${boleto.asaasId}`);
+        newStatus = (d as any).status as StatusBoleto;
+      } else {
+        showToast('info', 'Sem identificador para consultar status');
+        return;
+      }
+
+      const updated = { ...boleto, status: newStatus };
       setBoletos(prev => {
         const next = prev.map(b => b.id === boleto.id ? updated : b);
         saveAll(BOLETOS_KEY, next);
@@ -183,7 +219,7 @@ export default function Documentos() {
       });
       showToast('success', 'Status atualizado!');
     } catch (err: any) {
-      showToast('error', 'Erro ao consultar Asaas', err.message);
+      showToast('error', 'Erro ao consultar status', err.message);
     }
   }
 
@@ -307,26 +343,57 @@ export default function Documentos() {
       {/* ── ABA: BOLETOS ── */}
       {tab === 'boletos' && (
         <div className="space-y-4">
-          {/* Config Asaas */}
-          <AsaasConfigCard
-            config={asaasConfig}
-            showForm={showAsaasForm}
-            onToggleForm={() => setShowAsaasForm(p => !p)}
-            onSave={(cfg) => {
-              setAsaasConfig(cfg);
-              localStorage.setItem(ASAAS_KEY, JSON.stringify(cfg));
-              setShowAsaasForm(false);
-              showToast('success', 'Configuração Asaas salva!');
-            }}
-          />
+          {/* Provider toggle */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-[#a0a0a0]">Provedor:</span>
+            <div className="flex gap-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-0.5">
+              {(['bradesco', 'asaas'] as BoletoProvider[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setBoletoProvider(p);
+                    localStorage.setItem(PROVIDER_KEY, p);
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    boletoProvider === p
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'text-[#505050] hover:text-[#a0a0a0]'
+                  }`}
+                >
+                  {p === 'bradesco' ? '🏦 Bradesco (direto)' : '🔵 Asaas'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Config card — muda conforme provider selecionado */}
+          {boletoProvider === 'asaas' ? (
+            <AsaasConfigCard
+              config={asaasConfig}
+              showForm={showAsaasForm}
+              onToggleForm={() => setShowAsaasForm(p => !p)}
+              onSave={(cfg) => {
+                setAsaasConfig(cfg);
+                localStorage.setItem(ASAAS_KEY, JSON.stringify(cfg));
+                setShowAsaasForm(false);
+                showToast('success', 'Configuração Asaas salva!');
+              }}
+            />
+          ) : (
+            <BradescoConfigCard configured={bradescoConfigured} />
+          )}
 
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[#a0a0a0]">{boletos.length} boleto{boletos.length !== 1 ? 's' : ''} emitido{boletos.length !== 1 ? 's' : ''}</h3>
             <button
               onClick={() => {
-                if (!asaasConfig?.accessToken) {
+                if (boletoProvider === 'asaas' && !asaasConfig?.accessToken) {
                   showToast('error', 'Configure a API Asaas primeiro');
                   setShowAsaasForm(true);
+                  return;
+                }
+                if (boletoProvider === 'bradesco' && !bradescoConfigured) {
+                  showToast('error', 'Bradesco não configurado', 'Adicione as variáveis BRADESCO_* nas env vars do Render.');
                   return;
                 }
                 setNovoBoletoOpen(true);
@@ -373,7 +440,8 @@ export default function Documentos() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-end gap-1.5">
-                          {asaasConfig && b.asaasId && (
+                          {/* Atualizar status — disponível se houver asaasId ou nossoNumero */}
+                          {(b.asaasId || b.nossoNumero) && (
                             <button
                               onClick={() => atualizarBoleto(b)}
                               title="Atualizar status"
@@ -391,9 +459,9 @@ export default function Documentos() {
                               <Copy className="w-4 h-4" />
                             </button>
                           )}
-                          {b.bankSlipUrl && (
+                          {(b.bankSlipUrl || b.invoiceUrl) && (
                             <a
-                              href={b.bankSlipUrl}
+                              href={b.bankSlipUrl || b.invoiceUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Abrir boleto"
@@ -533,9 +601,10 @@ export default function Documentos() {
         />
       )}
 
-      {novoBoletoOpen && asaasConfig && (
+      {novoBoletoOpen && (
         <NovoBoletoModal
-          config={asaasConfig}
+          provider={boletoProvider}
+          asaasConfig={asaasConfig}
           clientes={clientes}
           onClose={() => setNovoBoletoOpen(false)}
           onSaved={(b) => { saveBoleto(b); setNovoBoletoOpen(false); }}
@@ -645,6 +714,69 @@ function AsaasConfigCard({ config, showForm, onToggleForm, onSave }: {
 }
 
 // ══════════════════════════════════════════════════════════════
+// Configuração Bradesco (server-side — apenas exibe status das env vars)
+// ══════════════════════════════════════════════════════════════
+function BradescoConfigCard({ configured }: { configured: boolean | null }) {
+  return (
+    <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 mt-0.5">
+          <Building2 className="w-5 h-5 text-red-400" />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-[#f5f5f5] text-sm">Bradesco — Boleto Bancário (API direta)</p>
+          <p className="text-xs mt-0.5">
+            {configured === null ? (
+              <span className="text-[#505050] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin inline" /> Verificando servidor...</span>
+            ) : configured ? (
+              <span className="text-green-400">● Configurado — credenciais presentes no servidor</span>
+            ) : (
+              <span className="text-red-400">● Não configurado — adicione as variáveis de ambiente no Render</span>
+            )}
+          </p>
+
+          {configured === false && (
+            <div className="mt-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-4 space-y-2 text-xs">
+              <p className="font-medium text-[#f5f5f5]">Como configurar:</p>
+              <ol className="space-y-1.5 text-[#a0a0a0] list-decimal list-inside">
+                <li>
+                  Crie conta em{' '}
+                  <a href="https://developers.bradesco.com.br" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">
+                    developers.bradesco.com.br
+                  </a>{' '}
+                  e registre sua aplicação
+                </li>
+                <li>Obtenha o <strong className="text-[#f5f5f5]">Client ID</strong> e <strong className="text-[#f5f5f5]">Client Secret</strong> da aplicação</li>
+                <li>Solicite ao Bradesco o <strong className="text-[#f5f5f5]">Merchant ID</strong> vinculado ao CNPJ do escritório</li>
+                <li>
+                  No painel do{' '}
+                  <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">
+                    Render
+                  </a>
+                  {' '}→ seu serviço (MSK API) → <em>Environment</em>, adicione:
+                  <div className="mt-1.5 space-y-0.5 ml-4">
+                    <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_CLIENT_ID</code></p>
+                    <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_CLIENT_SECRET</code></p>
+                    <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_MERCHANT_ID</code></p>
+                  </div>
+                </li>
+                <li>Faça um novo <em>Deploy</em> do serviço e recarregue esta página</li>
+              </ol>
+            </div>
+          )}
+
+          {configured === true && (
+            <p className="text-xs text-[#505050] mt-1.5">
+              As credenciais ficam armazenadas somente no servidor (Render). Nenhum segredo é exposto ao navegador.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // Configuração NFe.io
 // ══════════════════════════════════════════════════════════════
 function NfeioConfigCard({ config, showForm, onToggleForm, onSave }: {
@@ -725,10 +857,11 @@ function NfeioConfigCard({ config, showForm, onToggleForm, onSave }: {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Modal: Novo Boleto
+// Modal: Novo Boleto (Asaas ou Bradesco)
 // ══════════════════════════════════════════════════════════════
-function NovoBoletoModal({ config, clientes, onClose, onSaved, showToast }: {
-  config: AsaasConfig;
+function NovoBoletoModal({ provider, asaasConfig, clientes, onClose, onSaved, showToast }: {
+  provider: BoletoProvider;
+  asaasConfig: AsaasConfig | null;
   clientes: Cliente[];
   onClose: () => void;
   onSaved: (b: BoletoRegistrado) => void;
@@ -751,57 +884,89 @@ function NovoBoletoModal({ config, clientes, onClose, onSaved, showToast }: {
     const c = clientes.find(cl => cl.id === id);
     setForm(p => ({
       ...p,
-      clienteId: id,
-      clienteNome: c?.nome || '',
-      cpfCnpj: c?.cpf || c?.cnpj || '',
-      email: c?.email || '',
+      clienteId:   id,
+      clienteNome: c?.nome    || '',
+      cpfCnpj:     c?.cpf     || c?.cnpj  || '',
+      email:       c?.email   || '',
     }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.cpfCnpj) { showToast('error', 'CPF/CNPJ obrigatório'); return; }
     setSaving(true);
     try {
-      // 1. Cria ou busca customer no Asaas
-      let customerId: string;
-      const custSearch = await asaasFetch(config, `/customers?cpfCnpj=${form.cpfCnpj.replace(/\D/g, '')}`);
-      if (custSearch.data?.length > 0) {
-        customerId = custSearch.data[0].id;
-      } else {
-        const cust = await asaasFetch(config, '/customers', 'POST', {
-          name:     form.clienteNome,
-          cpfCnpj: form.cpfCnpj.replace(/\D/g, ''),
-          email:   form.email || undefined,
+      if (provider === 'bradesco') {
+        // ── Bradesco: chama o backend (server-side OAuth2) ──
+        const data: any = await serverFetch('/boleto/bradesco/criar', 'POST', {
+          nomeComprador:  form.clienteNome,
+          cpfCnpj:        form.cpfCnpj,
+          emailComprador: form.email || undefined,
+          valor:          parseFloat(form.valor),
+          dataVencimento: form.vencimento,
+          descricao:      form.descricao,
         });
-        customerId = cust.id;
+
+        const boleto: BoletoRegistrado = {
+          id:             genId(),
+          clienteId:      form.clienteId || undefined,
+          clienteNome:    form.clienteNome,
+          valor:          parseFloat(form.valor),
+          vencimento:     form.vencimento,
+          descricao:      form.descricao,
+          status:         'PENDING',
+          nossoNumero:    data.nossoNumero || data.numeroPedido,
+          linhaDigitavel: data.linhaDigitavel || undefined,
+          bankSlipUrl:    data.linkBoleto || undefined,
+          criadoEm:       new Date().toISOString(),
+        };
+        onSaved(boleto);
+        showToast('success', 'Boleto Bradesco emitido!', `Vencimento: ${new Date(form.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}`);
+
+      } else {
+        // ── Asaas: chamada direta do browser ──
+        if (!asaasConfig) throw new Error('Asaas não configurado');
+
+        // 1. Cria ou busca customer no Asaas
+        let customerId: string;
+        const custSearch = await asaasFetch(asaasConfig, `/customers?cpfCnpj=${form.cpfCnpj.replace(/\D/g, '')}`);
+        if (custSearch.data?.length > 0) {
+          customerId = custSearch.data[0].id;
+        } else {
+          const cust = await asaasFetch(asaasConfig, '/customers', 'POST', {
+            name:    form.clienteNome,
+            cpfCnpj: form.cpfCnpj.replace(/\D/g, ''),
+            email:   form.email || undefined,
+          });
+          customerId = cust.id;
+        }
+
+        // 2. Cria cobrança boleto
+        const payment = await asaasFetch(asaasConfig, '/payments', 'POST', {
+          customer:    customerId,
+          billingType: 'BOLETO',
+          value:       parseFloat(form.valor),
+          dueDate:     form.vencimento,
+          description: form.descricao,
+        });
+
+        const boleto: BoletoRegistrado = {
+          id:           genId(),
+          asaasId:      payment.id,
+          clienteId:    form.clienteId || undefined,
+          clienteNome:  form.clienteNome,
+          valor:        parseFloat(form.valor),
+          vencimento:   form.vencimento,
+          descricao:    form.descricao,
+          status:       (payment.status as StatusBoleto) || 'PENDING',
+          bankSlipUrl:  payment.bankSlipUrl,
+          invoiceUrl:   payment.invoiceUrl,
+          nossoNumero:  payment.nossoNumero,
+          criadoEm:     new Date().toISOString(),
+        };
+        onSaved(boleto);
+        showToast('success', 'Boleto Asaas emitido!', `Vencimento: ${new Date(form.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}`);
       }
-
-      // 2. Cria cobrança boleto
-      const payment = await asaasFetch(config, '/payments', 'POST', {
-        customer:    customerId,
-        billingType: 'BOLETO',
-        value:       parseFloat(form.valor),
-        dueDate:     form.vencimento,
-        description: form.descricao,
-      });
-
-      const boleto: BoletoRegistrado = {
-        id:           genId(),
-        asaasId:      payment.id,
-        clienteId:    form.clienteId || undefined,
-        clienteNome:  form.clienteNome,
-        valor:        parseFloat(form.valor),
-        vencimento:   form.vencimento,
-        descricao:    form.descricao,
-        status:       payment.status as StatusBoleto || 'PENDING',
-        bankSlipUrl:  payment.bankSlipUrl,
-        invoiceUrl:   payment.invoiceUrl,
-        nossoNumero:  payment.nossoNumero,
-        criadoEm:     new Date().toISOString(),
-      };
-
-      onSaved(boleto);
-      showToast('success', 'Boleto emitido!', `Vencimento: ${new Date(form.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}`);
     } catch (err: any) {
       showToast('error', 'Erro ao emitir boleto', err.message);
     } finally {
@@ -818,7 +983,12 @@ function NovoBoletoModal({ config, clientes, onClose, onSaved, showToast }: {
         <div className="flex justify-center p-4">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a]">
-              <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Novo Boleto Bancário</h2>
+              <div>
+                <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Novo Boleto Bancário</h2>
+                <p className="text-xs text-[#505050] mt-0.5">
+                  {provider === 'bradesco' ? '🏦 Via Bradesco (direto)' : '🔵 Via Asaas'}
+                </p>
+              </div>
               <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
@@ -830,21 +1000,32 @@ function NovoBoletoModal({ config, clientes, onClose, onSaved, showToast }: {
                 </select>
               </div>
 
+              {/* Campos manuais quando não selecionou cliente */}
               {!form.clienteId && (
                 <>
                   <div>
                     <label className={lbl}>Nome do pagador *</label>
                     <input className={inp} required value={form.clienteNome} onChange={e => fill('clienteNome', e.target.value)} placeholder="Nome completo" />
                   </div>
-                  <div>
-                    <label className={lbl}>CPF / CNPJ *</label>
-                    <input className={inp} required value={form.cpfCnpj} onChange={e => fill('cpfCnpj', e.target.value)} placeholder="000.000.000-00" />
-                  </div>
-                  <div>
-                    <label className={lbl}>E-mail (opcional)</label>
-                    <input type="email" className={inp} value={form.email} onChange={e => fill('email', e.target.value)} placeholder="email@exemplo.com" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={lbl}>CPF / CNPJ *</label>
+                      <input className={inp} required value={form.cpfCnpj} onChange={e => fill('cpfCnpj', e.target.value)} placeholder="000.000.000-00" />
+                    </div>
+                    <div>
+                      <label className={lbl}>E-mail (opcional)</label>
+                      <input type="email" className={inp} value={form.email} onChange={e => fill('email', e.target.value)} placeholder="email@exemplo.com" />
+                    </div>
                   </div>
                 </>
+              )}
+
+              {/* Quando cliente selecionado, mostra CPF/CNPJ em modo readonly para confirmar */}
+              {form.clienteId && (
+                <div>
+                  <label className={lbl}>CPF / CNPJ *</label>
+                  <input className={inp} required value={form.cpfCnpj} onChange={e => fill('cpfCnpj', e.target.value)} placeholder="000.000.000-00" />
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
@@ -863,10 +1044,19 @@ function NovoBoletoModal({ config, clientes, onClose, onSaved, showToast }: {
                 <input className={inp} required value={form.descricao} onChange={e => fill('descricao', e.target.value)} />
               </div>
 
-              <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-400 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>A emissão utiliza o ambiente <strong>{config.env === 'sandbox' ? 'Sandbox (testes)' : 'Produção'}</strong> do Asaas. Em sandbox os boletos não são reais.</p>
-              </div>
+              {provider === 'asaas' && asaasConfig && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-400 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>Utilizando Asaas no ambiente <strong>{asaasConfig.env === 'sandbox' ? 'Sandbox (testes)' : 'Produção'}</strong>. Em sandbox os boletos não são reais.</p>
+                </div>
+              )}
+
+              {provider === 'bradesco' && (
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-xs text-red-400 flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>O boleto será registrado diretamente no <strong>Bradesco</strong> via API bancária. Credenciais armazenadas com segurança no servidor.</p>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Cancelar</button>
