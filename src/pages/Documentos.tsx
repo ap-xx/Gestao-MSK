@@ -126,7 +126,7 @@ export default function Documentos() {
   // Boletos
   const [boletos, setBoletos]         = useState<BoletoRegistrado[]>(() => getAll<BoletoRegistrado>(BOLETOS_KEY));
   const [boletoProvider, setBoletoProvider] = useState<BoletoProvider>(
-    () => (localStorage.getItem(PROVIDER_KEY) as BoletoProvider) || 'bradesco',
+    () => (localStorage.getItem(PROVIDER_KEY) as BoletoProvider) || 'asaas',
   );
   const [asaasConfig, setAsaasConfig] = useState<AsaasConfig | null>(() => {
     try { return JSON.parse(localStorage.getItem(ASAAS_KEY) || 'null'); } catch { return null; }
@@ -657,6 +657,7 @@ function AsaasConfigCard({ config, showForm, onToggleForm, onSave }: {
             <p className="text-xs text-[#505050] mt-0.5">
               Crie sua conta em <a href="https://www.asaas.com" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">asaas.com</a> e gere seu API key em Configurações → Integrações.
             </p>
+            <p className="text-xs text-green-400/70 mt-0.5">✓ Aceita CPF de pessoa física — não exige CNPJ</p>
           </div>
         </div>
         <button
@@ -724,7 +725,12 @@ function BradescoConfigCard({ configured }: { configured: boolean | null }) {
           <Building2 className="w-5 h-5 text-red-400" />
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-[#f5f5f5] text-sm">Bradesco — Boleto Bancário (API direta)</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-[#f5f5f5] text-sm">Bradesco — Boleto Bancário (API direta)</p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              Requer CNPJ
+            </span>
+          </div>
           <p className="text-xs mt-0.5">
             {configured === null ? (
               <span className="text-[#505050] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin inline" /> Verificando servidor...</span>
@@ -735,32 +741,42 @@ function BradescoConfigCard({ configured }: { configured: boolean | null }) {
             )}
           </p>
 
+          {/* Aviso sobre CNPJ — sempre visível */}
+          <div className="mt-3 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <p>
+              A integração direta com o Bradesco exige que o escritório possua{' '}
+              <strong>CNPJ registrado</strong> para obter o Merchant ID junto ao banco.
+              Sem CNPJ, utilize o provedor <strong>Asaas</strong> (aceita CPF de pessoa física/MEI).
+            </p>
+          </div>
+
           {configured === false && (
             <div className="mt-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-4 space-y-2 text-xs">
-              <p className="font-medium text-[#f5f5f5]">Como configurar:</p>
+              <p className="font-medium text-[#f5f5f5]">Como configurar (quando tiver CNPJ):</p>
               <ol className="space-y-1.5 text-[#a0a0a0] list-decimal list-inside">
                 <li>
                   Crie conta em{' '}
                   <a href="https://developers.bradesco.com.br" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">
                     developers.bradesco.com.br
                   </a>{' '}
-                  e registre sua aplicação
+                  com o CNPJ do escritório e registre sua aplicação
                 </li>
                 <li>Obtenha o <strong className="text-[#f5f5f5]">Client ID</strong> e <strong className="text-[#f5f5f5]">Client Secret</strong> da aplicação</li>
-                <li>Solicite ao Bradesco o <strong className="text-[#f5f5f5]">Merchant ID</strong> vinculado ao CNPJ do escritório</li>
+                <li>Solicite ao Bradesco o <strong className="text-[#f5f5f5]">Merchant ID</strong> vinculado ao CNPJ</li>
                 <li>
                   No painel do{' '}
                   <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">
                     Render
                   </a>
-                  {' '}→ seu serviço (MSK API) → <em>Environment</em>, adicione:
+                  {' '}→ MSK API → <em>Environment</em>, adicione:
                   <div className="mt-1.5 space-y-0.5 ml-4">
                     <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_CLIENT_ID</code></p>
                     <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_CLIENT_SECRET</code></p>
                     <p><code className="bg-[#252525] px-1.5 py-0.5 rounded font-mono">BRADESCO_MERCHANT_ID</code></p>
                   </div>
                 </li>
-                <li>Faça um novo <em>Deploy</em> do serviço e recarregue esta página</li>
+                <li>Faça um novo <em>Deploy</em> e recarregue esta página</li>
               </ol>
             </div>
           )}
