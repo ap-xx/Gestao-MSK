@@ -6,6 +6,7 @@ import {
 import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import type { Cliente, Lancamento } from '../types';
 import Portal from '../components/ui/Portal';
 
@@ -188,6 +189,8 @@ function NotificacaoModal({ clienteInadimplente, onClose }: NotifModalProps) {
 export default function Inadimplencia() {
   const { showToast } = useToast();
   const [notifTarget, setNotifTarget] = useState<ClienteInadimplente | null>(null);
+  const [regularizarTarget, setRegularizarTarget] = useState<ClienteInadimplente | null>(null);
+  const [regularizando, setRegularizando] = useState(false);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,16 +231,20 @@ export default function Inadimplencia() {
     }).filter(Boolean) as ClienteInadimplente[];
   }, [lancamentos, clientes]);
 
-  async function regularizar(item: ClienteInadimplente) {
-    if (!window.confirm(`Marcar todos os débitos de "${item.cliente.nome}" como pagos?`)) return;
+  async function doRegularizar() {
+    if (!regularizarTarget) return;
+    setRegularizando(true);
     try {
-      await Promise.all(item.lancamentos.map(l =>
+      await Promise.all(regularizarTarget.lancamentos.map(l =>
         lancamentosApi.update(l.id, { status: 'pago', dataPagamento: new Date().toISOString().split('T')[0] })
       ));
-      showToast('success', 'Regularizado!', `${item.lancamentos.length} lançamento(s) de ${item.cliente.nome} marcados como pagos.`);
+      showToast('success', 'Regularizado!', `${regularizarTarget.lancamentos.length} lançamento(s) de ${regularizarTarget.cliente.nome} marcados como pagos.`);
+      setRegularizarTarget(null);
       await reload();
     } catch (err: any) {
       showToast('error', 'Erro', err.message);
+    } finally {
+      setRegularizando(false);
     }
   }
 
@@ -351,7 +358,7 @@ export default function Inadimplencia() {
                       Notificar
                     </button>
                     <button
-                      onClick={() => regularizar(item)}
+                      onClick={() => setRegularizarTarget(item)}
                       className="flex items-center justify-center gap-1.5 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-xs font-medium transition-colors"
                     >
                       <CheckCircle className="w-3 h-3" />
@@ -370,6 +377,17 @@ export default function Inadimplencia() {
           onClose={() => setNotifTarget(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!regularizarTarget}
+        title="Regularizar Inadimplência"
+        message={`Marcar todos os ${regularizarTarget?.lancamentos.length} débito(s) de "${regularizarTarget?.cliente.nome}" como pagos?`}
+        confirmLabel="Regularizar"
+        variant="success"
+        onConfirm={doRegularizar}
+        onCancel={() => setRegularizarTarget(null)}
+        loading={regularizando}
+      />
     </div>
   );
 }
