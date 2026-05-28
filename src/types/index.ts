@@ -176,6 +176,47 @@ export interface Lancamento {
   parcelaGrupoId?: string; // UUID compartilhado entre todas as parcelas do mesmo grupo
   parcelaAtual?: number;   // número da parcela (1-based)
   parcelasTotal?: number;  // total de parcelas do grupo
+  // Recorrência
+  recorrente?: boolean;
+  recorrenciaFrequencia?: 'semanal' | 'quinzenal' | 'mensal' | 'bimestral' | 'trimestral';
+  recorrenciaProximaData?: string; // data ISO — próxima geração automática
+}
+
+// ── Documentos emitidos ───────────────────────────────────────
+
+export type StatusBoleto = 'PENDING' | 'RECEIVED' | 'OVERDUE' | 'CANCELLED';
+
+export interface BoletoRegistrado {
+  id: string;
+  asaasId?: string;
+  clienteId?: string;
+  clienteNome: string;
+  valor: number;
+  vencimento: string;
+  descricao: string;
+  status: StatusBoleto;
+  bankSlipUrl?: string;
+  invoiceUrl?: string;
+  nossoNumero?: string;
+  linhaDigitavel?: string;
+  criadoEm: string;
+}
+
+export type StatusNF = 'Processing' | 'Issued' | 'Cancelled' | 'Error';
+
+export interface NotaFiscalEmitida {
+  id: string;
+  nfeioId?: string;
+  clienteId?: string;
+  clienteNome: string;
+  valor: number;
+  descricao: string;
+  status: StatusNF;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  numero?: string;
+  codigoVerificacao?: string;
+  criadoEm: string;
 }
 
 export type UrgenciaAviso = 'critica' | 'alta' | 'media' | 'baixa';

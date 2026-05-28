@@ -3,8 +3,9 @@ import {
   Plus, X, DollarSign, CheckCircle, Clock, TrendingDown,
   Search, Edit2, Trash2, Receipt, CreditCard, Printer,
   Percent, Tag, ChevronDown, ChevronUp, TrendingUp, Layers,
+  RefreshCw, FileText,
 } from 'lucide-react';
-import { lancamentosApi, clientesApi } from '../services/api';
+import { lancamentosApi, clientesApi, escritorioApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
@@ -13,8 +14,17 @@ import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
-import type { Lancamento, TipoLancamento, StatusPagamento, Cliente } from '../types';
+import { addDias } from '../hooks/useRecorrencia';
+import type { Lancamento, TipoLancamento, StatusPagamento, Cliente, Escritorio } from '../types';
 import Portal from '../components/ui/Portal';
+
+const RECORRENCIA_LABELS: Record<string, string> = {
+  semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal',
+  bimestral: 'Bimestral', trimestral: 'Trimestral',
+};
+const RECORRENCIA_DIAS: Record<string, number> = {
+  semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90,
+};
 
 const STATUS_STYLES: Record<StatusPagamento, string> = {
   pago: 'bg-green-500/15 text-green-400 border-green-500/30',
@@ -38,7 +48,7 @@ const FORMAS_PAGAMENTO = ['PIX', 'TED', 'Boleto', 'Cartão', 'Dinheiro', 'Cheque
  * Desconto é sempre aplicado (cortesia negociada).
  * Retorna null se não há encargos configurados.
  */
-function calcEncargos(l: Lancamento) {
+export function calcEncargos(l: Lancamento) {
   if (!l.jurosMensais && !l.multaPorAtraso && !l.desconto) return null;
 
   const hoje = new Date();
@@ -92,6 +102,10 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
   const [numParcelas,    setNumParcelas]    = useState('3');
   const [intervaloDias,  setIntervaloDias]  = useState('30');
 
+  // ── Recorrência ──
+  const [recorrente,    setRecorrente]    = useState(lancamento?.recorrente ?? false);
+  const [recorrenciaFreq, setRecorrenciaFreq] = useState(lancamento?.recorrenciaFrequencia ?? 'mensal');
+
   // Preview das parcelas (primeiras 6 para não sobrecarregar o modal)
   const parcelaPreview = useMemo(() => {
     const n        = Math.min(Math.max(parseInt(numParcelas) || 2, 2), 24);
@@ -135,6 +149,12 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
       multaPorAtraso: form.multaPorAtraso ? parseFloat(form.multaPorAtraso) : undefined,
       desconto:       form.desconto       ? parseFloat(form.desconto)       : undefined,
       motivoDesconto: form.motivoDesconto || undefined,
+      // Recorrência
+      recorrente: recorrente || undefined,
+      recorrenciaFrequencia: recorrente ? recorrenciaFreq : undefined,
+      recorrenciaProximaData: recorrente
+        ? addDias(form.dataVencimento, RECORRENCIA_DIAS[recorrenciaFreq] ?? 30)
+        : undefined,
     };
     try {
       if (isEdit) {
@@ -341,6 +361,53 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
             </div>
           )}
 
+          {/* ── Recorrência ── */}
+          {form.tipo === 'a_receber' && (
+            <div className="border-t border-[#2a2a2a] pt-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-medium text-[#505050]">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Cobrança recorrente
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRecorrente(p => !p)}
+                  className={`relative w-10 h-5 rounded-full transition-all ${recorrente ? 'bg-amber-500' : 'bg-[#2a2a2a]'}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${recorrente ? 'left-5.5' : 'left-0.5'}`} style={{ left: recorrente ? '22px' : '2px' }} />
+                </button>
+              </div>
+              {recorrente && (
+                <div className="mt-3 bg-[#1a1a1a] rounded-xl p-4 border border-[#2a2a2a] space-y-3">
+                  <div>
+                    <label className={labelClass}>Frequência de geração</label>
+                    <select
+                      className={inputClass}
+                      value={recorrenciaFreq}
+                      onChange={e => setRecorrenciaFreq(e.target.value as any)}
+                    >
+                      <option value="semanal">Semanal (a cada 7 dias)</option>
+                      <option value="quinzenal">Quinzenal (a cada 15 dias)</option>
+                      <option value="mensal">Mensal (a cada 30 dias)</option>
+                      <option value="bimestral">Bimestral (a cada 60 dias)</option>
+                      <option value="trimestral">Trimestral (a cada 90 dias)</option>
+                    </select>
+                  </div>
+                  {form.dataVencimento && (
+                    <div className="bg-[#141414] rounded-lg p-3 text-xs text-[#505050] border border-[#2a2a2a]">
+                      <p>1ª cobrança: <span className="text-amber-400 font-medium">
+                        {new Date(form.dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </span></p>
+                      <p className="mt-0.5">Próxima geração automática: <span className="text-amber-400 font-medium">
+                        {new Date(addDias(form.dataVencimento, RECORRENCIA_DIAS[recorrenciaFreq] ?? 30) + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </span></p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Juros, Multa & Desconto ── */}
           <div className="border-t border-[#2a2a2a] pt-3">
             <button
@@ -483,6 +550,8 @@ export default function Honorarios() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Lancamento | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [reciboTarget, setReciboTarget] = useState<Lancamento | null>(null);
+  const [escritorio, setEscritorio] = useState<Escritorio | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -498,6 +567,7 @@ export default function Honorarios() {
   }, [showToast]);
 
   useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { escritorioApi.get().then(setEscritorio).catch(() => {}); }, []);
 
   const filtered = useMemo(() => {
     return lancamentos.filter(l => {
@@ -789,11 +859,16 @@ export default function Honorarios() {
                   return (
                   <tr key={l.id} className="hover:bg-[#1a1a1a] transition-colors">
                     <td className="px-5 py-4">
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-1.5 flex-wrap">
                         <p className="font-medium text-[#f5f5f5] leading-tight">{l.descricao}</p>
                         {l.parcelaAtual && l.parcelasTotal && (
                           <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 mt-0.5">
                             <Layers className="w-2.5 h-2.5 mr-0.5" />{l.parcelaAtual}/{l.parcelasTotal}
+                          </span>
+                        )}
+                        {l.recorrente && (
+                          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 mt-0.5" title={`Recorrente ${RECORRENCIA_LABELS[l.recorrenciaFrequencia ?? 'mensal']}`}>
+                            <RefreshCw className="w-2.5 h-2.5 mr-0.5" />{RECORRENCIA_LABELS[l.recorrenciaFrequencia ?? 'mensal']}
                           </span>
                         )}
                       </div>
@@ -858,6 +933,15 @@ export default function Honorarios() {
                             Marcar Pago
                           </button>
                         )}
+                        {l.status === 'pago' && (
+                          <button
+                            onClick={() => setReciboTarget(l)}
+                            title="Gerar recibo"
+                            className="p-1.5 text-[#505050] hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
                         <button onClick={() => { setEditLancamento(l); setModalOpen(true); }} className="p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(l)} className="p-1.5 text-[#505050] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -892,6 +976,136 @@ export default function Honorarios() {
           onSave={() => { reload(); setModalOpen(false); setEditLancamento(undefined); }}
         />
       )}
+
+      {/* ── Modal Recibo ── */}
+      {reciboTarget && (
+        <ReciboModal
+          lancamento={reciboTarget}
+          escritorio={escritorio}
+          onClose={() => setReciboTarget(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Recibo Modal ─────────────────────────────────────────────
+const RECIBO_KEY = 'msk_recibo_counter';
+
+function ReciboModal({ lancamento: l, escritorio: esc, onClose }: {
+  lancamento: Lancamento;
+  escritorio: Escritorio | null;
+  onClose: () => void;
+}) {
+  const num = useMemo(() => {
+    const n = Number(localStorage.getItem(RECIBO_KEY) || 0) + 1;
+    localStorage.setItem(RECIBO_KEY, String(n));
+    return String(n).padStart(4, '0');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [l.id]);
+
+  function handlePrint() {
+    window.print();
+  }
+
+  const enc = calcEncargos(l);
+  const valorFinal = enc ? enc.valorFinal : l.valor;
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto no-print">
+        <div className="flex justify-center p-4">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xl shadow-2xl">
+            {/* Cabeçalho do modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a2a] no-print">
+              <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">Recibo Nº {num}</h2>
+              <div className="flex gap-2">
+                <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg text-sm font-medium">
+                  <Printer className="w-4 h-4" /> Imprimir
+                </button>
+                <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
+              </div>
+            </div>
+
+            {/* Conteúdo imprimível */}
+            <div id="recibo-print" className="px-8 py-6 print-recibo space-y-4">
+              {/* Cabeçalho escritório */}
+              <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4">
+                <div>
+                  <h1 className="font-playfair text-xl font-bold text-[#f5f5f5]">{esc?.nome || 'MSK Gestor'}</h1>
+                  {esc?.cnpj && <p className="text-xs text-[#505050] mt-0.5">CNPJ: {esc.cnpj}</p>}
+                  {esc?.oabPrincipal && <p className="text-xs text-[#505050]">OAB: {esc.oabPrincipal}</p>}
+                  {(esc?.endereco?.logradouro) && (
+                    <p className="text-xs text-[#505050] mt-0.5">
+                      {esc.endereco.logradouro}, {esc.endereco.numero} — {esc.endereco.cidade}/{esc.endereco.uf}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-amber-400 font-playfair">RECIBO</p>
+                  <p className="text-sm font-mono text-[#a0a0a0]">Nº {num}</p>
+                  <p className="text-xs text-[#505050] mt-1">{new Date().toLocaleDateString('pt-BR')}</p>
+                </div>
+              </div>
+
+              {/* Corpo do recibo */}
+              <div className="bg-[#1a1a1a] rounded-xl p-5 space-y-3 text-sm border border-[#2a2a2a]">
+                <div className="flex gap-2">
+                  <span className="text-[#505050] w-28 shrink-0">Recebemos de</span>
+                  <span className="font-semibold text-[#f5f5f5]">{l.clienteNome || '—'}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-[#505050] w-28 shrink-0">Referente a</span>
+                  <span className="text-[#a0a0a0]">{l.descricao}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-[#505050] w-28 shrink-0">Forma pgto.</span>
+                  <span className="text-[#a0a0a0]">{l.formaPagamento || 'Não informado'}</span>
+                </div>
+                {l.dataPagamento && (
+                  <div className="flex gap-2">
+                    <span className="text-[#505050] w-28 shrink-0">Data pgto.</span>
+                    <span className="text-[#a0a0a0]">{new Date(l.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                  </div>
+                )}
+                {l.observacoes && (
+                  <div className="flex gap-2">
+                    <span className="text-[#505050] w-28 shrink-0">Obs.</span>
+                    <span className="text-[#505050] text-xs">{l.observacoes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Valor de destaque */}
+              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-4">
+                <span className="text-sm font-medium text-[#a0a0a0]">Valor recebido</span>
+                <span className="text-2xl font-bold text-amber-400 font-playfair">{formatCurrency(valorFinal)}</span>
+              </div>
+
+              {/* Encargos (se houver) */}
+              {enc && (
+                <div className="text-xs text-[#505050] space-y-1 bg-[#1a1a1a] rounded-lg px-4 py-3 border border-[#2a2a2a]">
+                  <p className="font-medium text-[#a0a0a0] mb-1">Composição do valor</p>
+                  <div className="flex justify-between"><span>Valor original</span><span>{formatCurrency(l.valor)}</span></div>
+                  {enc.multa > 0 && <div className="flex justify-between text-red-400"><span>+ Multa</span><span>+{formatCurrency(enc.multa)}</span></div>}
+                  {enc.juros > 0 && <div className="flex justify-between text-amber-400"><span>+ Juros ({enc.dias}d)</span><span>+{formatCurrency(enc.juros)}</span></div>}
+                  {enc.desconto > 0 && <div className="flex justify-between text-green-400"><span>− Desconto{l.motivoDesconto ? ` (${l.motivoDesconto})` : ''}</span><span>-{formatCurrency(enc.desconto)}</span></div>}
+                </div>
+              )}
+
+              {/* Assinatura */}
+              <div className="flex justify-end pt-4">
+                <div className="text-center w-56">
+                  <div className="border-t border-[#505050] pt-2">
+                    <p className="text-xs text-[#505050]">{esc?.responsavel || esc?.nome || 'Responsável'}</p>
+                    {esc?.oabPrincipal && <p className="text-xs text-[#505050]">OAB {esc.oabPrincipal}</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Portal>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   AlertTriangle, X, Mail, MessageCircle, FileText,
   CheckCircle, Phone, Calendar, User, Building2, Loader2,
+  Download, ArrowUpDown,
 } from 'lucide-react';
 import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -9,6 +10,8 @@ import { formatCurrency } from '../utils/cn';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import type { Cliente, Lancamento } from '../types';
 import Portal from '../components/ui/Portal';
+
+type SortKey = 'totalDevido' | 'diasMaxAtraso' | 'nome';
 
 const TOKEN_KEY = 'msk_token';
 
@@ -194,6 +197,8 @@ export default function Inadimplencia() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortKey, setSortKey] = useState<SortKey>('diasMaxAtraso');
+  const [busca, setBusca] = useState('');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -250,6 +255,39 @@ export default function Inadimplencia() {
 
   const totalGeral = inadimplentes.reduce((s, i) => s + i.totalDevido, 0);
 
+  const inadimplentesOrdenados = useMemo(() => {
+    const lista = busca
+      ? inadimplentes.filter(i => i.cliente.nome.toLowerCase().includes(busca.toLowerCase()))
+      : inadimplentes;
+    return [...lista].sort((a, b) => {
+      if (sortKey === 'nome') return a.cliente.nome.localeCompare(b.cliente.nome);
+      if (sortKey === 'totalDevido') return b.totalDevido - a.totalDevido;
+      return b.diasMaxAtraso - a.diasMaxAtraso; // padrão
+    });
+  }, [inadimplentes, sortKey, busca]);
+
+  function exportarCSV() {
+    const header = 'Cliente,CPF/CNPJ,E-mail,Telefone,Parcelas,Total Devido,Dias Máx. Atraso';
+    const rows = inadimplentes.map(i => [
+      `"${i.cliente.nome}"`,
+      i.cliente.cpf || i.cliente.cnpj || '',
+      i.cliente.email,
+      i.cliente.telefone,
+      i.lancamentos.length,
+      i.totalDevido.toFixed(2).replace('.', ','),
+      i.diasMaxAtraso,
+    ].join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inadimplencia-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('success', 'CSV exportado!');
+  }
+
   return (
     <div className="space-y-5 animate-fade-in-up">
       {/* Header */}
@@ -259,12 +297,48 @@ export default function Inadimplencia() {
           <p className="text-[#a0a0a0] text-sm">{inadimplentes.length} clientes em atraso</p>
         </div>
         {inadimplentes.length > 0 && (
-          <div className="ml-auto bg-red-500/10 border border-red-500/20 rounded-xl px-5 py-3 text-right">
-            <p className="text-xs text-[#505050]">Total em aberto</p>
-            <p className="text-xl font-bold text-red-400">{formatCurrency(totalGeral)}</p>
-          </div>
+          <>
+            <div className="ml-auto bg-red-500/10 border border-red-500/20 rounded-xl px-5 py-3 text-right">
+              <p className="text-xs text-[#505050]">Total em aberto</p>
+              <p className="text-xl font-bold text-red-400">{formatCurrency(totalGeral)}</p>
+            </div>
+            <button
+              onClick={exportarCSV}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm transition-colors"
+            >
+              <Download className="w-4 h-4" /> Exportar CSV
+            </button>
+          </>
         )}
       </div>
+
+      {/* Filtros */}
+      {inadimplentes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#505050] w-48"
+            placeholder="Buscar cliente..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+          <div className="flex items-center gap-2 ml-auto text-xs text-[#505050]">
+            <ArrowUpDown className="w-3.5 h-3.5" /> Ordenar por:
+            {(['diasMaxAtraso', 'totalDevido', 'nome'] as SortKey[]).map(k => (
+              <button
+                key={k}
+                onClick={() => setSortKey(k)}
+                className={`px-2.5 py-1 rounded-lg border transition-colors ${
+                  sortKey === k
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                    : 'border-[#2a2a2a] bg-[#141414] text-[#505050] hover:text-[#a0a0a0]'
+                }`}
+              >
+                {k === 'diasMaxAtraso' ? 'Dias atraso' : k === 'totalDevido' ? 'Total' : 'Nome'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -278,9 +352,7 @@ export default function Inadimplencia() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {inadimplentes
-            .sort((a, b) => b.diasMaxAtraso - a.diasMaxAtraso)
-            .map(item => {
+          {inadimplentesOrdenados.map(item => {
               const { cliente, lancamentos: lans, totalDevido, diasMaxAtraso } = item;
               const urgente = diasMaxAtraso > 30;
               return (

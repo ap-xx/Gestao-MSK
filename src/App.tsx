@@ -34,6 +34,7 @@ if (!LicenseDB.get() && _hadData && !_gateShown) {
 
 import Layout, { type PageKey } from './components/Layout';
 import { useAutoBackup } from './hooks/useAutoBackup';
+import { useRecorrencia } from './hooks/useRecorrencia';
 import Dashboard     from './pages/Dashboard';
 import Clientes      from './pages/Clientes';
 import Contratos     from './pages/Contratos';
@@ -45,11 +46,13 @@ import Agenda        from './pages/Agenda';
 import Configuracoes from './pages/Configuracoes';
 import Relatorios    from './pages/Relatorios';
 import Licencas      from './pages/Licencas';
+import Documentos    from './pages/Documentos';
 import { useState } from 'react';
 
-/** Roda o hook de backup apenas quando o usuário está autenticado. */
+/** Roda o hook de backup + recorrência apenas quando o usuário está autenticado. */
 function AutoBackupChecker() {
   useAutoBackup();
+  useRecorrencia();
   return null;
 }
 
@@ -93,6 +96,7 @@ function AppContent() {
     relatorios:    <Relatorios />,
     configuracoes: <Configuracoes />,
     licencas:      <Licencas />,
+    documentos:    <Documentos />,
   };
 
   return (
