@@ -147,11 +147,12 @@ export default function Licencas() {
   const { user }  = useAuth();
   const { showToast } = useToast();
 
-  const [records,   setRecords]   = useState<LicenseRecord[]>([]);
-  const [myLicense, setMyLicense] = useState<LocalLicense | null>(null);
-  const [myDbSize,  setMyDbSize]  = useState(0);
-  const [syncing,   setSyncing]   = useState(false);
-  const [showModal, setShowModal] = useState(false);
+  const [records,    setRecords]   = useState<LicenseRecord[]>([]);
+  const [myLicense,  setMyLicense] = useState<LocalLicense | null>(null);
+  const [myDbSize,   setMyDbSize]  = useState(0);
+  const [syncing,    setSyncing]   = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'ok' | 'sleeping' | 'error'>('idle');
+  const [showModal,  setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId,  setCopiedId]  = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<LicenseRecord | null>(null);
@@ -206,13 +207,30 @@ export default function Licencas() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncStatus('idle');
     try {
       const serverData = await licenseApi.syncFromServer();
       licenseApi.mergeServerData(serverData);
       load();
-      showToast('success', `Sincronizado: ${serverData.length} registro(s) atualizado(s).`);
-    } catch {
-      showToast('error', 'Servidor não disponível.', 'Os dados locais permanecem intactos.');
+      setSyncStatus('ok');
+      showToast('success', `Sincronizado — ${serverData.length} máquina(s) encontrada(s).`);
+    } catch (err) {
+      // Distinguish "server sleeping / network down" from other errors
+      const msg = err instanceof Error ? err.message : '';
+      const isSleeping =
+        err instanceof TypeError ||          // fetch() threw (network unreachable)
+        msg.includes('AbortError') ||
+        msg.includes('fetch') ||
+        msg.includes('504') ||
+        msg.includes('502');
+
+      if (isSleeping) {
+        setSyncStatus('sleeping');
+        showToast('warning', 'Servidor dormindo.', 'O Render free tier acorda em ~30s. Tente novamente em instantes.');
+      } else {
+        setSyncStatus('error');
+        showToast('warning', 'Sincronização indisponível.', msg || 'Verifique se o servidor está atualizado.');
+      }
     } finally {
       setSyncing(false);
     }
@@ -244,10 +262,17 @@ export default function Licencas() {
             onClick={() => void handleSync()}
             disabled={syncing}
             title="Buscar dados das máquinas no servidor"
-            className="flex items-center gap-2 px-3 py-2 border border-[#2a2a2a] hover:border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5] text-xs rounded-lg transition-colors disabled:opacity-40"
+            className={[
+              'flex items-center gap-2 px-3 py-2 border text-xs rounded-lg transition-colors disabled:opacity-40',
+              syncStatus === 'ok'
+                ? 'border-emerald-500/30 text-emerald-400 hover:border-emerald-500/50'
+                : syncStatus === 'sleeping' || syncStatus === 'error'
+                  ? 'border-amber-500/30 text-amber-400 hover:border-amber-500/50'
+                  : 'border-[#2a2a2a] hover:border-[#3a3a3a] text-[#a0a0a0] hover:text-[#f5f5f5]',
+            ].join(' ')}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            Sincronizar
+            {syncing ? 'Sincronizando…' : syncStatus === 'sleeping' ? 'Servidor dormindo' : syncStatus === 'ok' ? 'Sincronizado' : 'Sincronizar'}
           </button>
           <button
             onClick={() => setShowModal(true)}

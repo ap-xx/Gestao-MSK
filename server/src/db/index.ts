@@ -193,6 +193,20 @@ db.exec(`
     modulos TEXT NOT NULL DEFAULT '["dashboard","clientes","contratos","processos","honorarios","agenda","inadimplencia","avisos"]',
     criadoEm TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS machine_reports (
+    machineId   TEXT PRIMARY KEY,
+    machineName TEXT NOT NULL DEFAULT '',
+    licenseKey  TEXT NOT NULL,
+    activatedAt TEXT,
+    lastLogin   TEXT,
+    loginCount  INTEGER NOT NULL DEFAULT 0,
+    dbSizeKb    INTEGER NOT NULL DEFAULT 0,
+    cidade      TEXT,
+    uf          TEXT,
+    ip          TEXT,
+    reportedAt  TEXT NOT NULL
+  );
 `);
 
 // ─── Migrações não-destrutivas ─────────────────────────────────
