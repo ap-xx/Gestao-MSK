@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scale, KeyRound, Monitor, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { validateLicenseKey, formatKeyInput } from '../utils/license';
 import { LicenseDB } from '../data/db';
@@ -14,6 +14,12 @@ export default function LicenseGate({ onActivated }: Props) {
   const [error,       setError]       = useState('');
   const [loading,     setLoading]     = useState(false);
   const [success,     setSuccess]     = useState(false);
+
+  // Mark that this machine has seen the LicenseGate.
+  // Used in App.tsx to prevent the "had seeded data = legacy machine" false positive.
+  useEffect(() => {
+    localStorage.setItem('msk_gate_shown', '1');
+  }, []);
 
   const handleKeyInput = (v: string) => {
     setError('');

@@ -8,14 +8,19 @@ import LicenseGate from './components/LicenseGate';
 // ── Bootstrap ─────────────────────────────────────────────────
 // Check for existing user data BEFORE seeding so we can distinguish
 // a returning machine from a brand-new one.
-const _hadData = !!localStorage.getItem('msk_users');
+const _hadData      = !!localStorage.getItem('msk_users');
+// If this machine ever saw the LicenseGate it's NOT a legacy machine —
+// it's a new install where initializeDatabase() seeded msk_users on
+// the first visit, causing a false-positive on every subsequent visit.
+const _gateShown    = !!localStorage.getItem('msk_gate_shown');
 
 // Seed localStorage with initial data if this is a fresh browser
 initializeDatabase();
 
-// Auto-license machines that were already using the app (migration).
-// New machines (no prior data) will see the LicenseGate instead.
-if (!LicenseDB.get() && _hadData) {
+// Auto-license ONLY machines that had real pre-existing data AND never
+// saw the LicenseGate (i.e. were running before the license system was
+// introduced). New machines will see the gate, which sets msk_gate_shown.
+if (!LicenseDB.get() && _hadData && !_gateShown) {
   LicenseDB.set({
     machineId:   LicenseDB.getMachineId(),
     machineName: 'PC Registrado',

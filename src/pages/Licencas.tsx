@@ -9,6 +9,8 @@ import { licenseApi } from '../services/api';
 import { LicenseDB } from '../data/db';
 import { calcDbSizeKb } from '../utils/license';
 import { useToast } from '../context/ToastContext';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import Portal from '../components/ui/Portal';
 import type { LicenseRecord, LocalLicense } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -59,6 +61,7 @@ function GerarModal({
   };
 
   return (
+    <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md shadow-2xl"
@@ -134,6 +137,7 @@ function GerarModal({
         )}
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -150,6 +154,8 @@ export default function Licencas() {
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId,  setCopiedId]  = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<LicenseRecord | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<LicenseRecord | null>(null);
 
   const load = useCallback(() => {
     setRecords(licenseApi.getAll());
@@ -172,9 +178,12 @@ export default function Licencas() {
     });
   };
 
-  const handleRevoke = (r: LicenseRecord) => {
-    if (!confirm(`Revogar a licença "${r.key}"?\nA máquina ainda poderá usar o sistema localmente até o próximo login.`)) return;
-    licenseApi.revoke(r.id);
+  const handleRevoke = (r: LicenseRecord) => setConfirmRevoke(r);
+
+  const doRevoke = () => {
+    if (!confirmRevoke) return;
+    licenseApi.revoke(confirmRevoke.id);
+    setConfirmRevoke(null);
     load();
     showToast('success', 'Licença revogada.');
   };
@@ -185,9 +194,12 @@ export default function Licencas() {
     showToast('success', 'Licença reativada.');
   };
 
-  const handleDelete = (r: LicenseRecord) => {
-    if (!confirm(`Excluir o registro da licença "${r.key}"?`)) return;
-    licenseApi.delete(r.id);
+  const handleDelete = (r: LicenseRecord) => setConfirmDelete(r);
+
+  const doDelete = () => {
+    if (!confirmDelete) return;
+    licenseApi.delete(confirmDelete.id);
+    setConfirmDelete(null);
     load();
     showToast('success', 'Registro excluído.');
   };
@@ -477,6 +489,26 @@ export default function Licencas() {
           onGenerated={() => { load(); setShowModal(false); }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmRevoke}
+        title="Revogar Licença"
+        message={`Revogar a licença "${confirmRevoke?.key}"? A máquina ainda poderá usar o sistema localmente até o próximo login.`}
+        confirmLabel="Revogar"
+        variant="warning"
+        onConfirm={doRevoke}
+        onCancel={() => setConfirmRevoke(null)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Excluir Registro"
+        message={`Excluir permanentemente o registro da licença "${confirmDelete?.key}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        variant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
