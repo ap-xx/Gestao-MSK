@@ -1586,6 +1586,7 @@ export default function Configuracoes() {
             <h3 className="font-semibold text-[#f5f5f5] mb-2 flex items-center gap-2">
               <Upload className="w-4 h-4 text-amber-400" /> Importar Backup
             </h3>
+
             <p className="text-xs text-[#505050] mb-4">
               Importa dados a partir de um arquivo JSON exportado anteriormente. <strong className="text-red-400">Atenção: substitui todos os dados atuais.</strong>
             </p>
@@ -1614,8 +1615,41 @@ export default function Configuracoes() {
               )}
             </div>
           </div>
+
+          {/* ── Zona de Perigo ── */}
+          <div className="bg-[#141414] border border-red-500/20 rounded-xl p-5">
+            <h3 className="font-semibold text-red-400 mb-2 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> Zona de Perigo
+            </h3>
+            <p className="text-xs text-[#505050] mb-4 leading-relaxed">
+              Remove <strong className="text-red-400">permanentemente</strong> todos os clientes,
+              contratos, processos, lançamentos, avisos e log de auditoria.
+              Usuários, configurações do escritório e licença são mantidos.
+              Esta ação <strong className="text-red-400">não pode ser desfeita</strong>.
+            </p>
+            <button
+              onClick={() => openConfirm(
+                'Zerar Banco de Dados',
+                'Isso apagará PERMANENTEMENTE todos os clientes, contratos, processos, lançamentos e avisos. Usuários e configurações do escritório serão mantidos. Não é possível desfazer.',
+                'Zerar Banco',
+                async () => {
+                  [
+                    'msk_clientes', 'msk_contratos', 'msk_processos',
+                    'msk_lancamentos', 'msk_avisos', 'msk_auditoria',
+                    'msk_perfis', 'msk_permissions',
+                  ].forEach(k => localStorage.removeItem(k));
+                  window.location.reload();
+                },
+              )}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+              Zerar Banco de Dados
+            </button>
+          </div>
         </div>
       )}
+
       {/* ── Tab: Permissões (admin only) ──────────────────────── */}
       {tab === 'permissoes' && isAdmin && (
         <div className="space-y-5">

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, DollarSign, CheckCircle, Clock, TrendingDown,
   Search, Edit2, Trash2, Receipt, CreditCard, Printer,
+  Percent, Tag, ChevronDown, ChevronUp, TrendingUp, Layers,
 } from 'lucide-react';
 import { lancamentosApi, clientesApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -31,6 +32,28 @@ const STATUS_LABELS: Record<StatusPagamento, string> = {
 
 const FORMAS_PAGAMENTO = ['PIX', 'TED', 'Boleto', 'Cartão', 'Dinheiro', 'Cheque', 'Outro'];
 
+/**
+ * Calcula encargos acumulados de um lançamento.
+ * Juros e multa só incidem quando status === 'vencido' e há dias de atraso.
+ * Desconto é sempre aplicado (cortesia negociada).
+ * Retorna null se não há encargos configurados.
+ */
+function calcEncargos(l: Lancamento) {
+  if (!l.jurosMensais && !l.multaPorAtraso && !l.desconto) return null;
+
+  const hoje = new Date();
+  const venc = new Date(l.dataVencimento + 'T00:00:00');
+  const dias = Math.max(0, Math.floor((hoje.getTime() - venc.getTime()) / 86_400_000));
+
+  const isVencido = l.status === 'vencido' && dias > 0;
+  const multa     = isVencido ? l.valor * (l.multaPorAtraso ?? 0) / 100 : 0;
+  const juros     = isVencido ? l.valor * ((l.jurosMensais ?? 0) / 30 / 100) * dias : 0;
+  const desconto  = l.desconto ?? 0;
+  const valorFinal = Math.max(0, l.valor + juros + multa - desconto);
+
+  return { dias, juros, multa, desconto, valorFinal };
+}
+
 interface ModalProps {
   lancamento?: Lancamento;
   tipo?: TipoLancamento;
@@ -53,7 +76,40 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
     status: (lancamento?.status || 'pendente') as StatusPagamento,
     formaPagamento: lancamento?.formaPagamento || '',
     observacoes: lancamento?.observacoes || '',
+    jurosMensais:   lancamento?.jurosMensais?.toString()   || '',
+    multaPorAtraso: lancamento?.multaPorAtraso?.toString() || '',
+    desconto:       lancamento?.desconto?.toString()       || '',
+    motivoDesconto: lancamento?.motivoDesconto             || '',
   });
+
+  // Expande a seção de encargos automaticamente se o lançamento já tiver algum
+  const [showEncargos, setShowEncargos] = useState(
+    !!(lancamento?.jurosMensais || lancamento?.multaPorAtraso || lancamento?.desconto),
+  );
+
+  // ── Parcelamento ──
+  const [showParcelar,   setShowParcelar]   = useState(false);
+  const [numParcelas,    setNumParcelas]    = useState('3');
+  const [intervaloDias,  setIntervaloDias]  = useState('30');
+
+  // Preview das parcelas (primeiras 6 para não sobrecarregar o modal)
+  const parcelaPreview = useMemo(() => {
+    const n        = Math.min(Math.max(parseInt(numParcelas) || 2, 2), 24);
+    const interval = Math.max(parseInt(intervaloDias) || 30, 1);
+    const total    = parseFloat(form.valor) || 0;
+    const parcela  = Math.floor(total * 100 / n) / 100;
+    const sobra    = Math.round((total - parcela * n) * 100) / 100;
+    const base     = new Date(form.dataVencimento + 'T12:00:00');
+    return Array.from({ length: Math.min(n, 6) }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(d.getDate() + i * interval);
+      return {
+        idx:   i + 1,
+        data:  d.toLocaleDateString('pt-BR'),
+        valor: i === n - 1 ? parcela + sobra : parcela,
+      };
+    });
+  }, [numParcelas, intervaloDias, form.valor, form.dataVencimento]);
 
   function set(key: string, val: string) {
     setForm(prev => ({ ...prev, [key]: val }));
@@ -63,7 +119,7 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
     e.preventDefault();
     const cliente = clientes.find(c => c.id === form.clienteId);
     const now = new Date().toISOString();
-    const payload: Omit<Lancamento, 'id'> = {
+    const basePayload: Omit<Lancamento, 'id'> = {
       tipo: form.tipo,
       clienteId: form.clienteId || undefined,
       clienteNome: cliente?.nome,
@@ -75,11 +131,49 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
       formaPagamento: form.formaPagamento || undefined,
       observacoes: form.observacoes || undefined,
       criadoEm: lancamento?.criadoEm || now,
+      jurosMensais:   form.jurosMensais   ? parseFloat(form.jurosMensais)   : undefined,
+      multaPorAtraso: form.multaPorAtraso ? parseFloat(form.multaPorAtraso) : undefined,
+      desconto:       form.desconto       ? parseFloat(form.desconto)       : undefined,
+      motivoDesconto: form.motivoDesconto || undefined,
     };
     try {
-      if (isEdit) await lancamentosApi.update(lancamento.id, payload);
-      else await lancamentosApi.create(payload);
-      showToast('success', isEdit ? 'Lançamento atualizado!' : 'Lançamento registrado!');
+      if (isEdit) {
+        await lancamentosApi.update(lancamento.id, basePayload);
+        showToast('success', 'Lançamento atualizado!');
+        onSave();
+        return;
+      }
+
+      // ── Parcelamento ──
+      const n = parseInt(numParcelas);
+      if (showParcelar && n >= 2) {
+        const interval  = Math.max(parseInt(intervaloDias) || 30, 1);
+        const total     = parseFloat(form.valor);
+        const parcela   = Math.floor(total * 100 / n) / 100;
+        const sobra     = Math.round((total - parcela * n) * 100) / 100;
+        const grupoId   = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const base = new Date(form.dataVencimento + 'T12:00:00');
+
+        for (let i = 0; i < n; i++) {
+          const d = new Date(base);
+          d.setDate(d.getDate() + i * interval);
+          await lancamentosApi.create({
+            ...basePayload,
+            descricao:      `${form.descricao} — Parcela ${i + 1}/${n}`,
+            valor:          i === n - 1 ? parcela + sobra : parcela,
+            dataVencimento: d.toISOString().slice(0, 10),
+            parcelaGrupoId: grupoId,
+            parcelaAtual:   i + 1,
+            parcelasTotal:  n,
+          });
+        }
+        showToast('success', `${n} parcelas criadas com sucesso!`);
+      } else {
+        await lancamentosApi.create(basePayload);
+        showToast('success', 'Lançamento registrado!');
+      }
       onSave();
     } catch (err: any) {
       showToast('error', 'Erro ao salvar', err.message);
@@ -175,6 +269,192 @@ function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalP
             <textarea className={`${inputClass} resize-none`} rows={2} value={form.observacoes} onChange={e => set('observacoes', e.target.value)} />
           </div>
 
+          {/* ── Parcelamento ── (apenas em novo lançamento) */}
+          {!isEdit && (
+            <div className="border-t border-[#2a2a2a] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowParcelar(p => !p)}
+                className="flex items-center gap-2 text-xs font-medium text-[#505050] hover:text-amber-400 transition-colors w-full"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                {showParcelar ? 'Cancelar parcelamento' : 'Parcelar este lançamento'}
+                {showParcelar
+                  ? <ChevronUp className="w-3 h-3 ml-auto" />
+                  : <ChevronDown className="w-3 h-3 ml-auto" />
+                }
+              </button>
+
+              {showParcelar && (
+                <div className="mt-3 space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-[#2a2a2a]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>Nº de parcelas</label>
+                      <input
+                        type="number" min="2" max="24" step="1"
+                        className={inputClass}
+                        value={numParcelas}
+                        onChange={e => setNumParcelas(e.target.value)}
+                        placeholder="ex: 3"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Intervalo</label>
+                      <select
+                        className={inputClass}
+                        value={intervaloDias}
+                        onChange={e => setIntervaloDias(e.target.value)}
+                      >
+                        <option value="7">Semanal (7d)</option>
+                        <option value="15">Quinzenal (15d)</option>
+                        <option value="30">Mensal (30d)</option>
+                        <option value="60">Bimestral (60d)</option>
+                        <option value="90">Trimestral (90d)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Preview das parcelas */}
+                  {form.valor && parseFloat(form.valor) > 0 && (
+                    <div className="bg-[#141414] rounded-lg p-3 border border-[#2a2a2a]">
+                      <p className="text-[10px] font-medium text-[#505050] mb-2 uppercase tracking-wide">
+                        Prévia das parcelas
+                        {parseInt(numParcelas) > 6 && <span className="ml-1">(exibindo 6 de {numParcelas})</span>}
+                      </p>
+                      <div className="space-y-1">
+                        {parcelaPreview.map(p => (
+                          <div key={p.idx} className="flex items-center justify-between text-xs">
+                            <span className="text-[#505050]">Parcela <span className="font-mono text-amber-400">{p.idx}/{numParcelas}</span></span>
+                            <span className="text-[#505050]">{p.data}</span>
+                            <span className="font-medium text-[#f5f5f5]">{formatCurrency(p.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-[#2a2a2a] flex justify-between text-xs font-bold text-[#a0a0a0]">
+                        <span>Total</span>
+                        <span>{formatCurrency(parseFloat(form.valor) || 0)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Juros, Multa & Desconto ── */}
+          <div className="border-t border-[#2a2a2a] pt-3">
+            <button
+              type="button"
+              onClick={() => setShowEncargos(p => !p)}
+              className="flex items-center gap-2 text-xs font-medium text-[#505050] hover:text-amber-400 transition-colors w-full"
+            >
+              {showEncargos
+                ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar Juros, Multa & Desconto</>
+                : <><ChevronDown className="w-3.5 h-3.5" /> Adicionar Juros, Multa & Desconto</>
+              }
+            </button>
+
+            {showEncargos && (
+              <div className="mt-3 space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-[#2a2a2a]">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>
+                      <Percent className="inline w-3 h-3 mr-1" />
+                      Juros de mora (% ao mês)
+                    </label>
+                    <input
+                      type="number" min="0" max="100" step="0.01"
+                      className={inputClass}
+                      value={form.jurosMensais}
+                      onChange={e => set('jurosMensais', e.target.value)}
+                      placeholder="ex: 1"
+                    />
+                    <p className="text-[10px] text-[#505050] mt-1">Acumulado por dia após o vencimento</p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      <TrendingUp className="inline w-3 h-3 mr-1" />
+                      Multa por atraso (% fixo)
+                    </label>
+                    <input
+                      type="number" min="0" max="100" step="0.01"
+                      className={inputClass}
+                      value={form.multaPorAtraso}
+                      onChange={e => set('multaPorAtraso', e.target.value)}
+                      placeholder="ex: 2"
+                    />
+                    <p className="text-[10px] text-[#505050] mt-1">Aplicado uma vez no 1º dia de atraso</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>
+                      <Tag className="inline w-3 h-3 mr-1" />
+                      Desconto / Cortesia (R$)
+                    </label>
+                    <input
+                      type="number" min="0" step="0.01"
+                      className={inputClass}
+                      value={form.desconto}
+                      onChange={e => set('desconto', e.target.value)}
+                      placeholder="ex: 50.00"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Motivo do desconto</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={form.motivoDesconto}
+                      onChange={e => set('motivoDesconto', e.target.value)}
+                      placeholder="ex: Cortesia / Bom pagador"
+                    />
+                  </div>
+                </div>
+
+                {/* Preview do valor atualizado */}
+                {(form.jurosMensais || form.multaPorAtraso || form.desconto) && form.valor && (
+                  <div className="bg-[#141414] rounded-lg p-3 border border-[#2a2a2a] space-y-1 text-xs">
+                    <p className="text-[#505050] font-medium mb-1.5">Prévia (se vencido hoje)</p>
+                    <div className="flex justify-between text-[#a0a0a0]">
+                      <span>Valor original</span>
+                      <span>{formatCurrency(parseFloat(form.valor) || 0)}</span>
+                    </div>
+                    {form.multaPorAtraso && (
+                      <div className="flex justify-between text-red-400">
+                        <span>+ Multa ({form.multaPorAtraso}%)</span>
+                        <span>+{formatCurrency((parseFloat(form.valor) || 0) * parseFloat(form.multaPorAtraso) / 100)}</span>
+                      </div>
+                    )}
+                    {form.jurosMensais && (
+                      <div className="flex justify-between text-amber-400">
+                        <span>+ Juros 30d ({form.jurosMensais}%/mês)</span>
+                        <span>+{formatCurrency((parseFloat(form.valor) || 0) * parseFloat(form.jurosMensais) / 100)}</span>
+                      </div>
+                    )}
+                    {form.desconto && (
+                      <div className="flex justify-between text-green-400">
+                        <span>− Desconto</span>
+                        <span>-{formatCurrency(parseFloat(form.desconto) || 0)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-[#f5f5f5] border-t border-[#2a2a2a] pt-1.5 mt-1">
+                      <span>Valor após 30 dias vencido</span>
+                      <span>{formatCurrency(
+                        Math.max(0,
+                          (parseFloat(form.valor) || 0)
+                          + ((parseFloat(form.valor) || 0) * (parseFloat(form.multaPorAtraso) || 0) / 100)
+                          + ((parseFloat(form.valor) || 0) * (parseFloat(form.jurosMensais) || 0) / 100)
+                          - (parseFloat(form.desconto) || 0)
+                        )
+                      )}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </form>
 
         {/* Sticky footer */}
@@ -235,9 +515,21 @@ export default function Honorarios() {
   const pagination = usePagination(sorted, 15);
 
   const stats = useMemo(() => {
-    const recebido = lancamentos.filter(l => l.tipo === 'recebimento' && l.status === 'pago').reduce((s, l) => s + l.valor, 0);
-    const aReceber = lancamentos.filter(l => l.tipo === 'a_receber' && (l.status === 'pendente' || l.status === 'vencido')).reduce((s, l) => s + l.valor, 0);
-    const despesas = lancamentos.filter(l => l.tipo === 'despesa').reduce((s, l) => s + l.valor, 0);
+    const recebido = lancamentos
+      .filter(l => l.tipo === 'recebimento' && l.status === 'pago')
+      .reduce((s, l) => s + l.valor, 0);
+
+    const aReceber = lancamentos
+      .filter(l => l.tipo === 'a_receber' && (l.status === 'pendente' || l.status === 'vencido'))
+      .reduce((s, l) => {
+        const enc = calcEncargos(l);
+        return s + (enc ? enc.valorFinal : l.valor);
+      }, 0);
+
+    const despesas = lancamentos
+      .filter(l => l.tipo === 'despesa')
+      .reduce((s, l) => s + l.valor, 0);
+
     return { recebido, aReceber, despesas };
   }, [lancamentos]);
 
@@ -492,10 +784,19 @@ export default function Honorarios() {
                   </td>
                 </tr>
               ) : (
-                pagination.items.map(l => (
+                pagination.items.map(l => {
+                  const enc = calcEncargos(l);
+                  return (
                   <tr key={l.id} className="hover:bg-[#1a1a1a] transition-colors">
                     <td className="px-5 py-4">
-                      <p className="font-medium text-[#f5f5f5] leading-tight">{l.descricao}</p>
+                      <div className="flex items-start gap-2">
+                        <p className="font-medium text-[#f5f5f5] leading-tight">{l.descricao}</p>
+                        {l.parcelaAtual && l.parcelasTotal && (
+                          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 mt-0.5">
+                            <Layers className="w-2.5 h-2.5 mr-0.5" />{l.parcelaAtual}/{l.parcelasTotal}
+                          </span>
+                        )}
+                      </div>
                       {l.formaPagamento && (
                         <p className="text-xs text-[#505050] flex items-center gap-1 mt-0.5">
                           <CreditCard className="w-3 h-3" /> {l.formaPagamento}
@@ -506,9 +807,34 @@ export default function Honorarios() {
                       <p className="text-sm text-[#a0a0a0]">{l.clienteNome || '—'}</p>
                     </td>
                     <td className="px-5 py-4">
-                      <p className={`font-bold text-sm ${l.tipo === 'recebimento' || l.tipo === 'a_receber' ? 'text-green-400' : 'text-red-400'}`}>
-                        {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
-                      </p>
+                      {enc ? (
+                        <div>
+                          {/* Valor original riscado */}
+                          <p className="text-xs text-[#505050] line-through leading-tight">
+                            {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
+                          </p>
+                          {/* Valor com encargos */}
+                          <p className={`font-bold text-sm ${l.tipo === 'recebimento' || l.tipo === 'a_receber' ? 'text-green-400' : 'text-red-400'}`}>
+                            {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(enc.valorFinal)}
+                          </p>
+                          {/* Detalhamento compacto */}
+                          <div className="flex flex-wrap gap-x-2 mt-0.5">
+                            {enc.multa > 0 && (
+                              <span className="text-[10px] text-red-400">+{formatCurrency(enc.multa)} multa</span>
+                            )}
+                            {enc.juros > 0 && (
+                              <span className="text-[10px] text-amber-400">+{formatCurrency(enc.juros)} juros ({enc.dias}d)</span>
+                            )}
+                            {enc.desconto > 0 && (
+                              <span className="text-[10px] text-green-400">-{formatCurrency(enc.desconto)} desc.</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className={`font-bold text-sm ${l.tipo === 'recebimento' || l.tipo === 'a_receber' ? 'text-green-400' : 'text-red-400'}`}>
+                          {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-4 hidden lg:table-cell">
                       <p className="text-xs text-[#a0a0a0]">{new Date(l.dataVencimento).toLocaleDateString('pt-BR')}</p>
@@ -537,7 +863,8 @@ export default function Honorarios() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

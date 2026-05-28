@@ -41,43 +41,52 @@ export function useAutoBackup() {
   const { showToast } = useToast();
 
   useEffect(() => {
-    const schedule = (localStorage.getItem(BACKUP_SCHED_KEY) as BackupSchedule) || 'desabilitado';
-    if (schedule === 'desabilitado') return;
+    function checkAndRun() {
+      const schedule = (localStorage.getItem(BACKUP_SCHED_KEY) as BackupSchedule) || 'desabilitado';
+      if (schedule === 'desabilitado') return;
 
-    const mode     = (localStorage.getItem(BACKUP_MODE_KEY) as BackupMode) || 'auto';
-    const last     = localStorage.getItem(BACKUP_LAST_KEY);
-    const lastTime = last ? new Date(last).getTime() : 0;
+      const mode     = (localStorage.getItem(BACKUP_MODE_KEY) as BackupMode) || 'auto';
+      const last     = localStorage.getItem(BACKUP_LAST_KEY);
+      const lastTime = last ? new Date(last).getTime() : 0;
 
-    if (Date.now() - lastTime < THRESHOLDS[schedule]) return;
+      // Ainda dentro do período de threshold — não é hora de rodar
+      if (Date.now() - lastTime < THRESHOLDS[schedule]) return;
 
-    // Verificação de dia da semana (semanal) ou dia do mês (mensal)
-    const now = new Date();
-    if (schedule === 'semanal') {
-      const dow = Number(localStorage.getItem(BACKUP_DOW_KEY) ?? '1');
-      if (now.getDay() !== dow) return;
+      // Verificação de dia da semana (semanal) ou dia do mês (mensal)
+      const now = new Date();
+      if (schedule === 'semanal') {
+        const dow = Number(localStorage.getItem(BACKUP_DOW_KEY) ?? '1');
+        if (now.getDay() !== dow) return;
+      }
+      if (schedule === 'mensal') {
+        const dom = Number(localStorage.getItem(BACKUP_DOM_KEY) ?? '1');
+        if (now.getDate() !== dom) return;
+      }
+
+      // Verificação de horário do dia
+      const [hStr = '8', mStr = '0'] = (localStorage.getItem(BACKUP_TIME_KEY) || '08:00').split(':');
+      const scheduledMin = Number(hStr) * 60 + Number(mStr);
+      if (now.getHours() * 60 + now.getMinutes() < scheduledMin) return;
+
+      if (mode === 'auto') {
+        triggerBackupDownload()
+          .then(() => showToast('success', 'Backup automático realizado!'))
+          .catch(() => showToast('error', 'Falha no backup automático'));
+      } else {
+        // Salva timestamp para não repetir o aviso no próximo tick do interval
+        localStorage.setItem(BACKUP_LAST_KEY, new Date().toISOString());
+        showToast(
+          'info',
+          'Backup pendente',
+          'Acesse Configurações → Dados para baixar o backup.',
+        );
+      }
     }
-    if (schedule === 'mensal') {
-      const dom = Number(localStorage.getItem(BACKUP_DOM_KEY) ?? '1');
-      if (now.getDate() !== dom) return;
-    }
 
-    // Verificação de horário do dia
-    const [hStr = '8', mStr = '0'] = (localStorage.getItem(BACKUP_TIME_KEY) || '08:00').split(':');
-    const scheduledMin = Number(hStr) * 60 + Number(mStr);
-    if (now.getHours() * 60 + now.getMinutes() < scheduledMin) return;
-
-    if (mode === 'auto') {
-      triggerBackupDownload()
-        .then(() => showToast('success', 'Backup automático realizado!'))
-        .catch(() => showToast('error', 'Falha no backup automático'));
-    } else {
-      // Notifica sem baixar — o usuário decide quando fazer
-      showToast(
-        'info',
-        'Backup pendente',
-        'Acesse Configurações → Dados para baixar o backup.',
-      );
-    }
+    checkAndRun(); // verifica imediatamente ao abrir o app
+    // Continua verificando a cada minuto enquanto o app estiver aberto
+    const interval = setInterval(checkAndRun, 60_000);
+    return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

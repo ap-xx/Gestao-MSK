@@ -234,7 +234,25 @@ export const processosApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const lancamentosApi = {
-  getAll:  () => lp(() => LancamentosDB.getAll()),
+  getAll: () => lp(() => {
+    const hoje = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const todos = LancamentosDB.getAll();
+    let mudou = false;
+
+    const resultado = todos.map(l => {
+      // Transita pendente → vencido silenciosamente quando dataVencimento passou
+      if (l.status === 'pendente' && l.dataVencimento && l.dataVencimento < hoje) {
+        mudou = true;
+        return { ...l, status: 'vencido' } as Lancamento;
+      }
+      return l;
+    });
+
+    // Persiste em lote (uma única escrita) para manter o localStorage consistente
+    if (mudou) saveAll('msk_lancamentos', resultado);
+
+    return resultado;
+  }),
   getById: (id: string) => lp(() => {
     const l = LancamentosDB.getById(id);
     if (!l) throw new Error('Lançamento não encontrado');

@@ -167,6 +167,15 @@ export interface Lancamento {
   comprovante?: string;
   observacoes?: string;
   criadoEm: string;
+  // Encargos financeiros
+  jurosMensais?: number;   // % ao mês sobre o valor original após vencimento
+  multaPorAtraso?: number; // % fixo aplicado no 1º dia de atraso
+  desconto?: number;       // valor em R$ de desconto/cortesia
+  motivoDesconto?: string; // justificativa do desconto
+  // Parcelamento
+  parcelaGrupoId?: string; // UUID compartilhado entre todas as parcelas do mesmo grupo
+  parcelaAtual?: number;   // número da parcela (1-based)
+  parcelasTotal?: number;  // total de parcelas do grupo
 }
 
 export type UrgenciaAviso = 'critica' | 'alta' | 'media' | 'baixa';
