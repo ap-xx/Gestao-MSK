@@ -7,6 +7,11 @@ import {
   ClipboardList, Clock, Edit2, ShieldCheck, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi } from '../services/api';
+import {
+  type BackupSchedule, type BackupMode,
+  BACKUP_SCHED_KEY, BACKUP_LAST_KEY, BACKUP_MODE_KEY,
+  triggerBackupDownload,
+} from '../hooks/useAutoBackup';
 import type { AuditEntry, Perfil } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCEP, formatTelefone } from '../services/apis';
 import { useToast } from '../context/ToastContext';
@@ -91,16 +96,16 @@ export default function Configuracoes() {
   const [importando, setImportando] = useState(false);
 
   // ── Backup automático ──
-  type BackupSchedule = 'desabilitado' | 'diario' | 'semanal' | 'mensal';
-  const BACKUP_SCHED_KEY   = 'msk_backup_schedule';
-  const BACKUP_LAST_KEY    = 'msk_backup_last';
-  const [backupSchedule, setBackupSchedule]     = useState<BackupSchedule>(
+  const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>(
     () => (localStorage.getItem(BACKUP_SCHED_KEY) as BackupSchedule) || 'desabilitado',
+  );
+  const [backupMode, setBackupMode] = useState<BackupMode>(
+    () => (localStorage.getItem(BACKUP_MODE_KEY) as BackupMode) || 'auto',
   );
   const [lastAutoBackup, setLastAutoBackup] = useState<string | null>(
     () => localStorage.getItem(BACKUP_LAST_KEY),
   );
-  const [autoBackingUp, setAutoBackingUp] = useState(false);
+  const [backupBaixando, setBackupBaixando] = useState(false);
 
   // ── Editar usuário ──
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
@@ -298,43 +303,18 @@ export default function Configuracoes() {
     }
   }
 
-  // ── Auto-backup check on dados tab open ──
-  useEffect(() => {
-    if (tab !== 'dados' || backupSchedule === 'desabilitado' || autoBackingUp) return;
-    const last = lastAutoBackup ? new Date(lastAutoBackup).getTime() : 0;
-    const now  = Date.now();
-    const thresholds: Record<BackupSchedule, number> = {
-      desabilitado: Infinity,
-      diario:  1 * 24 * 60 * 60 * 1000,
-      semanal: 7 * 24 * 60 * 60 * 1000,
-      mensal:  30 * 24 * 60 * 60 * 1000,
-    };
-    if (now - last >= thresholds[backupSchedule]) {
-      setAutoBackingUp(true);
-      backupApi.exportar()
-        .then(data => {
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `msk-auto-backup-${new Date().toISOString().slice(0, 10)}.json`;
-          a.click();
-          URL.revokeObjectURL(url);
-          const ts = new Date().toISOString();
-          localStorage.setItem(BACKUP_LAST_KEY, ts);
-          setLastAutoBackup(ts);
-          showToast('success', 'Backup automático realizado!');
-        })
-        .catch(() => showToast('error', 'Falha no backup automático'))
-        .finally(() => setAutoBackingUp(false));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
-
   function saveBackupSchedule(v: BackupSchedule) {
     setBackupSchedule(v);
     localStorage.setItem(BACKUP_SCHED_KEY, v);
-    showToast('info', `Backup automático: ${v === 'desabilitado' ? 'desativado' : v}`);
+    showToast('info', `Frequência de backup: ${
+      { desabilitado: 'desabilitado', diario: 'diário', semanal: 'semanal', mensal: 'mensal' }[v]
+    }`);
+  }
+
+  function saveBackupMode(v: BackupMode) {
+    setBackupMode(v);
+    localStorage.setItem(BACKUP_MODE_KEY, v);
+    showToast('info', v === 'auto' ? 'Backup: baixar automaticamente' : 'Backup: apenas notificar');
   }
 
   // ── Permissões / Perfis ──
@@ -615,18 +595,15 @@ export default function Configuracoes() {
   }
 
   async function exportarBackup() {
+    setBackupBaixando(true);
     try {
-      const data = await backupApi.exportar();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `msk-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await triggerBackupDownload();
+      setLastAutoBackup(localStorage.getItem(BACKUP_LAST_KEY));
       showToast('success', 'Backup exportado!');
     } catch {
       showToast('error', 'Erro ao exportar backup');
+    } finally {
+      setBackupBaixando(false);
     }
   }
 
@@ -1400,37 +1377,67 @@ export default function Configuracoes() {
         <div className="space-y-5">
 
           {/* Backup Automático */}
-          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
-            <h3 className="font-semibold text-[#f5f5f5] mb-2 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" /> Backup Automático
-            </h3>
-            <p className="text-xs text-[#505050] mb-4">
-              Quando ativado, um backup JSON é baixado automaticamente ao abrir esta aba, respeitando o intervalo escolhido.
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              {(['desabilitado','diario','semanal','mensal'] as const).map(v => (
-                <button
-                  key={v}
-                  onClick={() => saveBackupSchedule(v)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
-                    backupSchedule === v
-                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                      : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#a0a0a0] hover:text-[#f5f5f5]'
-                  }`}
-                >
-                  {{ desabilitado: 'Desabilitado', diario: 'Diário', semanal: 'Semanal', mensal: 'Mensal' }[v]}
-                </button>
-              ))}
-            </div>
-            {lastAutoBackup && (
-              <p className="text-xs text-[#505050] mt-3">
-                Último backup automático: {new Date(lastAutoBackup).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5 space-y-5">
+            <div>
+              <h3 className="font-semibold text-[#f5f5f5] mb-1 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-400" /> Backup Automático
+              </h3>
+              <p className="text-xs text-[#505050]">
+                Roda quando o site é aberto, respeitando o intervalo configurado.
               </p>
-            )}
-            {autoBackingUp && (
-              <div className="flex items-center gap-2 mt-3 text-amber-400 text-xs">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando backup automático…
+            </div>
+
+            {/* Frequência */}
+            <div>
+              <p className="text-xs font-medium text-[#a0a0a0] mb-2">Frequência</p>
+              <div className="flex flex-wrap gap-2">
+                {(['desabilitado','diario','semanal','mensal'] as const).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => saveBackupSchedule(v)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      backupSchedule === v
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                        : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#a0a0a0] hover:text-[#f5f5f5]'
+                    }`}
+                  >
+                    {{ desabilitado: 'Desabilitado', diario: 'Diário', semanal: 'Semanal', mensal: 'Mensal' }[v]}
+                  </button>
+                ))}
               </div>
+            </div>
+
+            {/* Modo — só exibe se backup não for desabilitado */}
+            {backupSchedule !== 'desabilitado' && (
+              <div>
+                <p className="text-xs font-medium text-[#a0a0a0] mb-2">Quando vencer</p>
+                <div className="flex gap-2">
+                  {([
+                    { v: 'auto',      label: 'Baixar automaticamente', desc: 'O arquivo é baixado sem perguntar' },
+                    { v: 'notificar', label: 'Apenas notificar',        desc: 'Mostra um aviso; você decide quando baixar' },
+                  ] as { v: BackupMode; label: string; desc: string }[]).map(({ v, label, desc }) => (
+                    <button
+                      key={v}
+                      onClick={() => saveBackupMode(v)}
+                      className={`flex-1 text-left px-4 py-3 rounded-lg border text-sm transition-all ${
+                        backupMode === v
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                          : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#a0a0a0] hover:text-[#f5f5f5]'
+                      }`}
+                    >
+                      <p className="font-medium">{label}</p>
+                      <p className="text-[11px] mt-0.5 opacity-70">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Status */}
+            {lastAutoBackup && (
+              <p className="text-xs text-[#505050]">
+                Último backup: {new Date(lastAutoBackup).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+              </p>
             )}
           </div>
 
@@ -1444,10 +1451,13 @@ export default function Configuracoes() {
             </p>
             <button
               onClick={exportarBackup}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm font-medium transition-all"
+              disabled={backupBaixando}
+              className="flex items-center gap-2 px-6 py-3 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download className="w-4 h-4" />
-              Baixar Backup JSON
+              {backupBaixando
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Gerando…</>
+                : <><Download className="w-4 h-4" /> Baixar Backup JSON</>
+              }
             </button>
           </div>
 

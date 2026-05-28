@@ -33,6 +33,7 @@ if (!LicenseDB.get() && _hadData && !_gateShown) {
 // ──────────────────────────────────────────────────────────────
 
 import Layout, { type PageKey } from './components/Layout';
+import { useAutoBackup } from './hooks/useAutoBackup';
 import Dashboard     from './pages/Dashboard';
 import Clientes      from './pages/Clientes';
 import Contratos     from './pages/Contratos';
@@ -45,6 +46,12 @@ import Configuracoes from './pages/Configuracoes';
 import Relatorios    from './pages/Relatorios';
 import Licencas      from './pages/Licencas';
 import { useState } from 'react';
+
+/** Roda o hook de backup apenas quando o usuário está autenticado. */
+function AutoBackupChecker() {
+  useAutoBackup();
+  return null;
+}
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -90,6 +97,7 @@ function AppContent() {
 
   return (
     <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+      <AutoBackupChecker />
       {pages[currentPage]}
     </Layout>
   );
