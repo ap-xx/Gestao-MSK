@@ -67,7 +67,7 @@ export default function LicenseGate({ onActivated }: Props) {
     if (e.key === 'Enter') void handleActivate();
   };
 
-  const keyFull = licenseKey.length === 19; // MSK-XXXX-XXXX-XXXX-XXXX
+  const keyFull = licenseKey.length === 23; // MSK-XXXX-XXXX-XXXX-XXXX = 23 chars
   const keyValid = keyFull && validateLicenseKey(licenseKey);
 
   return (

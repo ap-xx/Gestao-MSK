@@ -72,5 +72,5 @@ export function formatKeyInput(raw: string): string {
   const body = clean.startsWith('MSK') ? clean.slice(3) : clean;
   // Reinsert dashes every 4 chars
   const segs = body.match(/.{1,4}/g) ?? [];
-  return `MSK${segs.length ? '-' + segs.join('-') : ''}`.slice(0, 19);
+  return `MSK${segs.length ? '-' + segs.join('-') : ''}`.slice(0, 23); // MSK-XXXX-XXXX-XXXX-XXXX = 23 chars
 }
