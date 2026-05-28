@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Building2, User, Bell, Save, Loader2, MapPin,
   Mail, Phone, Globe, Shield, Users, Database,
@@ -10,6 +10,7 @@ import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi,
 import {
   type BackupSchedule, type BackupMode,
   BACKUP_SCHED_KEY, BACKUP_LAST_KEY, BACKUP_MODE_KEY,
+  BACKUP_TIME_KEY, BACKUP_DOW_KEY, BACKUP_DOM_KEY,
   triggerBackupDownload,
 } from '../hooks/useAutoBackup';
 import type { AuditEntry, Perfil } from '../services/api';
@@ -106,6 +107,25 @@ export default function Configuracoes() {
     () => localStorage.getItem(BACKUP_LAST_KEY),
   );
   const [backupBaixando, setBackupBaixando] = useState(false);
+
+  // ── Backup horário / dia ──
+  const [backupTime, setBackupTime] = useState<string>(
+    () => localStorage.getItem(BACKUP_TIME_KEY) || '08:00',
+  );
+  const [backupDow, setBackupDow] = useState<number>(
+    () => Number(localStorage.getItem(BACKUP_DOW_KEY) ?? '1'),
+  );
+  const [backupDom, setBackupDom] = useState<number>(
+    () => Number(localStorage.getItem(BACKUP_DOM_KEY) ?? '1'),
+  );
+
+  // ── Filtros de auditoria ──
+  const [auditFiltroAcao,        setAuditFiltroAcao]        = useState('');
+  const [auditFiltroUsuario,     setAuditFiltroUsuario]     = useState('');
+  const [auditFiltroDataInicio,  setAuditFiltroDataInicio]  = useState('');
+  const [auditFiltroDataFim,     setAuditFiltroDataFim]     = useState('');
+  const [auditFiltroHoraInicio,  setAuditFiltroHoraInicio]  = useState('');
+  const [auditFiltroHoraFim,     setAuditFiltroHoraFim]     = useState('');
 
   // ── Editar usuário ──
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
@@ -315,6 +335,54 @@ export default function Configuracoes() {
     setBackupMode(v);
     localStorage.setItem(BACKUP_MODE_KEY, v);
     showToast('info', v === 'auto' ? 'Backup: baixar automaticamente' : 'Backup: apenas notificar');
+  }
+
+  function saveBackupTime(v: string) {
+    setBackupTime(v);
+    localStorage.setItem(BACKUP_TIME_KEY, v);
+  }
+  function saveBackupDow(v: number) {
+    setBackupDow(v);
+    localStorage.setItem(BACKUP_DOW_KEY, String(v));
+  }
+  function saveBackupDom(v: number) {
+    setBackupDom(v);
+    localStorage.setItem(BACKUP_DOM_KEY, String(v));
+  }
+
+  // ── Auditoria: dados derivados ──
+  const auditAcoes = useMemo(
+    () => Array.from(new Set(auditorias.map(a => a.acao))).sort(),
+    [auditorias],
+  );
+  const auditUsuarios = useMemo(
+    () => Array.from(new Set(auditorias.map(a => a.userNome))).sort(),
+    [auditorias],
+  );
+  const auditFiltered = useMemo(() => {
+    return auditorias.filter(a => {
+      if (auditFiltroAcao    && a.acao     !== auditFiltroAcao)    return false;
+      if (auditFiltroUsuario && a.userNome !== auditFiltroUsuario) return false;
+      const dt       = new Date(a.criadoEm);
+      const dateStr  = dt.toISOString().slice(0, 10);
+      const hh       = String(dt.getHours()).padStart(2, '0');
+      const mm       = String(dt.getMinutes()).padStart(2, '0');
+      const timeStr  = `${hh}:${mm}`;
+      if (auditFiltroDataInicio && dateStr < auditFiltroDataInicio) return false;
+      if (auditFiltroDataFim    && dateStr > auditFiltroDataFim)    return false;
+      if (auditFiltroHoraInicio && timeStr < auditFiltroHoraInicio) return false;
+      if (auditFiltroHoraFim    && timeStr > auditFiltroHoraFim)    return false;
+      return true;
+    });
+  }, [auditorias, auditFiltroAcao, auditFiltroUsuario, auditFiltroDataInicio, auditFiltroDataFim, auditFiltroHoraInicio, auditFiltroHoraFim]);
+
+  function limparFiltrosAuditoria() {
+    setAuditFiltroAcao('');
+    setAuditFiltroUsuario('');
+    setAuditFiltroDataInicio('');
+    setAuditFiltroDataFim('');
+    setAuditFiltroHoraInicio('');
+    setAuditFiltroHoraFim('');
   }
 
   // ── Permissões / Perfis ──
@@ -1433,6 +1501,58 @@ export default function Configuracoes() {
               </div>
             )}
 
+            {/* Horário / Dia — visível apenas quando schedule não é desabilitado */}
+            {backupSchedule !== 'desabilitado' && (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-[#a0a0a0]">Agendamento</p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  {backupSchedule === 'semanal' && (
+                    <div>
+                      <p className="text-[11px] text-[#505050] mb-1.5">Dia da semana</p>
+                      <select
+                        value={backupDow}
+                        onChange={e => saveBackupDow(Number(e.target.value))}
+                        className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#f5f5f5] text-sm"
+                      >
+                        {(['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'] as const)
+                          .map((label, i) => <option key={i} value={i}>{label}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {backupSchedule === 'mensal' && (
+                    <div>
+                      <p className="text-[11px] text-[#505050] mb-1.5">Dia do mês</p>
+                      <select
+                        value={backupDom}
+                        onChange={e => saveBackupDom(Number(e.target.value))}
+                        className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#f5f5f5] text-sm"
+                      >
+                        {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+                          <option key={d} value={d}>Dia {d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[11px] text-[#505050] mb-1.5">Horário</p>
+                    <input
+                      type="time"
+                      value={backupTime}
+                      onChange={e => setBackupTime(e.target.value)}
+                      onBlur={e  => saveBackupTime(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#f5f5f5] text-sm [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#505050] leading-relaxed">
+                  O backup é executado ao abrir o sistema, se as condições de
+                  {backupSchedule === 'diario'  && ' horário forem atendidas.'}
+                  {backupSchedule === 'semanal' && ' dia da semana e horário forem atendidas.'}
+                  {backupSchedule === 'mensal'  && ' dia do mês e horário forem atendidas.'}
+                </p>
+              </div>
+            )}
+
             {/* Status */}
             {lastAutoBackup && (
               <p className="text-xs text-[#505050]">
@@ -1726,12 +1846,92 @@ export default function Configuracoes() {
                 Atualizar
               </button>
             </div>
+            {/* ── Filtros ── */}
+            {!loadingAuditoria && auditorias.length > 0 && (
+              <div className="px-5 py-3 border-b border-[#2a2a2a] space-y-2.5">
+                {/* Linha 1: período + horário */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#505050] shrink-0">De</span>
+                    <input
+                      type="date"
+                      value={auditFiltroDataInicio}
+                      onChange={e => setAuditFiltroDataInicio(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#f5f5f5] text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#505050] shrink-0">até</span>
+                    <input
+                      type="date"
+                      value={auditFiltroDataFim}
+                      onChange={e => setAuditFiltroDataFim(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#f5f5f5] text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <span className="text-[11px] text-[#505050] shrink-0">Das</span>
+                    <input
+                      type="time"
+                      value={auditFiltroHoraInicio}
+                      onChange={e => setAuditFiltroHoraInicio(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#f5f5f5] text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#505050] shrink-0">às</span>
+                    <input
+                      type="time"
+                      value={auditFiltroHoraFim}
+                      onChange={e => setAuditFiltroHoraFim(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#f5f5f5] text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+                {/* Linha 2: ação + usuário + limpar */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select
+                    value={auditFiltroAcao}
+                    onChange={e => setAuditFiltroAcao(e.target.value)}
+                    className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#a0a0a0] text-xs"
+                  >
+                    <option value="">Todas as ações</option>
+                    {auditAcoes.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <select
+                    value={auditFiltroUsuario}
+                    onChange={e => setAuditFiltroUsuario(e.target.value)}
+                    className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-1.5 text-[#a0a0a0] text-xs"
+                  >
+                    <option value="">Todos os usuários</option>
+                    {auditUsuarios.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                  {(auditFiltroAcao || auditFiltroUsuario || auditFiltroDataInicio || auditFiltroDataFim || auditFiltroHoraInicio || auditFiltroHoraFim) && (
+                    <button
+                      onClick={limparFiltrosAuditoria}
+                      className="px-3 py-1.5 text-xs text-[#505050] hover:text-[#a0a0a0] border border-[#2a2a2a] hover:border-[#3a3a3a] bg-[#1e1e1e] rounded-lg transition-colors"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
+                  <span className="ml-auto text-[11px] text-[#505050] tabular-nums">
+                    {auditFiltered.length === auditorias.length
+                      ? `${auditorias.length} registro${auditorias.length !== 1 ? 's' : ''}`
+                      : `${auditFiltered.length} de ${auditorias.length} registros`
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+
             {loadingAuditoria ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
               </div>
             ) : auditorias.length === 0 ? (
               <p className="text-center py-8 text-[#505050] text-sm">Nenhum registro de auditoria encontrado</p>
+            ) : auditFiltered.length === 0 ? (
+              <p className="text-center py-8 text-[#505050] text-sm">Nenhum resultado com os filtros aplicados</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -1745,7 +1945,7 @@ export default function Configuracoes() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#1e1e1e]">
-                    {auditorias.map(a => (
+                    {auditFiltered.map(a => (
                       <tr key={a.id} className="hover:bg-[#1a1a1a] transition-colors">
                         <td className="px-4 py-3">
                           <span className="font-medium text-amber-400">{a.acao}</span>

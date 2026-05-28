@@ -8,6 +8,9 @@ export type BackupMode = 'auto' | 'notificar';
 export const BACKUP_SCHED_KEY = 'msk_backup_schedule';
 export const BACKUP_LAST_KEY  = 'msk_backup_last';
 export const BACKUP_MODE_KEY  = 'msk_backup_mode';
+export const BACKUP_TIME_KEY  = 'msk_backup_time';  // 'HH:MM'
+export const BACKUP_DOW_KEY   = 'msk_backup_dow';   // dia da semana 0–6
+export const BACKUP_DOM_KEY   = 'msk_backup_dom';   // dia do mês 1–31
 
 export const THRESHOLDS: Record<BackupSchedule, number> = {
   desabilitado: Infinity,
@@ -46,6 +49,22 @@ export function useAutoBackup() {
     const lastTime = last ? new Date(last).getTime() : 0;
 
     if (Date.now() - lastTime < THRESHOLDS[schedule]) return;
+
+    // Verificação de dia da semana (semanal) ou dia do mês (mensal)
+    const now = new Date();
+    if (schedule === 'semanal') {
+      const dow = Number(localStorage.getItem(BACKUP_DOW_KEY) ?? '1');
+      if (now.getDay() !== dow) return;
+    }
+    if (schedule === 'mensal') {
+      const dom = Number(localStorage.getItem(BACKUP_DOM_KEY) ?? '1');
+      if (now.getDate() !== dom) return;
+    }
+
+    // Verificação de horário do dia
+    const [hStr = '8', mStr = '0'] = (localStorage.getItem(BACKUP_TIME_KEY) || '08:00').split(':');
+    const scheduledMin = Number(hStr) * 60 + Number(mStr);
+    if (now.getHours() * 60 + now.getMinutes() < scheduledMin) return;
 
     if (mode === 'auto') {
       triggerBackupDownload()

@@ -170,6 +170,7 @@ export default function Avisos() {
     try {
       await avisosApi.marcarLido(id);
       await reload();
+      window.dispatchEvent(new CustomEvent('msk:avisos-changed'));
     } catch {
       showToast('error', 'Erro ao marcar aviso como lido');
     }
@@ -179,6 +180,7 @@ export default function Avisos() {
     try {
       await Promise.all(avisos.filter(a => !a.lido).map(a => avisosApi.marcarLido(a.id)));
       await reload();
+      window.dispatchEvent(new CustomEvent('msk:avisos-changed'));
       showToast('success', 'Todos marcados como lidos');
     } catch {
       showToast('error', 'Erro ao marcar avisos como lidos');

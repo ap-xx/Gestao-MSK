@@ -1,9 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search, X, Users, FileText, Gavel, Loader2, ArrowRight, Building2, Star } from 'lucide-react';
 import type { PageKey } from './Layout';
 import { clientesApi, contratosApi, processosApi } from '../services/api';
 import type { Cliente, Contrato, Processo } from '../types';
 import Portal from './ui/Portal';
+
+// ── Module-level cache ────────────────────────────────────────────
+// Persists across open/close so reopening Ctrl+K is instant.
+// Invalidated after CACHE_TTL ms or when the component forces a refresh.
+let _cache: SearchData | null = null;
+let _cacheTs = 0;
+const CACHE_TTL = 30_000; // 30 s
+// ─────────────────────────────────────────────────────────────────
 
 interface GlobalSearchProps {
   open: boolean;
@@ -48,9 +56,22 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
     if (!open) return;
     setQuery('');
     setFocused(null);
+
+    // Serve from cache when data is still fresh (< 30 s old)
+    const now = Date.now();
+    if (_cache && now - _cacheTs < CACHE_TTL) {
+      setData(_cache);
+      return;
+    }
+
     setLoading(true);
     Promise.all([clientesApi.getAll(), contratosApi.getAll(), processosApi.getAll()])
-      .then(([clientes, contratos, processos]) => setData({ clientes, contratos, processos }))
+      .then(([clientes, contratos, processos]) => {
+        const fresh = { clientes, contratos, processos };
+        _cache   = fresh;
+        _cacheTs = Date.now();
+        setData(fresh);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open]);
@@ -68,30 +89,36 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
 
   const q = query.trim().toLowerCase();
 
-  const filteredClientes = q
-    ? data.clientes.filter(c =>
-        c.nome.toLowerCase().includes(q) ||
-        (c.cpf ?? '').includes(q) || (c.cnpj ?? '').includes(q) ||
-        c.email.toLowerCase().includes(q)
-      ).slice(0, 5)
-    : data.clientes.slice(0, 4);
+  const filteredClientes = useMemo(() =>
+    q
+      ? data.clientes.filter(c =>
+          c.nome.toLowerCase().includes(q) ||
+          (c.cpf ?? '').includes(q) || (c.cnpj ?? '').includes(q) ||
+          c.email.toLowerCase().includes(q)
+        ).slice(0, 5)
+      : data.clientes.slice(0, 4),
+  [q, data.clientes]);
 
-  const filteredContratos = q
-    ? data.contratos.filter(c =>
-        c.clienteNome.toLowerCase().includes(q) ||
-        c.descricao.toLowerCase().includes(q) ||
-        c.areaAtuacao.toLowerCase().includes(q)
-      ).slice(0, 4)
-    : data.contratos.slice(0, 3);
+  const filteredContratos = useMemo(() =>
+    q
+      ? data.contratos.filter(c =>
+          c.clienteNome.toLowerCase().includes(q) ||
+          c.descricao.toLowerCase().includes(q) ||
+          c.areaAtuacao.toLowerCase().includes(q)
+        ).slice(0, 4)
+      : data.contratos.slice(0, 3),
+  [q, data.contratos]);
 
-  const filteredProcessos = q
-    ? data.processos.filter(p =>
-        p.numeroCNJ.toLowerCase().includes(q) ||
-        p.clienteNome.toLowerCase().includes(q) ||
-        p.parteAdversa.toLowerCase().includes(q) ||
-        p.areaAtuacao.toLowerCase().includes(q)
-      ).slice(0, 5)
-    : data.processos.slice(0, 4);
+  const filteredProcessos = useMemo(() =>
+    q
+      ? data.processos.filter(p =>
+          p.numeroCNJ.toLowerCase().includes(q) ||
+          p.clienteNome.toLowerCase().includes(q) ||
+          p.parteAdversa.toLowerCase().includes(q) ||
+          p.areaAtuacao.toLowerCase().includes(q)
+        ).slice(0, 5)
+      : data.processos.slice(0, 4),
+  [q, data.processos]);
 
   const total = filteredClientes.length + filteredContratos.length + filteredProcessos.length;
 
@@ -107,7 +134,7 @@ export function GlobalSearch({ open, onClose, onNavigate }: GlobalSearchProps) {
       {/* Overlay */}
       <div
         className="fixed inset-0 z-[300]"
-        style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+        style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
         onClick={onClose}
       />
 

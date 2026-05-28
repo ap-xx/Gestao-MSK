@@ -104,15 +104,19 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
   }, []);
 
   useEffect(() => {
-    avisosApi.getAll()
-      .then(data => setNaoLidos(data.filter(a => !a.lido).length))
-      .catch(() => {});
-    const interval = setInterval(() => {
+    const fetchCount = () => {
       avisosApi.getAll()
         .then(data => setNaoLidos(data.filter(a => !a.lido).length))
         .catch(() => {});
-    }, 120_000);
-    return () => clearInterval(interval);
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 120_000);
+    // Atualiza imediatamente quando avisos são marcados como lidos
+    window.addEventListener('msk:avisos-changed', fetchCount);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('msk:avisos-changed', fetchCount);
+    };
   }, []);
 
   const roleColors: Record<string, string> = {
