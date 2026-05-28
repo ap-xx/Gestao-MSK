@@ -1,7 +1,10 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-// initializeDatabase() removed — server now manages data
+import { initializeDatabase } from './data/db';
 import Login from './pages/Login';
+
+// Seed localStorage with initial data if this is a fresh browser
+initializeDatabase();
 import Layout, { type PageKey } from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Clientes from './pages/Clientes';

@@ -38,6 +38,19 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
   );
 }
 
+// ─── Section print button (defined at module level to avoid remounts) ─────────
+function SectionPrintBtn({ id, onPrint }: { id: string; onPrint: (id: string) => void }) {
+  return (
+    <button
+      onClick={() => onPrint(id)}
+      className="no-print p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors ml-auto"
+      title="Imprimir esta seção"
+    >
+      <Printer className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
 export default function Relatorios() {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -46,6 +59,7 @@ export default function Relatorios() {
   const [lancamentos,setLancamentos]= useState<Lancamento[]>([]);
   const [contratos,  setContratos]  = useState<Contrato[]>([]);
   const [periodo, setPeriodo] = useState<'mes' | 'trimestre' | 'ano'>('mes');
+  const [printingSectionId, setPrintingSectionId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -167,27 +181,12 @@ export default function Relatorios() {
   }
 
   // ── Print per section ──────────────────────────────────────
-  const [printingSectionId, setPrintingSectionId] = React.useState<string | null>(null);
-
   function printSection(id: string) {
     setPrintingSectionId(id);
-    // Small delay so React re-renders the CSS before print dialog
     setTimeout(() => {
       window.print();
       window.addEventListener('afterprint', () => setPrintingSectionId(null), { once: true });
     }, 80);
-  }
-
-  function SectionPrintBtn({ id }: { id: string }) {
-    return (
-      <button
-        onClick={() => printSection(id)}
-        className="no-print p-1.5 text-[#505050] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors ml-auto"
-        title="Imprimir esta seção"
-      >
-        <Printer className="w-3.5 h-3.5" />
-      </button>
-    );
   }
 
   return (
@@ -234,7 +233,7 @@ export default function Relatorios() {
       <div id="section-kpis" className="report-section">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-bold uppercase tracking-widest text-[#444]">Visão Geral</span>
-          <SectionPrintBtn id="section-kpis" />
+          <SectionPrintBtn id="section-kpis" onPrint={printSection} />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard icon={Users}    label="Clientes ativos"    value={clientes.filter(c => c.status === 'ativo').length} sub={`${clientes.length} total`} color="bg-amber-500/10 text-amber-400" />
@@ -248,7 +247,7 @@ export default function Relatorios() {
       <div id="section-financeiro" className="report-section">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-bold uppercase tracking-widest text-[#444]">Financeiro — {periodoLabel}</span>
-          <SectionPrintBtn id="section-financeiro" />
+          <SectionPrintBtn id="section-financeiro" onPrint={printSection} />
         </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
@@ -277,7 +276,7 @@ export default function Relatorios() {
       <div id="section-graficos" className="report-section">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-bold uppercase tracking-widest text-[#444]">Análise Financeira & Processos</span>
-          <SectionPrintBtn id="section-graficos" />
+          <SectionPrintBtn id="section-graficos" onPrint={printSection} />
         </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Receitas x Despesas — últimos 6 meses */}
@@ -336,7 +335,7 @@ export default function Relatorios() {
       <div id="section-status" className="report-section">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs font-bold uppercase tracking-widest text-[#444]">Status & Inadimplência</span>
-          <SectionPrintBtn id="section-status" />
+          <SectionPrintBtn id="section-status" onPrint={printSection} />
         </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Status processos */}
@@ -392,7 +391,7 @@ export default function Relatorios() {
         <div id="section-clientes" className="report-section bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
           <h3 className="text-sm font-semibold text-[#f5f5f5] mb-4 flex items-center gap-2">
             <Star className="w-4 h-4 text-amber-400 fill-amber-400" /> Clientes Bem Avaliados
-            <SectionPrintBtn id="section-clientes" />
+            <SectionPrintBtn id="section-clientes" onPrint={printSection} />
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {topClientes.map(c => (
@@ -416,7 +415,7 @@ export default function Relatorios() {
       <div id="section-audiencias" className="report-section bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
         <h3 className="text-sm font-semibold text-[#f5f5f5] mb-4 flex items-center gap-2">
           <Calendar className="w-4 h-4 text-amber-400" /> Próximas Audiências
-          <SectionPrintBtn id="section-audiencias" />
+          <SectionPrintBtn id="section-audiencias" onPrint={printSection} />
         </h3>
         {(() => {
           const hoje = new Date().toISOString().slice(0, 10);

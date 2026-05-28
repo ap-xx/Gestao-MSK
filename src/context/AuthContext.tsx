@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
 import { SessionDB } from '../data/db';
-import { authApi } from '../services/api';
-
-const TOKEN_KEY   = 'msk_token';
-const REFRESH_KEY = 'msk_refresh';
 
 interface AuthContextType {
   user: User | null;
@@ -17,45 +13,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
-
-async function tryFetch(email: string, senha: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, senha }),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function apiLogin(email: string, senha: string): Promise<{ token: string; refreshToken?: string; user: User }> {
-  let res: Response;
-  try {
-    // Primeira tentativa — 30s
-    res = await tryFetch(email, senha, 30_000);
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      // Servidor estava dormindo — tenta mais uma vez (já acordou)
-      try {
-        res = await tryFetch(email, senha, 30_000);
-      } catch {
-        throw new Error('O servidor demorou para responder. Tente novamente em instantes.');
-      }
-    } else {
-      throw err;
-    }
-  }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Erro ao autenticar.');
-  return data as { token: string; refreshToken?: string; user: User };
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,34 +24,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, senha: string) => {
-    try {
-      const { token, refreshToken, user: loggedUser } = await apiLogin(email.toLowerCase().trim(), senha);
-      sessionStorage.setItem(TOKEN_KEY, token);
-      if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
-      SessionDB.set(loggedUser);
-      setUser(loggedUser);
-    } catch (err) {
-      // Servidor não disponível — tenta autenticação local (fallback)
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        const { UsersDB } = await import('../data/db');
-        const found = UsersDB.getByEmail(email.toLowerCase().trim());
-        if (!found || found.senha !== senha) throw new Error('E-mail ou senha incorretos.');
-        if (!found.ativo) throw new Error('Usuário inativo. Contate o administrador.');
-        SessionDB.set(found);
-        setUser(found);
-        return;
-      }
-      throw err;
-    }
+    const { UsersDB } = await import('../data/db');
+    const found = UsersDB.getByEmail(email.toLowerCase().trim());
+    if (!found || found.senha !== senha) throw new Error('E-mail ou senha incorretos.');
+    if (!found.ativo) throw new Error('Usuário inativo. Contate o administrador.');
+    SessionDB.set(found);
+    setUser(found);
   }, []);
 
   const logout = useCallback(() => {
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (refreshToken) {
-      authApi.logout(refreshToken).catch(() => {}); // fire-and-forget
-      localStorage.removeItem(REFRESH_KEY);
-    }
-    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem('msk_token');
+    localStorage.removeItem('msk_refresh');
     SessionDB.clear();
     setUser(null);
   }, []);
@@ -107,23 +47,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const changePassword = useCallback(async (senhaAtual: string, novaSenha: string) => {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-
-    if (token) {
-      const res = await fetch(`${API_BASE}/auth/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ senhaAtual, novaSenha }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Erro ao alterar senha.');
-      return;
-    }
-
-    // Fallback local (servidor não disponível)
     const { UsersDB } = await import('../data/db');
     const found = user ? UsersDB.getById(user.id) : null;
     if (!found || found.senha !== senhaAtual) throw new Error('Senha atual incorreta.');

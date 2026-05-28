@@ -215,7 +215,6 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const isEdit = !!cliente;
 
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>(cliente?.tipoPessoa || 'PF');
-  const [avaliacao, setAvaliacao] = useState(cliente?.avaliacao ?? 0);
   const [form, setForm] = useState({
     nome: cliente?.nome || '',
     cpf: cliente?.cpf || '',
@@ -321,7 +320,7 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
     const saved: Omit<Cliente, 'id'> & { id?: string } = {
       ...(cliente?.id ? { id: cliente.id } : {}),
       tipoPessoa,
-      avaliacao,
+      avaliacao: cliente?.avaliacao, // preserve existing rating set from the table column
       nome: form.nome,
       cpf: tipoPessoa === 'PF' ? form.cpf : undefined,
       cnpj: tipoPessoa === 'PJ' ? form.cnpj : undefined,
@@ -492,18 +491,6 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                 <option value="inativo">Inativo</option>
                 <option value="bloqueado">Bloqueado</option>
               </select>
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Avaliação do Cliente</label>
-            <div className="flex items-center gap-3">
-              <StarRating value={avaliacao} onChange={setAvaliacao} />
-              {avaliacao > 0 && (
-                <span className="text-xs text-[#505050]">
-                  {['', 'Muito ruim', 'Ruim', 'Regular', 'Bom', 'Excelente'][avaliacao]}
-                </span>
-              )}
             </div>
           </div>
 
