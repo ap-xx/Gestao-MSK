@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Scale, LayoutDashboard, Users, FileText, Gavel, DollarSign,
   AlertTriangle, Bell, Settings, LogOut, Menu, X, ChevronRight,
-  UserCircle, TrendingDown, Calendar, Search, BarChart2,
+  UserCircle, TrendingDown, Calendar, Search, BarChart2, KeyRound,
 } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../context/AuthContext';
@@ -19,12 +19,14 @@ export type PageKey =
   | 'inadimplencia'
   | 'avisos'
   | 'relatorios'
-  | 'configuracoes';
+  | 'configuracoes'
+  | 'licencas';
 
 interface NavItem {
   key: PageKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -36,8 +38,9 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'agenda',        label: 'Agenda',         icon: Calendar },
   { key: 'inadimplencia', label: 'Inadimplência',  icon: TrendingDown },
   { key: 'avisos',        label: 'Avisos',         icon: AlertTriangle },
-  { key: 'relatorios',   label: 'Relatórios',     icon: BarChart2 },
+  { key: 'relatorios',    label: 'Relatórios',     icon: BarChart2 },
   { key: 'configuracoes', label: 'Configurações',  icon: Settings },
+  { key: 'licencas',      label: 'Licenças',       icon: KeyRound, adminOnly: true },
 ];
 
 interface LayoutProps {
@@ -205,7 +208,7 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             />
           )}
 
-          {NAV_ITEMS.map(item => {
+          {NAV_ITEMS.filter(item => !item.adminOnly || user?.role === 'admin').map(item => {
             const Icon  = item.icon;
             const active = currentPage === item.key;
             return (

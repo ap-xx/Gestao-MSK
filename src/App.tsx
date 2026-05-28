@@ -1,26 +1,58 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { initializeDatabase } from './data/db';
+import { initializeDatabase, LicenseDB } from './data/db';
+import { generateLicenseKey, validateLicenseKey } from './utils/license';
 import Login from './pages/Login';
+import LicenseGate from './components/LicenseGate';
+
+// ── Bootstrap ─────────────────────────────────────────────────
+// Check for existing user data BEFORE seeding so we can distinguish
+// a returning machine from a brand-new one.
+const _hadData = !!localStorage.getItem('msk_users');
 
 // Seed localStorage with initial data if this is a fresh browser
 initializeDatabase();
+
+// Auto-license machines that were already using the app (migration).
+// New machines (no prior data) will see the LicenseGate instead.
+if (!LicenseDB.get() && _hadData) {
+  LicenseDB.set({
+    machineId:   LicenseDB.getMachineId(),
+    machineName: 'PC Registrado',
+    licenseKey:  generateLicenseKey(),
+    activatedAt: new Date().toISOString(),
+    lastLogin:   new Date().toISOString(),
+    loginCount:  0,
+  });
+}
+// ──────────────────────────────────────────────────────────────
+
 import Layout, { type PageKey } from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Clientes from './pages/Clientes';
-import Contratos from './pages/Contratos';
-import Processos from './pages/Processos';
-import Honorarios from './pages/Honorarios';
+import Dashboard     from './pages/Dashboard';
+import Clientes      from './pages/Clientes';
+import Contratos     from './pages/Contratos';
+import Processos     from './pages/Processos';
+import Honorarios    from './pages/Honorarios';
 import Inadimplencia from './pages/Inadimplencia';
-import Avisos from './pages/Avisos';
-import Agenda from './pages/Agenda';
+import Avisos        from './pages/Avisos';
+import Agenda        from './pages/Agenda';
 import Configuracoes from './pages/Configuracoes';
-import Relatorios from './pages/Relatorios';
+import Relatorios    from './pages/Relatorios';
+import Licencas      from './pages/Licencas';
 import { useState } from 'react';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageKey>('dashboard');
+
+  // License check — shown before login if no valid license in localStorage
+  const [licensed, setLicensed] = useState<boolean>(
+    () => validateLicenseKey(LicenseDB.get()?.licenseKey ?? '')
+  );
+
+  if (!licensed) {
+    return <LicenseGate onActivated={() => setLicensed(true)} />;
+  }
 
   if (loading) {
     return (
@@ -48,6 +80,7 @@ function AppContent() {
     avisos:        <Avisos />,
     relatorios:    <Relatorios />,
     configuracoes: <Configuracoes />,
+    licencas:      <Licencas />,
   };
 
   return (

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '../types';
 import { SessionDB } from '../data/db';
-import { auditoriaApi } from '../services/api';
+import { auditoriaApi, licenseApi } from '../services/api';
 
 const TOKEN_KEY   = 'msk_token';
 const REFRESH_KEY = 'msk_refresh';
@@ -41,7 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(found);
     void auditoriaApi.log('login', 'usuario', found.id, found.email);
 
-    // ── Etapa 2: buscar JWT do servidor em background ─────────────
+    // ── Etapa 2: atualizar estatísticas da licença desta máquina ──
+    licenseApi.updateLoginStats();
+    void licenseApi.fetchGeo();           // geolocalização via IP (uma vez)
+    void licenseApi.reportToServer();     // heartbeat para o servidor (fire-and-forget)
+
+    // ── Etapa 3: buscar JWT do servidor em background ─────────────
     // O Render free tier pode levar 30-60s para acordar — não bloqueamos
     // o login por isso. Quando o token chegar, Google Calendar e E-mail
     // passam a funcionar automaticamente sem novo login.

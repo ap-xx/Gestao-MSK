@@ -4,7 +4,8 @@
 // ============================================================
 
 import type {
-  User, Escritorio, Cliente, Contrato, Processo, Lancamento, Aviso
+  User, Escritorio, Cliente, Contrato, Processo, Lancamento, Aviso,
+  LocalLicense, LicenseRecord,
 } from '../types';
 
 const DB_KEYS = {
@@ -651,5 +652,48 @@ export function initializeDatabase(): void {
 
   localStorage.setItem(DB_KEYS.initialized, 'true');
 }
+
+// ─── Licenças ─────────────────────────────────────────────────
+
+const MACHINE_ID_KEY  = 'msk_machine_id';
+const LOCAL_LIC_KEY   = 'msk_license';
+const LIC_REGISTRY_KEY = 'msk_licenses_registry';
+
+/** Per-machine license stored in this browser's localStorage */
+export const LicenseDB = {
+  getMachineId(): string {
+    let id = localStorage.getItem(MACHINE_ID_KEY);
+    if (!id) {
+      id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(MACHINE_ID_KEY, id);
+    }
+    return id;
+  },
+  get(): LocalLicense | null {
+    const raw = localStorage.getItem(LOCAL_LIC_KEY);
+    return raw ? JSON.parse(raw) : null;
+  },
+  set(data: LocalLicense): void {
+    localStorage.setItem(LOCAL_LIC_KEY, JSON.stringify(data));
+  },
+  clear(): void {
+    localStorage.removeItem(LOCAL_LIC_KEY);
+  },
+  updateStats(stats: Partial<LocalLicense>): void {
+    const cur = this.get();
+    if (cur) this.set({ ...cur, ...stats });
+  },
+};
+
+/** Registry of generated license keys — stored on the admin's machine */
+export const LicensesRegistryDB = {
+  getAll:    ()                              => getAll<LicenseRecord>(LIC_REGISTRY_KEY),
+  insert:    (r: LicenseRecord)              => insert<LicenseRecord>(LIC_REGISTRY_KEY, r),
+  update:    (id: string, u: Partial<LicenseRecord>) =>
+    update<LicenseRecord>(LIC_REGISTRY_KEY, id, u),
+  remove:    (id: string)                    => remove<LicenseRecord>(LIC_REGISTRY_KEY, id),
+  getByKey:  (key: string)                   =>
+    getAll<LicenseRecord>(LIC_REGISTRY_KEY).find(r => r.key === key),
+};
 
 export { DB_KEYS };

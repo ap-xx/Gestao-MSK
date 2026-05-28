@@ -305,3 +305,40 @@ export interface DataJudResponse {
     hits: DataJudHit[];
   };
 }
+
+// ── Licenças ──────────────────────────────────────────────────
+
+/** License stored in this machine's localStorage */
+export interface LocalLicense {
+  machineId:   string;   // stable UUID-like ID for this browser/machine
+  machineName: string;   // friendly name set on first activation
+  licenseKey:  string;   // MSK-XXXX-XXXX-XXXX-XXXX
+  activatedAt: string;   // ISO — first activation date
+  lastLogin:   string;   // ISO — last time the app was accessed
+  loginCount:  number;
+  cidade?:     string;   // from IP geolocation (ipapi.co)
+  uf?:         string;
+  ip?:         string;
+}
+
+export type LicenseStatus = 'active' | 'revoked';
+
+/** Registry entry stored on the admin's machine */
+export interface LicenseRecord {
+  id:          string;
+  key:         string;            // MSK-XXXX-XXXX-XXXX-XXXX
+  descricao?:  string;            // optional note, e.g. "PC Recepção"
+  status:      LicenseStatus;
+  criadoEm:    string;
+  atualizadoEm: string;
+  // Populated when the machine activates or syncs with server
+  machineId?:  string;
+  machineName?: string;
+  cidade?:     string;
+  uf?:         string;
+  dbSizeKb?:   number;
+  lastLogin?:  string;
+  loginCount?: number;
+  ip?:         string;
+  activatedAt?: string;
+}

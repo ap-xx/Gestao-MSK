@@ -6,12 +6,13 @@
 import {
   ClientesDB, ContratosDB, ProcessosDB, LancamentosDB,
   AvisosDB, UsersDB, EscritoriooDB, generateId,
-  getAll, saveAll, SessionDB,
+  getAll, saveAll, SessionDB, LicenseDB, LicensesRegistryDB,
 } from '../data/db';
 import type {
   Cliente, Contrato, Processo, Lancamento, Aviso,
-  Escritorio, User, Andamento,
+  Escritorio, User, Andamento, LicenseRecord,
 } from '../types';
+import { generateLicenseKey, calcDbSizeKb } from '../utils/license';
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS LOCAIS
@@ -636,6 +637,135 @@ export const perfisApi = {
       localStorage.setItem(PERMS_KEY, JSON.stringify(perms));
       return { ok: true as const };
     }),
+};
+
+// ─────────────────────────────────────────────────────────────
+// LICENÇAS
+// ─────────────────────────────────────────────────────────────
+
+export const licenseApi = {
+  // ── Admin operations (local registry) ────────────────────
+
+  /** Generate a new license key and add it to the local registry */
+  generate(descricao?: string): LicenseRecord {
+    const key = generateLicenseKey();
+    const now = new Date().toISOString();
+    const record: LicenseRecord = {
+      id:          generateId(),
+      key,
+      descricao,
+      status:      'active',
+      criadoEm:    now,
+      atualizadoEm: now,
+    };
+    LicensesRegistryDB.insert(record);
+    logAudit('criar', 'licenca', record.id, key);
+    return record;
+  },
+
+  /** List all license records from local registry */
+  getAll(): LicenseRecord[] {
+    return LicensesRegistryDB.getAll();
+  },
+
+  /** Update description of a license record */
+  updateDesc(id: string, descricao: string): void {
+    LicensesRegistryDB.update(id, { descricao, atualizadoEm: new Date().toISOString() });
+  },
+
+  /** Revoke a license key */
+  revoke(id: string): void {
+    LicensesRegistryDB.update(id, { status: 'revoked', atualizadoEm: new Date().toISOString() });
+    logAudit('revogar', 'licenca', id);
+  },
+
+  /** Re-activate a revoked key */
+  reactivate(id: string): void {
+    LicensesRegistryDB.update(id, { status: 'active', atualizadoEm: new Date().toISOString() });
+    logAudit('reativar', 'licenca', id);
+  },
+
+  /** Delete a license record entirely */
+  delete(id: string): void {
+    LicensesRegistryDB.remove(id);
+    logAudit('excluir', 'licenca', id);
+  },
+
+  /** Merge server-reported machine data into the local registry */
+  mergeServerData(records: LicenseRecord[]): void {
+    for (const rec of records) {
+      const existing = LicensesRegistryDB.getByKey(rec.key);
+      if (existing) {
+        LicensesRegistryDB.update(existing.id, {
+          machineId:   rec.machineId,
+          machineName: rec.machineName,
+          cidade:      rec.cidade,
+          uf:          rec.uf,
+          dbSizeKb:    rec.dbSizeKb,
+          lastLogin:   rec.lastLogin,
+          loginCount:  rec.loginCount,
+          ip:          rec.ip,
+          activatedAt: rec.activatedAt,
+          atualizadoEm: new Date().toISOString(),
+        });
+      }
+    }
+  },
+
+  // ── Admin: server sync ────────────────────────────────────
+
+  /** Fetch all machine reports from the server (throws if unreachable) */
+  syncFromServer(): Promise<LicenseRecord[]> {
+    return serverReq<LicenseRecord[]>('GET', '/licenses');
+  },
+
+  // ── Machine operations (on every login) ──────────────────
+
+  /** Update lastLogin + loginCount in localStorage */
+  updateLoginStats(): void {
+    const lic = LicenseDB.get();
+    if (!lic) return;
+    LicenseDB.updateStats({
+      lastLogin:  new Date().toISOString(),
+      loginCount: (lic.loginCount ?? 0) + 1,
+    });
+  },
+
+  /** Fetch geolocation from ipapi.co (once, when not yet known) */
+  async fetchGeo(): Promise<void> {
+    const lic = LicenseDB.get();
+    if (!lic || lic.cidade) return; // already known
+    try {
+      const res = await fetch('https://ipapi.co/json/', {
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (res.ok) {
+        const geo = await res.json() as {
+          city?: string; region_code?: string; ip?: string;
+        };
+        LicenseDB.updateStats({ cidade: geo.city, uf: geo.region_code, ip: geo.ip });
+      }
+    } catch { /* geolocation unavailable — not critical */ }
+  },
+
+  /** Report machine stats to the server (fire-and-forget) */
+  async reportToServer(): Promise<void> {
+    const lic = LicenseDB.get();
+    if (!lic) return;
+    try {
+      await serverReq<unknown>('POST', '/licenses/report', {
+        machineId:   lic.machineId,
+        machineName: lic.machineName,
+        licenseKey:  lic.licenseKey,
+        lastLogin:   lic.lastLogin,
+        loginCount:  lic.loginCount,
+        dbSizeKb:    calcDbSizeKb(),
+        activatedAt: lic.activatedAt,
+        cidade:      lic.cidade,
+        uf:          lic.uf,
+      }, 8_000);
+    } catch { /* server unavailable — local data intact */ }
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
