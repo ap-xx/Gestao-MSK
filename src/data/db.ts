@@ -18,6 +18,7 @@ const DB_KEYS = {
   avisos: 'msk_avisos',
   currentUser: 'msk_current_user',
   initialized: 'msk_initialized_v4',
+  migratedV5:  'msk_initialized_v5',
 };
 
 // ─── Funções genéricas de CRUD ────────────────────────────────
@@ -144,8 +145,55 @@ export const SessionDB = {
   clear: () => sessionStorage.removeItem(DB_KEYS.currentUser),
 };
 
+// ─── Limpeza de dados de exemplo ──────────────────────────────
+// Remove os registros de seed (IDs fixos c1-c5, ct1-ct5, etc.)
+// Executado uma única vez quando msk_initialized_v5 ainda não existe.
+
+const SEED_IDS: Array<[string, string[]]> = [
+  [DB_KEYS.clientes,    ['c1','c2','c3','c4','c5']],
+  [DB_KEYS.contratos,   ['ct1','ct2','ct3','ct4','ct5']],
+  [DB_KEYS.processos,   ['p1','p2','p3']],
+  [DB_KEYS.lancamentos, ['l1','l2','l3','l4','l5','l6','l7','l8','l9','l10']],
+  [DB_KEYS.avisos,      ['av1','av2','av3','av4','av5']],
+];
+
+function purgeSeedDataLocal(): void {
+  for (const [key, ids] of SEED_IDS) {
+    const all = getAll<{ id: string }>(key);
+    const purged = all.filter(item => !ids.includes(item.id));
+    if (purged.length < all.length) saveAll(key, purged);
+  }
+
+  // Reset escritório se ainda contiver o CNPJ falso do seed
+  try {
+    const raw = localStorage.getItem(DB_KEYS.escritorio);
+    if (raw) {
+      const e = JSON.parse(raw) as { cnpj?: string };
+      if (e.cnpj === '12.345.678/0001-90') {
+        const blank = {
+          nome: 'MSK Gestor',
+          cnpj: '', telefone: '', email: '', site: '',
+          endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+          oabPrincipal: '', responsavel: '',
+          notificacoes: { emailAlertas: true, whatsappAlertas: true, prazosDias: 5, inadimplenciaAuto: true },
+        };
+        localStorage.setItem(DB_KEYS.escritorio, JSON.stringify(blank));
+      }
+    }
+  } catch { /* JSON inválido — ignora */ }
+}
+
+function runMigrations(): void {
+  if (localStorage.getItem(DB_KEYS.migratedV5)) return;
+  purgeSeedDataLocal();
+  localStorage.setItem(DB_KEYS.migratedV5, 'true');
+}
+
 // ─── SEED INICIAL ─────────────────────────────────────────────
 export function initializeDatabase(): void {
+  // Always run migrations (even on already-initialized installs)
+  runMigrations();
+
   if (localStorage.getItem(DB_KEYS.initialized)) return;
 
   // Usuários (fallback local — autenticação real via servidor)
@@ -180,475 +228,23 @@ export function initializeDatabase(): void {
   ];
   saveAll(DB_KEYS.users, users);
 
-  // Escritório
+  // Escritório — começa em branco para novas instalações
   const escritorio: Escritorio = {
     nome: 'MSK Gestor',
-    cnpj: '12.345.678/0001-90',
-    telefone: '(11) 3456-7890',
-    email: 'contato@msk.adv.br',
-    site: 'www.msk.adv.br',
-    endereco: {
-      cep: '01310-100',
-      logradouro: 'Avenida Paulista',
-      numero: '1000',
-      complemento: 'Conj. 501',
-      bairro: 'Bela Vista',
-      cidade: 'São Paulo',
-      uf: 'SP',
-    },
-    oabPrincipal: 'SP 123456',
-    responsavel: 'Dr. Marcus Silveira Klemm',
-    notificacoes: {
-      emailAlertas: true,
-      whatsappAlertas: true,
-      prazosDias: 5,
-      inadimplenciaAuto: true,
-    },
+    cnpj: '', telefone: '', email: '', site: '',
+    endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+    oabPrincipal: '', responsavel: '',
+    notificacoes: { emailAlertas: true, whatsappAlertas: true, prazosDias: 5, inadimplenciaAuto: true },
   };
   localStorage.setItem(DB_KEYS.escritorio, JSON.stringify(escritorio));
 
-  // Clientes
-  const clientes: Cliente[] = [
-    {
-      id: 'c1',
-      tipoPessoa: 'PF',
-      nome: 'João Carlos Mendonça',
-      cpf: '123.456.789-00',
-      email: 'joao@email.com',
-      telefone: '(11) 98765-4321',
-      status: 'ativo',
-      endereco: {
-        cep: '01310-100',
-        logradouro: 'Rua das Flores',
-        numero: '123',
-        bairro: 'Jardim Europa',
-        cidade: 'São Paulo',
-        uf: 'SP',
-      },
-      criadoEm: '2024-01-15T10:00:00Z',
-      atualizadoEm: '2024-01-15T10:00:00Z',
-    },
-    {
-      id: 'c2',
-      tipoPessoa: 'PJ',
-      nome: 'Tech Solutions Ltda',
-      cnpj: '23.456.789/0001-01',
-      razaoSocial: 'Tech Solutions Serviços de Tecnologia Ltda',
-      email: 'contato@techsolutions.com.br',
-      telefone: '(11) 3333-4444',
-      status: 'ativo',
-      porte: 'MEDIO',
-      naturezaJuridica: 'Sociedade Empresária Limitada',
-      capitalSocial: 'R$ 500.000,00',
-      endereco: {
-        cep: '04538-133',
-        logradouro: 'Rua Joaquim Floriano',
-        numero: '100',
-        complemento: 'CJ 301',
-        bairro: 'Itaim Bibi',
-        cidade: 'São Paulo',
-        uf: 'SP',
-      },
-      criadoEm: '2024-02-10T14:00:00Z',
-      atualizadoEm: '2024-02-10T14:00:00Z',
-    },
-    {
-      id: 'c3',
-      tipoPessoa: 'PF',
-      nome: 'Maria Fernanda Costa',
-      cpf: '987.654.321-00',
-      email: 'maria@email.com',
-      telefone: '(21) 99876-5432',
-      status: 'ativo',
-      endereco: {
-        cep: '22041-001',
-        logradouro: 'Av. Atlântica',
-        numero: '500',
-        bairro: 'Copacabana',
-        cidade: 'Rio de Janeiro',
-        uf: 'RJ',
-      },
-      criadoEm: '2024-03-05T09:00:00Z',
-      atualizadoEm: '2024-03-05T09:00:00Z',
-    },
-    {
-      id: 'c4',
-      tipoPessoa: 'PJ',
-      nome: 'Construtora Vale Verde S/A',
-      cnpj: '34.567.890/0001-12',
-      razaoSocial: 'Construtora Vale Verde S/A',
-      email: 'juridico@valeverde.com.br',
-      telefone: '(11) 4444-5555',
-      status: 'ativo',
-      porte: 'GRANDE',
-      naturezaJuridica: 'Sociedade Anônima Fechada',
-      capitalSocial: 'R$ 10.000.000,00',
-      endereco: {
-        cep: '01402-001',
-        logradouro: 'Alameda Santos',
-        numero: '2000',
-        bairro: 'Cerqueira César',
-        cidade: 'São Paulo',
-        uf: 'SP',
-      },
-      criadoEm: '2024-01-20T11:00:00Z',
-      atualizadoEm: '2024-01-20T11:00:00Z',
-    },
-    {
-      id: 'c5',
-      tipoPessoa: 'PF',
-      nome: 'Roberto Augusto Pinheiro',
-      cpf: '456.789.123-00',
-      email: 'roberto@email.com',
-      telefone: '(31) 97654-3210',
-      status: 'bloqueado',
-      endereco: {
-        cep: '30130-110',
-        logradouro: 'Rua da Bahia',
-        numero: '75',
-        bairro: 'Centro',
-        cidade: 'Belo Horizonte',
-        uf: 'MG',
-      },
-      criadoEm: '2024-04-01T08:00:00Z',
-      atualizadoEm: '2024-04-01T08:00:00Z',
-    },
-  ];
-  saveAll(DB_KEYS.clientes, clientes);
-
-  // Contratos
-  const contratos: Contrato[] = [
-    {
-      id: 'ct1',
-      clienteId: 'c1',
-      clienteNome: 'João Carlos Mendonça',
-      tipo: 'Mensal',
-      valorMensal: 3500,
-      descricao: 'Assessoria jurídica trabalhista',
-      areaAtuacao: 'Trabalhista',
-      dataInicio: '2024-01-15',
-      status: 'ativo',
-      criadoEm: '2024-01-15T10:00:00Z',
-    },
-    {
-      id: 'ct2',
-      clienteId: 'c2',
-      clienteNome: 'Tech Solutions Ltda',
-      tipo: 'Mensal',
-      valorMensal: 8000,
-      descricao: 'Consultoria jurídica empresarial e contratos',
-      areaAtuacao: 'Empresarial',
-      dataInicio: '2024-02-10',
-      status: 'ativo',
-      criadoEm: '2024-02-10T14:00:00Z',
-    },
-    {
-      id: 'ct3',
-      clienteId: 'c3',
-      clienteNome: 'Maria Fernanda Costa',
-      tipo: 'Êxito',
-      percentualExito: 20,
-      valorCausa: 150000,
-      descricao: 'Ação de danos morais — acidente de trânsito',
-      areaAtuacao: 'Cível',
-      dataInicio: '2024-03-05',
-      status: 'ativo',
-      criadoEm: '2024-03-05T09:00:00Z',
-    },
-    {
-      id: 'ct4',
-      clienteId: 'c4',
-      clienteNome: 'Construtora Vale Verde S/A',
-      tipo: 'Misto',
-      valorMensal: 15000,
-      percentualExito: 10,
-      valorCausa: 2000000,
-      descricao: 'Assessoria jurídica + litígios imobiliários',
-      areaAtuacao: 'Imobiliário',
-      dataInicio: '2024-01-20',
-      status: 'ativo',
-      criadoEm: '2024-01-20T11:00:00Z',
-    },
-    {
-      id: 'ct5',
-      clienteId: 'c5',
-      clienteNome: 'Roberto Augusto Pinheiro',
-      tipo: 'Avulso',
-      descricao: 'Ação de inventário',
-      areaAtuacao: 'Família e Sucessões',
-      dataInicio: '2024-04-01',
-      status: 'suspenso',
-      criadoEm: '2024-04-01T08:00:00Z',
-    },
-  ];
-  saveAll(DB_KEYS.contratos, contratos);
-
-  // Processos
-  const processos: Processo[] = [
-    {
-      id: 'p1',
-      numeroCNJ: '1234567-89.2024.8.26.0100',
-      clienteId: 'c1',
-      clienteNome: 'João Carlos Mendonça',
-      contratoId: 'ct1',
-      tribunal: 'Tribunal de Justiça de São Paulo',
-      tribunalAlias: 'tjsp',
-      vara: '5ª Vara do Trabalho de São Paulo',
-      areaAtuacao: 'Trabalhista',
-      fase: 'Instrução',
-      polo: 'Ativo',
-      parteAdversa: 'Empresa XYZ Comércio Ltda',
-      advogadoAdverso: 'Dr. Carlos Pinto',
-      valorCausa: 45000,
-      audiencias: [
-        {
-          data: '2026-08-15',
-          hora: '14:00',
-          tipo: 'Audiência de Instrução',
-          local: 'Fórum Trabalhista de SP',
-          vara: '5ª VT',
-        },
-      ],
-      proximaAudiencia: '2026-08-15',
-      ultimaMovimentacao: '2026-05-01',
-      status: 'ativo',
-      criadoEm: '2024-01-15T10:00:00Z',
-      atualizadoEm: '2026-05-01T00:00:00Z',
-    },
-    {
-      id: 'p2',
-      numeroCNJ: '9876543-21.2024.8.26.0100',
-      clienteId: 'c3',
-      clienteNome: 'Maria Fernanda Costa',
-      contratoId: 'ct3',
-      tribunal: 'Tribunal de Justiça do Rio de Janeiro',
-      tribunalAlias: 'tjrj',
-      vara: '3ª Vara Cível da Comarca do Rio de Janeiro',
-      areaAtuacao: 'Cível',
-      fase: 'Conhecimento',
-      polo: 'Ativo',
-      parteAdversa: 'Seguradora Nacional S/A',
-      valorCausa: 150000,
-      audiencias: [
-        {
-          data: '2026-09-10',
-          hora: '10:30',
-          tipo: 'Audiência de Conciliação',
-          local: 'Fórum Central RJ',
-        },
-      ],
-      proximaAudiencia: '2026-09-10',
-      ultimaMovimentacao: '2026-04-20',
-      status: 'ativo',
-      criadoEm: '2024-03-05T09:00:00Z',
-      atualizadoEm: '2026-04-20T00:00:00Z',
-    },
-    {
-      id: 'p3',
-      numeroCNJ: '5555555-55.2023.8.26.0100',
-      clienteId: 'c4',
-      clienteNome: 'Construtora Vale Verde S/A',
-      contratoId: 'ct4',
-      tribunal: 'Tribunal de Justiça de São Paulo',
-      tribunalAlias: 'tjsp',
-      vara: '1ª Vara de Falências e Recuperações Judiciais',
-      areaAtuacao: 'Imobiliário',
-      fase: 'Recursal',
-      polo: 'Passivo',
-      parteAdversa: 'Condomínio Residencial Park Hills',
-      valorCausa: 2000000,
-      audiencias: [],
-      ultimaMovimentacao: '2026-05-05',
-      status: 'ativo',
-      criadoEm: '2024-01-20T11:00:00Z',
-      atualizadoEm: '2026-05-05T00:00:00Z',
-    },
-  ];
-  saveAll(DB_KEYS.processos, processos);
-
-  // Lançamentos
-  const lancamentos: Lancamento[] = [
-    {
-      id: 'l1',
-      tipo: 'recebimento',
-      clienteId: 'c1',
-      clienteNome: 'João Carlos Mendonça',
-      contratoId: 'ct1',
-      descricao: 'Honorários mensais — Abril/2026',
-      valor: 3500,
-      dataVencimento: '2026-04-05',
-      dataPagamento: '2026-04-04',
-      status: 'pago',
-      formaPagamento: 'PIX',
-      criadoEm: '2026-04-01T00:00:00Z',
-    },
-    {
-      id: 'l2',
-      tipo: 'recebimento',
-      clienteId: 'c2',
-      clienteNome: 'Tech Solutions Ltda',
-      contratoId: 'ct2',
-      descricao: 'Honorários mensais — Abril/2026',
-      valor: 8000,
-      dataVencimento: '2026-04-10',
-      dataPagamento: '2026-04-09',
-      status: 'pago',
-      formaPagamento: 'TED',
-      criadoEm: '2026-04-01T00:00:00Z',
-    },
-    {
-      id: 'l3',
-      tipo: 'a_receber',
-      clienteId: 'c4',
-      clienteNome: 'Construtora Vale Verde S/A',
-      contratoId: 'ct4',
-      descricao: 'Honorários mensais — Maio/2026',
-      valor: 15000,
-      dataVencimento: '2026-05-10',
-      status: 'pendente',
-      criadoEm: '2026-05-01T00:00:00Z',
-    },
-    {
-      id: 'l4',
-      tipo: 'recebimento',
-      clienteId: 'c1',
-      clienteNome: 'João Carlos Mendonça',
-      contratoId: 'ct1',
-      descricao: 'Honorários mensais — Maio/2026',
-      valor: 3500,
-      dataVencimento: '2026-05-05',
-      dataPagamento: '2026-05-05',
-      status: 'pago',
-      formaPagamento: 'PIX',
-      criadoEm: '2026-05-01T00:00:00Z',
-    },
-    {
-      id: 'l5',
-      tipo: 'a_receber',
-      clienteId: 'c5',
-      clienteNome: 'Roberto Augusto Pinheiro',
-      descricao: 'Parcela 1/3 — Ação de Inventário',
-      valor: 5000,
-      dataVencimento: '2026-02-01',
-      status: 'vencido',
-      criadoEm: '2026-01-15T00:00:00Z',
-    },
-    {
-      id: 'l6',
-      tipo: 'a_receber',
-      clienteId: 'c5',
-      clienteNome: 'Roberto Augusto Pinheiro',
-      descricao: 'Parcela 2/3 — Ação de Inventário',
-      valor: 5000,
-      dataVencimento: '2026-03-01',
-      status: 'vencido',
-      criadoEm: '2026-01-15T00:00:00Z',
-    },
-    {
-      id: 'l7',
-      tipo: 'despesa',
-      descricao: 'Aluguel do escritório — Maio/2026',
-      valor: 8500,
-      dataVencimento: '2026-05-05',
-      status: 'pendente',
-      criadoEm: '2026-05-01T00:00:00Z',
-    },
-    {
-      id: 'l8',
-      tipo: 'despesa',
-      descricao: 'Custas processuais — Processo Construtora',
-      valor: 2340,
-      dataVencimento: '2026-04-15',
-      dataPagamento: '2026-04-14',
-      status: 'pago',
-      criadoEm: '2026-04-10T00:00:00Z',
-    },
-    {
-      id: 'l9',
-      tipo: 'recebimento',
-      clienteId: 'c3',
-      clienteNome: 'Maria Fernanda Costa',
-      contratoId: 'ct3',
-      descricao: 'Honorários êxito — Acordo judicial',
-      valor: 30000,
-      dataVencimento: '2026-04-20',
-      dataPagamento: '2026-04-20',
-      status: 'pago',
-      formaPagamento: 'TED',
-      criadoEm: '2026-04-15T00:00:00Z',
-    },
-    {
-      id: 'l10',
-      tipo: 'a_receber',
-      clienteId: 'c2',
-      clienteNome: 'Tech Solutions Ltda',
-      contratoId: 'ct2',
-      descricao: 'Honorários mensais — Maio/2026',
-      valor: 8000,
-      dataVencimento: '2026-05-10',
-      status: 'pendente',
-      criadoEm: '2026-05-01T00:00:00Z',
-    },
-  ];
-  saveAll(DB_KEYS.lancamentos, lancamentos);
-
-  // Avisos
-  const avisos: Aviso[] = [
-    {
-      id: 'av1',
-      titulo: 'Prazo de contestação vencendo',
-      descricao: 'Processo 1234567-89.2024.8.26.0100 — Prazo para contestar vence em 3 dias.',
-      tipo: 'prazo',
-      urgencia: 'critica',
-      processoId: 'p1',
-      dataLimite: '2026-05-29',
-      lido: false,
-      criadoEm: '2026-05-24T08:00:00Z',
-    },
-    {
-      id: 'av2',
-      titulo: 'Audiência agendada',
-      descricao: 'Audiência de Instrução — João Carlos Mendonça em 15/08/2026 às 14h.',
-      tipo: 'audiencia',
-      urgencia: 'alta',
-      processoId: 'p1',
-      dataLimite: '2026-08-15',
-      lido: false,
-      criadoEm: '2026-05-10T09:00:00Z',
-    },
-    {
-      id: 'av3',
-      titulo: 'Inadimplência — Roberto Pinheiro',
-      descricao: 'Cliente Roberto Augusto Pinheiro com 2 parcelas em aberto totalizando R$ 10.000,00.',
-      tipo: 'pagamento',
-      urgencia: 'alta',
-      clienteId: 'c5',
-      lido: false,
-      criadoEm: '2026-05-01T00:00:00Z',
-    },
-    {
-      id: 'av4',
-      titulo: 'Contrato suspenso — necessita revisão',
-      descricao: 'Contrato de Roberto Augusto Pinheiro está suspenso — necessita revisão.',
-      tipo: 'contrato',
-      urgencia: 'media',
-      clienteId: 'c5',
-      lido: false,
-      criadoEm: '2026-05-05T00:00:00Z',
-    },
-    {
-      id: 'av5',
-      titulo: 'Audiência de Conciliação',
-      descricao: 'Maria Fernanda Costa — Audiência em 10/09/2026 às 10h30.',
-      tipo: 'audiencia',
-      urgencia: 'media',
-      processoId: 'p2',
-      dataLimite: '2026-09-10',
-      lido: true,
-      criadoEm: '2026-05-08T00:00:00Z',
-    },
-  ];
-  saveAll(DB_KEYS.avisos, avisos);
+  // Novas instalações começam sem dados de exemplo —
+  // os registros de demonstração foram removidos para evitar confusão.
+  saveAll(DB_KEYS.clientes, []);
+  saveAll(DB_KEYS.contratos, []);
+  saveAll(DB_KEYS.processos, []);
+  saveAll(DB_KEYS.lancamentos, []);
+  saveAll(DB_KEYS.avisos, []);
 
   localStorage.setItem(DB_KEYS.initialized, 'true');
 }

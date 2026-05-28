@@ -144,10 +144,16 @@ export async function consultarProcessoDataJud(
   const tribunal = TRIBUNAIS[tribunalAlias];
   if (!tribunal) throw new Error(`Tribunal '${tribunalAlias}' não encontrado.`);
 
+  // Use term query on the keyword sub-field for exact CNJ number matching.
+  // Falls back to a match query so older indices without .keyword still work.
   const body = {
     query: {
-      match: {
-        numeroProcesso: numeroCNJ,
+      bool: {
+        should: [
+          { term: { 'numeroProcesso.keyword': numeroCNJ } },
+          { match: { numeroProcesso: numeroCNJ } },
+        ],
+        minimum_should_match: 1,
       },
     },
   };

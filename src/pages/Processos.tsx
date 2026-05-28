@@ -4,7 +4,7 @@ import {
   Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
   Paperclip, FileText, Download, Upload,
 } from 'lucide-react';
-import { processosApi, clientesApi, documentosApi } from '../services/api';
+import { processosApi, clientesApi, documentosApi, escritorioApi } from '../services/api';
 import type { Documento, CategoriaDocumento } from '../services/api';
 import { ModeloDocumento } from '../components/modelos/ModeloDocumento';
 import type { TipoModelo, ModeloDados } from '../components/modelos/ModeloDocumento';
@@ -18,7 +18,7 @@ import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
-import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente } from '../types';
+import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente, Escritorio } from '../types';
 
 const FASES: FaseProcessual[] = ['Inicial', 'Conhecimento', 'Instrução', 'Sentença', 'Recursal', 'Execução', 'Transitado em Julgado', 'Arquivado'];
 const POLOS: PoloProcessual[] = ['Ativo', 'Passivo', 'Terceiro'];
@@ -569,6 +569,22 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
   const [showDataJud, setShowDataJud] = useState(false);
   const [currentProcesso, setCurrentProcesso] = useState(processo);
   const [modeloTipo, setModeloTipo] = useState<TipoModelo | ''>('');
+  const [clienteData, setClienteData] = useState<Cliente | null>(null);
+  const [escritorioData, setEscritorioData] = useState<Escritorio | null>(null);
+
+  // Load client and escritório data for document generation
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [c, e] = await Promise.allSettled([
+          clientesApi.getById(currentProcesso.clienteId),
+          escritorioApi.get(),
+        ]);
+        if (c.status === 'fulfilled') setClienteData(c.value ?? null);
+        if (e.status === 'fulfilled') setEscritorioData(e.value ?? null);
+      } catch { /* silencioso */ }
+    })();
+  }, [currentProcesso.clienteId]);
 
   const handleAndamentoAdded = async () => {
     try {
@@ -683,10 +699,13 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
         onClose={() => setModeloTipo('')}
         tipo={modeloTipo as TipoModelo}
         dados={{
-          clienteNome: currentProcesso.clienteNome,
-          advogadoNome: user?.nome || 'Advogado Responsável',
-          advogadoOAB: user?.oab || '',
-          escritorioNome: 'MSK Advocacia',
+          clienteNome:   currentProcesso.clienteNome,
+          clienteCpf:    clienteData?.cpf,
+          clienteCnpj:   clienteData?.cnpj,
+          advogadoNome:  user?.nome || 'Advogado Responsável',
+          advogadoOAB:   user?.oab || '',
+          escritorioNome: escritorioData?.nome || 'MSK Advocacia',
+          cidade:        clienteData?.endereco?.cidade || escritorioData?.endereco?.cidade,
         } as ModeloDados}
       />
     )}

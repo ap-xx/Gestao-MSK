@@ -465,15 +465,15 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
           {/* Contato */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>E-mail *</label>
-              <input type="email" className={inputClass} value={form.email} onChange={e => set('email', e.target.value)} required placeholder="email@exemplo.com" />
+              <label className={labelClass}>E-mail</label>
+              <input type="email" className={inputClass} value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@exemplo.com" />
             </div>
             <div>
-              <label className={labelClass}>Telefone *</label>
+              <label className={labelClass}>Telefone</label>
               <input className={inputClass} value={form.telefone} onChange={e => {
                 let val = e.target.value.replace(/\D/g, '');
                 set('telefone', formatTelefone(val));
-              }} required placeholder="(00) 00000-0000" maxLength={15} />
+              }} placeholder="(00) 00000-0000" maxLength={15} />
             </div>
           </div>
 
