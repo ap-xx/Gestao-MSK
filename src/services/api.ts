@@ -709,22 +709,50 @@ export const licenseApi = {
     logAudit('excluir', 'licenca', id);
   },
 
-  /** Merge server-reported machine data into the local registry */
+  /** Merge server-reported machine data into the local registry.
+   *
+   * If the key already exists locally → update its machine stats.
+   * If the key is unknown (was generated on another machine) → insert it,
+   * so the admin can see all activated licenses regardless of which PC
+   * generated the key.
+   */
   mergeServerData(records: LicenseRecord[]): void {
+    const now = new Date().toISOString();
     for (const rec of records) {
       const existing = LicensesRegistryDB.getByKey(rec.key);
       if (existing) {
+        // Update machine telemetry for a key we already know about
         LicensesRegistryDB.update(existing.id, {
-          machineId:   rec.machineId,
-          machineName: rec.machineName,
-          cidade:      rec.cidade,
-          uf:          rec.uf,
-          dbSizeKb:    rec.dbSizeKb,
-          lastLogin:   rec.lastLogin,
-          loginCount:  rec.loginCount,
-          ip:          rec.ip,
-          activatedAt: rec.activatedAt,
-          atualizadoEm: new Date().toISOString(),
+          machineId:    rec.machineId,
+          machineName:  rec.machineName,
+          cidade:       rec.cidade,
+          uf:           rec.uf,
+          dbSizeKb:     rec.dbSizeKb,
+          lastLogin:    rec.lastLogin,
+          loginCount:   rec.loginCount,
+          ip:           rec.ip,
+          activatedAt:  rec.activatedAt,
+          atualizadoEm: now,
+        });
+      } else {
+        // Key was generated on another machine — import it so this registry
+        // shows the full picture after a sync
+        LicensesRegistryDB.insert({
+          id:           rec.id   || generateId(),
+          key:          rec.key,
+          descricao:    rec.descricao,
+          status:       rec.status ?? 'active',
+          machineId:    rec.machineId,
+          machineName:  rec.machineName,
+          cidade:       rec.cidade,
+          uf:           rec.uf,
+          dbSizeKb:     rec.dbSizeKb,
+          lastLogin:    rec.lastLogin,
+          loginCount:   rec.loginCount,
+          ip:           rec.ip,
+          activatedAt:  rec.activatedAt,
+          criadoEm:     rec.criadoEm  || now,
+          atualizadoEm: now,
         });
       }
     }
