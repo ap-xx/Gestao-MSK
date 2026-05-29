@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, Gavel, Search, Edit2, Trash2, Eye,
   Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
-  Paperclip, FileText, Download, Upload, Layers, GripVertical,
+  Paperclip, FileText, Download, Upload, Layers, GripVertical, CheckSquare, Square,
 } from 'lucide-react';
 import { processosApi, clientesApi, documentosApi, escritorioApi } from '../services/api';
 import type { Documento, CategoriaDocumento } from '../services/api';
@@ -16,6 +16,7 @@ import { adicionarDiasUteis } from '../utils/prazos';
 import { maskCNJ } from '../utils/masks';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
+import { useCtrlSave } from '../hooks/useCtrlSave';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -23,7 +24,7 @@ import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
 import { useSort } from '../hooks/useSort';
 import { usePagination } from '../hooks/usePagination';
-import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente, Escritorio } from '../types';
+import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente, Escritorio, PrazoProcessual } from '../types';
 
 const FASES: FaseProcessual[] = ['Inicial', 'Conhecimento', 'Instrução', 'Sentença', 'Recursal', 'Execução', 'Transitado em Julgado', 'Arquivado'];
 const POLOS: PoloProcessual[] = ['Ativo', 'Passivo', 'Terceiro'];
@@ -394,6 +395,7 @@ interface ModalProps {
 function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!processo;
+  useCtrlSave(() => document.getElementById('processo-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
   const tribunaisLista = Object.entries(TRIBUNAIS);
 
   const [form, setForm] = useState({
@@ -674,11 +676,77 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
 // ─── Detalhe Modal ─────────────────────────────────────────────
 function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo; onClose: () => void; onRefresh: (id: string) => void }) {
   const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [showDataJud, setShowDataJud] = useState(false);
   const [currentProcesso, setCurrentProcesso] = useState(processo);
   const [modeloTipo, setModeloTipo] = useState<TipoModelo | ''>('');
   const [clienteData, setClienteData] = useState<Cliente | null>(null);
   const [escritorioData, setEscritorioData] = useState<Escritorio | null>(null);
+
+  // ── Notas internas ──────────────────────────────────────────
+  const [notas, setNotas] = useState(processo.notas || '');
+  const [savingNotas, setSavingNotas] = useState(false);
+  const notasTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function saveNotas(value: string) {
+    if (isReadOnly) return;
+    setSavingNotas(true);
+    try {
+      await processosApi.update(currentProcesso.id, { notas: value });
+      setCurrentProcesso(p => ({ ...p, notas: value }));
+      onRefresh(currentProcesso.id);
+    } catch { /* silencioso */ } finally {
+      setSavingNotas(false);
+    }
+  }
+
+  function handleNotasChange(value: string) {
+    setNotas(value);
+    if (notasTimer.current) clearTimeout(notasTimer.current);
+    notasTimer.current = setTimeout(() => saveNotas(value), 800);
+  }
+
+  // ── Prazos processuais ──────────────────────────────────────
+  const [addingPrazo, setAddingPrazo] = useState(false);
+  const [prazoForm, setPrazoForm] = useState({
+    tipo: 'Contestação', descricao: '', dataBase: new Date().toISOString().split('T')[0], diasUteis: 15,
+  });
+
+  const prazoTypes = ['Contestação', 'Recurso', 'Embargos', 'Contrarrazões', 'Manifestação', 'Impugnação', 'Apelação', 'Agravo', 'Outro'];
+
+  const prazoDataFinal = React.useMemo(() =>
+    adicionarDiasUteis(prazoForm.dataBase, prazoForm.diasUteis),
+  [prazoForm.dataBase, prazoForm.diasUteis]);
+
+  async function addPrazo() {
+    const novo: PrazoProcessual = {
+      id: Math.random().toString(36).slice(2),
+      tipo: prazoForm.tipo, descricao: prazoForm.descricao || undefined as any,
+      dataBase: prazoForm.dataBase, diasUteis: prazoForm.diasUteis,
+      dataFinal: prazoDataFinal, status: 'pendente',
+      criadoEm: new Date().toISOString(),
+    };
+    const updated = [...(currentProcesso.prazos || []), novo];
+    await processosApi.update(currentProcesso.id, { prazos: updated });
+    setCurrentProcesso(p => ({ ...p, prazos: updated }));
+    onRefresh(currentProcesso.id);
+    setAddingPrazo(false);
+    setPrazoForm({ tipo: 'Contestação', descricao: '', dataBase: new Date().toISOString().split('T')[0], diasUteis: 15 });
+  }
+
+  async function updatePrazoStatus(prazoId: string, status: PrazoProcessual['status']) {
+    const updated = (currentProcesso.prazos || []).map(p => p.id === prazoId ? { ...p, status } : p);
+    await processosApi.update(currentProcesso.id, { prazos: updated });
+    setCurrentProcesso(p => ({ ...p, prazos: updated }));
+    onRefresh(currentProcesso.id);
+  }
+
+  async function removePrazo(prazoId: string) {
+    const updated = (currentProcesso.prazos || []).filter(p => p.id !== prazoId);
+    await processosApi.update(currentProcesso.id, { prazos: updated });
+    setCurrentProcesso(p => ({ ...p, prazos: updated }));
+    onRefresh(currentProcesso.id);
+  }
 
   // Load client and escritório data for document generation
   useEffect(() => {
@@ -796,6 +864,121 @@ function ProcessoDetalhe({ processo, onClose, onRefresh }: { processo: Processo;
               <p className="text-[#a0a0a0]">{currentProcesso.observacoes}</p>
             </div>
           )}
+
+          {/* ── Prazos processuais ──────────────────────────── */}
+          <div className="border-t border-[#2a2a2a] pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> Prazos ({(currentProcesso.prazos || []).length})
+              </p>
+              {!isReadOnly && (
+                <button onClick={() => setAddingPrazo(v => !v)} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors">
+                  <Plus className="w-3 h-3" /> Adicionar
+                </button>
+              )}
+            </div>
+
+            {addingPrazo && (
+              <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg p-3 mb-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-[#505050] mb-1">Tipo</label>
+                    <select className="w-full bg-[#141414] border border-[#2a2a2a] rounded px-2 py-1.5 text-xs text-[#f5f5f5]"
+                      value={prazoForm.tipo} onChange={e => setPrazoForm(f => ({ ...f, tipo: e.target.value }))}>
+                      {prazoTypes.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#505050] mb-1">Dias úteis</label>
+                    <input type="number" min={1} max={999} className="w-full bg-[#141414] border border-[#2a2a2a] rounded px-2 py-1.5 text-xs text-[#f5f5f5]"
+                      value={prazoForm.diasUteis} onChange={e => setPrazoForm(f => ({ ...f, diasUteis: Math.max(1, +e.target.value) }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-[#505050] mb-1">Data base</label>
+                    <DateInput className="w-full bg-[#141414] border border-[#2a2a2a] rounded px-2 py-1.5 text-xs text-[#f5f5f5] [color-scheme:dark]"
+                      value={prazoForm.dataBase} onChange={e => setPrazoForm(f => ({ ...f, dataBase: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <p className="text-[10px] text-[#505050] mb-1">Data final (calculada)</p>
+                    <p className="text-sm font-bold text-amber-400">
+                      {new Date(prazoDataFinal + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+                <input type="text" placeholder="Descrição opcional" className="w-full bg-[#141414] border border-[#2a2a2a] rounded px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#404040]"
+                  value={prazoForm.descricao} onChange={e => setPrazoForm(f => ({ ...f, descricao: e.target.value }))} />
+                <div className="flex gap-2">
+                  <button onClick={() => setAddingPrazo(false)} className="flex-1 py-1.5 text-xs bg-[#141414] border border-[#2a2a2a] text-[#a0a0a0] rounded">Cancelar</button>
+                  <button onClick={addPrazo} className="flex-1 py-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-white rounded font-medium">Registrar Prazo</button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {(currentProcesso.prazos || []).length === 0 ? (
+                <p className="text-xs text-[#505050] text-center py-3">Nenhum prazo registrado</p>
+              ) : (
+                [...(currentProcesso.prazos || [])].sort((a, b) => a.dataFinal.localeCompare(b.dataFinal)).map(pz => {
+                  const diasRestantes = Math.ceil((new Date(pz.dataFinal + 'T12:00:00').getTime() - Date.now()) / 86400000);
+                  const urgente = pz.status === 'pendente' && diasRestantes <= 5;
+                  const statusColors = { pendente: urgente ? 'text-red-400' : 'text-amber-400', cumprido: 'text-green-400', perdido: 'text-red-600' };
+                  return (
+                    <div key={pz.id} className={`flex items-start gap-2 bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs border ${urgente ? 'border-red-500/20' : 'border-transparent'}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-[#f5f5f5]">{pz.tipo}</span>
+                          <span className={`text-[10px] font-semibold ${statusColors[pz.status]}`}>{pz.status}</span>
+                          {pz.status === 'pendente' && (
+                            <span className={`text-[10px] ml-auto ${urgente ? 'text-red-400 font-bold' : 'text-[#505050]'}`}>
+                              {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d vencido` : `${diasRestantes}d restantes`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[#505050]">
+                          {pz.diasUteis}du a partir de {new Date(pz.dataBase + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          {' → '}
+                          <span className="text-amber-400">{new Date(pz.dataFinal + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        </p>
+                        {pz.descricao && <p className="text-[#505050] mt-0.5">{pz.descricao}</p>}
+                      </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-col gap-1 shrink-0">
+                          {pz.status === 'pendente' && (
+                            <button onClick={() => updatePrazoStatus(pz.id, 'cumprido')}
+                              className="text-[10px] text-green-400 hover:text-green-300 transition-colors" title="Marcar cumprido">✓</button>
+                          )}
+                          <button onClick={() => removePrazo(pz.id)}
+                            className="text-[10px] text-[#505050] hover:text-red-400 transition-colors" title="Remover">✕</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ── Notas internas ─────────────────────────────── */}
+          <div className="border-t border-[#2a2a2a] pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[#505050] font-medium uppercase tracking-wider">Notas Internas</p>
+              {savingNotas && <span className="text-[10px] text-amber-400">Salvando…</span>}
+              {!savingNotas && notas !== (currentProcesso.notas || '') && <span className="text-[10px] text-green-400">Salvo</span>}
+            </div>
+            {isReadOnly ? (
+              <p className="text-xs text-[#505050] italic">{notas || 'Nenhuma nota registrada'}</p>
+            ) : (
+              <textarea
+                value={notas}
+                onChange={e => handleNotasChange(e.target.value)}
+                placeholder="Anotações privadas — visíveis apenas para usuários do sistema. Estratégia, observações de reunião, lembretes…"
+                rows={3}
+                className="w-full bg-[#1e1e1e] border border-[#2a2a2a] focus:border-amber-500/40 rounded-lg px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#404040] resize-none outline-none transition-colors"
+              />
+            )}
+          </div>
         </div>
       </div>
       </div>
@@ -847,6 +1030,27 @@ export default function Processos() {
     () => (localStorage.getItem('msk_proc_view') as 'tabela' | 'kanban') || 'tabela'
   );
   const [dragFase, setDragFase] = useState<string | null>(null); // fase being dragged over
+  // Bulk selection
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  function toggleSelectProc(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleSelectAllProc() {
+    if (selectedIds.size === pagination.items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(pagination.items.map(p => p.id)));
+  }
+  async function handleBulkDeleteProc() {
+    if (!selectedIds.size) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map(id => processosApi.remove(id)));
+      await reload(); setSelectedIds(new Set());
+      showToast('success', `${selectedIds.size} processo(s) excluído(s)`);
+    } catch { showToast('error', 'Erro ao excluir selecionados'); }
+    finally { setBulkDeleting(false); }
+  }
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -1067,12 +1271,35 @@ export default function Processos() {
         )}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && !isReadOnly && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+          <span className="text-sm text-amber-400 font-medium">{selectedIds.size} selecionado(s)</span>
+          <button onClick={() => downloadCsv(`processos_sel.csv`, ['Nº CNJ','Cliente','Área','Fase','Status'], sorted.filter(p => selectedIds.has(p.id)).map(p => [p.numeroCNJ, p.clienteNome, p.areaAtuacao, p.fase, p.status]))}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-xs font-medium transition-all">
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={handleBulkDeleteProc} disabled={bulkDeleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-lg text-xs font-medium transition-all disabled:opacity-50">
+            <Trash2 className="w-3.5 h-3.5" /> {bulkDeleting ? 'Excluindo…' : 'Excluir'}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-[#505050] hover:text-[#a0a0a0]"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
       {/* ── Tabela ──────────────────────────────────────────── */}
       {viewMode === 'tabela' && <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
+                {!isReadOnly && (
+                  <th className="px-3 py-3.5 w-10">
+                    <button onClick={toggleSelectAllProc} className="text-[#505050] hover:text-amber-400 transition-colors">
+                      {selectedIds.size === pagination.items.length && pagination.items.length > 0 ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
+                )}
                 <th className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Processo</th>
                 <th onClick={() => toggle('clienteNome')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell cursor-pointer select-none hover:text-[#a0a0a0]">
                   Cliente / Parte Adversa <SortIcon col="clienteNome" />
@@ -1098,7 +1325,14 @@ export default function Processos() {
                 </tr>
               ) : (
                 pagination.items.map(p => (
-                  <tr key={p.id} className="hover:bg-[#1a1a1a] transition-colors">
+                  <tr key={p.id} className={`hover:bg-[#1a1a1a] transition-colors ${selectedIds.has(p.id) ? 'bg-amber-500/5' : ''}`}>
+                    {!isReadOnly && (
+                      <td className="px-3 py-4 w-10">
+                        <button onClick={() => toggleSelectProc(p.id)} className="text-[#505050] hover:text-amber-400 transition-colors">
+                          {selectedIds.has(p.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-5 py-4">
                       <p className="font-mono text-amber-400 text-xs font-medium">{p.numeroCNJ}</p>
                       <p className="text-[#505050] text-xs mt-0.5">{p.areaAtuacao} · Polo {p.polo}</p>

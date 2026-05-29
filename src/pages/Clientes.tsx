@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
+import { useCtrlSave } from '../hooks/useCtrlSave';
 import ImportCsvModal from '../components/ImportCsvModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -223,6 +224,8 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!cliente;
   const [dupWarning, setDupWarning] = useState<string | null>(null);
+  // Ctrl+S salva o formulário
+  useCtrlSave(() => document.getElementById('cliente-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>(cliente?.tipoPessoa || 'PF');
   const [form, setForm] = useState({
@@ -686,6 +689,31 @@ export default function Clientes() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Cross-reference: processos e lançamentos pendentes por cliente
+  const [processos, setProcessos] = useState<import('../types').Processo[]>([]);
+  const [lancamentos, setLancamentos] = useState<import('../types').Lancamento[]>([]);
+  useEffect(() => {
+    Promise.all([processosApi.getAll(), import('../services/api').then(m => m.lancamentosApi.getAll())])
+      .then(([p, l]) => { setProcessos(p); setLancamentos(l); })
+      .catch(() => {});
+  }, []);
+
+  const clienteStats = useMemo(() => {
+    const map: Record<string, { processos: number; pendente: number }> = {};
+    processos.forEach(p => {
+      if (!map[p.clienteId]) map[p.clienteId] = { processos: 0, pendente: 0 };
+      if (p.status === 'ativo') map[p.clienteId].processos++;
+    });
+    lancamentos.forEach(l => {
+      if (!l.clienteId) return;
+      if (!map[l.clienteId]) map[l.clienteId] = { processos: 0, pendente: 0 };
+      if (l.tipo === 'a_receber' && (l.status === 'pendente' || l.status === 'vencido')) {
+        map[l.clienteId].pendente += l.valor;
+      }
+    });
+    return map;
+  }, [processos, lancamentos]);
+
   // Atalho de teclado: N → Novo Cliente
   useEffect(() => {
     if (isReadOnly) return;
@@ -1019,7 +1047,19 @@ export default function Clientes() {
                         </div>
                         <div>
                           <p className="font-medium text-[#f5f5f5] leading-tight">{c.nome}</p>
-                          <p className="text-xs text-[#505050]">{c.tipoPessoa}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="text-xs text-[#505050]">{c.tipoPessoa}</span>
+                            {clienteStats[c.id]?.processos > 0 && (
+                              <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded-full">
+                                {clienteStats[c.id].processos}p
+                              </span>
+                            )}
+                            {clienteStats[c.id]?.pendente > 0 && (
+                              <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded-full" title="Valor pendente">
+                                {clienteStats[c.id].pendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>

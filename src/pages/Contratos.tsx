@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
+import { useCtrlSave } from '../hooks/useCtrlSave';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -81,6 +82,8 @@ interface ModalProps {
 function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!contrato;
+  // Ctrl+S salva o formulário
+  useCtrlSave(() => document.getElementById('contrato-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 
   const [form, setForm] = useState({
     clienteId: contrato?.clienteId || '',
@@ -372,24 +375,12 @@ export default function Contratos() {
   const pagination = usePagination(sorted, pageSize);
 
   function handleDelete(c: Contrato) {
-    setToDelete(c);
-    setConfirmOpen(true);
-  }
-
-  async function doDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
-    try {
-      await contratosApi.remove(toDelete.id);
-      await reload();
-      showToast('info', 'Contrato removido', toDelete.clienteNome);
-    } catch (err: any) {
-      showToast('error', 'Erro ao excluir', err.message);
-    } finally {
-      setDeleting(false);
-      setConfirmOpen(false);
-      setToDelete(null);
-    }
+    undoDelete(
+      c,
+      item => setContratos(prev => prev.filter(x => x.id !== item.id)),
+      item => setContratos(prev => [...prev, item]),
+      item => contratosApi.remove(item.id).then(() => {}),
+    );
   }
 
   const stats = useMemo(() => ({
@@ -570,14 +561,7 @@ export default function Contratos() {
         <Pagination {...pagination} />
       </div>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Excluir Contrato"
-        message={`Tem certeza que deseja excluir o contrato de "${toDelete?.clienteNome}"? Esta ação não pode ser desfeita.`}
-        onConfirm={doDelete}
-        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
-        loading={deleting}
-      />
+      {/* ConfirmDialog replaced by undo-delete toast pattern */}
 
       {modalOpen && (
         <ContratoModal

@@ -1,0 +1,20 @@
+{
+  "name": "MSK Gestor Jurídico",
+  "short_name": "MSK Gestor",
+  "description": "Sistema de gestão para escritórios de advocacia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "pt-BR"
+}

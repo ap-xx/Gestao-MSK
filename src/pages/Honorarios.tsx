@@ -3,7 +3,7 @@ import {
   Plus, X, DollarSign, CheckCircle, Clock, TrendingDown,
   Search, Edit2, Trash2, Receipt, CreditCard, Printer,
   Percent, Tag, ChevronDown, ChevronUp, TrendingUp, Layers,
-  RefreshCw, FileText, Download,
+  RefreshCw, FileText, Download, BarChart2,
 } from 'lucide-react';
 import { lancamentosApi, clientesApi, escritorioApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -13,6 +13,7 @@ import { printRecibo } from '../utils/printRecibo';
 import { printHonorarios } from '../utils/printRelatorio';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
+import { useCtrlSave } from '../hooks/useCtrlSave';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -79,6 +80,7 @@ interface ModalProps {
 function LancamentoModal({ lancamento, tipo, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!lancamento;
+  useCtrlSave(() => document.getElementById('lancamento-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 
   const [form, setForm] = useState({
     tipo: (lancamento?.tipo || tipo || 'recebimento') as TipoLancamento,
@@ -664,6 +666,40 @@ export default function Honorarios() {
     }
   }
 
+  const [showCashFlow, setShowCashFlow] = usePersistedFilter('hon_cashflow', false);
+
+  // Projeção de fluxo de caixa — próximas 8 semanas
+  const cashFlowData = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 8 }, (_, i) => {
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() + i * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const label = `${weekStart.getDate()}/${weekStart.getMonth() + 1}`;
+
+      const previsto = lancamentos
+        .filter(l => {
+          if (l.tipo !== 'a_receber' || l.status !== 'pendente') return false;
+          const d = new Date(l.dataVencimento);
+          return d >= weekStart && d <= weekEnd;
+        })
+        .reduce((s, l) => s + l.valor, 0);
+
+      const recebido = lancamentos
+        .filter(l => {
+          if (l.tipo !== 'recebimento' || l.status !== 'pago' || !l.dataPagamento) return false;
+          const d = new Date(l.dataPagamento);
+          return d >= weekStart && d <= weekEnd;
+        })
+        .reduce((s, l) => s + l.valor, 0);
+
+      return { label, previsto, recebido, semanaIdx: i };
+    });
+  }, [lancamentos]);
+
+  const cashFlowMax = Math.max(...cashFlowData.map(d => Math.max(d.previsto, d.recebido)), 1);
+
   const tabs: Array<{ key: TipoLancamento; label: string; icon: any; color: string }> = [
     { key: 'recebimento', label: 'Recebimentos', icon: CheckCircle, color: 'text-green-400' },
     { key: 'a_receber', label: 'A Receber', icon: Clock, color: 'text-amber-400' },
@@ -754,6 +790,61 @@ export default function Honorarios() {
             {formatCurrency(stats.recebido - stats.despesas)}
           </p>
         </div>
+      </div>
+
+      {/* ── Fluxo de Caixa projetado ────────────────────────── */}
+      <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowCashFlow(!showCashFlow)}
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-amber-400" />
+            <span className="font-semibold text-[#f5f5f5] text-sm">Fluxo de Caixa — Próximas 8 Semanas</span>
+          </div>
+          {showCashFlow ? <ChevronUp className="w-4 h-4 text-[#505050]" /> : <ChevronDown className="w-4 h-4 text-[#505050]" />}
+        </button>
+
+        {showCashFlow && (
+          <div className="px-5 pb-5 border-t border-[#2a2a2a]">
+            <div className="flex items-center gap-4 mt-3 mb-4 text-xs text-[#505050]">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-500/60" />A Receber (previsto)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-green-500/60" />Recebido</span>
+            </div>
+            <div className="flex items-end gap-2 h-36">
+              {cashFlowData.map((d, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                  {/* Bars */}
+                  <div className="w-full flex items-end justify-center gap-0.5" style={{ height: '100px' }}>
+                    <div
+                      className="flex-1 bg-amber-500/40 hover:bg-amber-500/60 rounded-t transition-all cursor-default"
+                      style={{ height: `${(d.previsto / cashFlowMax) * 100}%`, minHeight: d.previsto > 0 ? '3px' : '0' }}
+                      title={`Previsto: ${formatCurrency(d.previsto)}`}
+                    />
+                    <div
+                      className="flex-1 bg-green-500/50 hover:bg-green-500/70 rounded-t transition-all cursor-default"
+                      style={{ height: `${(d.recebido / cashFlowMax) * 100}%`, minHeight: d.recebido > 0 ? '3px' : '0' }}
+                      title={`Recebido: ${formatCurrency(d.recebido)}`}
+                    />
+                  </div>
+                  {/* Label */}
+                  <span className="text-[10px] text-[#505050] whitespace-nowrap">{d.label}</span>
+                </div>
+              ))}
+            </div>
+            {/* Totals row */}
+            <div className="mt-3 grid grid-cols-2 gap-3 pt-3 border-t border-[#2a2a2a]">
+              <div className="bg-[#1e1e1e] rounded-lg p-3">
+                <p className="text-[10px] text-[#505050] mb-0.5">Total previsto (8 sem.)</p>
+                <p className="text-sm font-bold text-amber-400">{formatCurrency(cashFlowData.reduce((s, d) => s + d.previsto, 0))}</p>
+              </div>
+              <div className="bg-[#1e1e1e] rounded-lg p-3">
+                <p className="text-[10px] text-[#505050] mb-0.5">Total recebido (8 sem.)</p>
+                <p className="text-sm font-bold text-green-400">{formatCurrency(cashFlowData.reduce((s, d) => s + d.recebido, 0))}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -892,7 +983,20 @@ export default function Honorarios() {
                       <p className="text-xs text-[#a0a0a0]">{l.dataPagamento ? new Date(l.dataPagamento).toLocaleDateString('pt-BR') : '—'}</p>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLES[l.status]}`}>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border cursor-default ${STATUS_STYLES[l.status]}`}
+                        title={(() => {
+                          if (l.status === 'vencido') {
+                            const dias = Math.floor((Date.now() - new Date(l.dataVencimento).getTime()) / 86400000);
+                            return `Vencido há ${dias} dia${dias !== 1 ? 's' : ''}`;
+                          }
+                          if (l.status === 'pendente') {
+                            const dias = Math.ceil((new Date(l.dataVencimento).getTime() - Date.now()) / 86400000);
+                            return dias >= 0 ? `Vence em ${dias} dia${dias !== 1 ? 's' : ''}` : `Venceu há ${Math.abs(dias)} dia${Math.abs(dias) !== 1 ? 's' : ''}`;
+                          }
+                          return '';
+                        })()}
+                      >
                         {STATUS_LABELS[l.status]}
                       </span>
                     </td>

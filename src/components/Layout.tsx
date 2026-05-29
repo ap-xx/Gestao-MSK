@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { avisosApi } from '../services/api';
 import NotificacoesPanel from './NotificacoesPanel';
 import { canAccessPage } from '../utils/permissions';
+import CalculadoraHonorarios from './CalculadoraHonorarios';
 
 export type PageKey =
   | 'dashboard'
@@ -443,6 +444,9 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
 
       {/* Notificações panel */}
       <NotificacoesPanel open={notifOpen} onClose={() => setNotifOpen(false)} onNavigate={onNavigate} />
+
+      {/* Calculadora de honorários — flutuante */}
+      {user?.role !== 'assistente' && <CalculadoraHonorarios />}
 
       {/* Busca global */}
       <GlobalSearch

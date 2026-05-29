@@ -119,6 +119,19 @@ export interface Andamento {
   criadoEm: string;
 }
 
+export type StatusPrazo = 'pendente' | 'cumprido' | 'perdido';
+
+export interface PrazoProcessual {
+  id: string;
+  tipo: string;           // contestação, recurso, embargos, etc.
+  descricao?: string;
+  dataBase: string;       // YYYY-MM-DD — data de início da contagem
+  diasUteis: number;      // prazo em dias úteis
+  dataFinal: string;      // YYYY-MM-DD — calculado em adicionarDiasUteis()
+  status: StatusPrazo;
+  criadoEm: string;
+}
+
 export interface Processo {
   id: string;
   numeroCNJ: string;
@@ -140,6 +153,10 @@ export interface Processo {
   ultimaMovimentacao?: string;
   status: 'ativo' | 'encerrado' | 'suspenso' | 'arquivado';
   observacoes?: string;
+  /** Notas internas — visíveis só para usuários do sistema, não compõem andamento oficial */
+  notas?: string;
+  /** Prazos processuais controlados */
+  prazos?: PrazoProcessual[];
   criadoEm: string;
   atualizadoEm: string;
   // Dados do DataJud

@@ -210,6 +210,71 @@ export default function Dashboard() {
     );
   }
 
+  // ── Widgets para Assistente (simplificado) ──────────────────
+  if (user?.role === 'assistente') {
+    const hoje = new Date().toDateString();
+    const audienciasHoje = proximasAudiencias.filter(a => new Date(a.data).toDateString() === hoje);
+    const proximas7 = proximasAudiencias.slice(0, 5);
+    return (
+      <div className="space-y-5 animate-fade-in-up">
+        <div className="bg-gradient-to-r from-[#141414] to-[#141414] border border-[#2a2a2a] rounded-2xl p-6">
+          <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">
+            {saudacao}, {user?.nome.split(' ')[0]}! 👋
+          </h1>
+          <p className="text-[#a0a0a0] mt-1 text-sm">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KPICard icon={Gavel} label="Processos ativos" value={kpis.processosAtivos} color="bg-purple-500/15 text-purple-400" />
+          <KPICard icon={Calendar} label="Audiências hoje" value={audienciasHoje.length} color="bg-amber-500/15 text-amber-400" />
+          <KPICard icon={AlertTriangle} label="Avisos não lidos" value={avisos.length} color="bg-red-500/15 text-red-400" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar className="w-4 h-4 text-amber-400" />
+              <h3 className="font-semibold text-[#f5f5f5]">Próximas Audiências</h3>
+            </div>
+            {proximas7.length === 0
+              ? <p className="text-[#505050] text-sm text-center py-6">Nenhuma audiência agendada</p>
+              : proximas7.map((a, i) => {
+                const dias = Math.ceil((new Date(a.data).getTime() - Date.now()) / 86400000);
+                return (
+                  <div key={i} className="flex items-start gap-3 p-3 bg-[#1e1e1e] rounded-lg mb-2 last:mb-0 hover:bg-[#252525]">
+                    <div className="text-center min-w-[40px]">
+                      <p className="text-amber-400 font-bold text-lg leading-none">{new Date(a.data).getDate()}</p>
+                      <p className="text-[#505050] text-xs uppercase">{new Date(a.data).toLocaleDateString('pt-BR', { month: 'short' })}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#f5f5f5] truncate">{a.cliente}</p>
+                      <p className="text-xs text-[#a0a0a0]">{a.tipo}</p>
+                    </div>
+                    <span className={`text-xs font-medium ${dias <= 7 ? 'text-red-400' : 'text-amber-400'}`}>{dias}d</span>
+                  </div>
+                );
+              })}
+          </div>
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <h3 className="font-semibold text-[#f5f5f5]">Alertas Urgentes</h3>
+            </div>
+            {alertas.length === 0
+              ? <div className="flex flex-col items-center py-6 text-[#505050]"><Clock className="w-8 h-8 mb-2" /><p className="text-sm">Sem alertas urgentes</p></div>
+              : alertas.map(a => (
+                <div key={a.id} className={`border-l-2 rounded-lg px-3 py-3 mb-2 last:mb-0 ${urgenciaStyles[a.urgencia]}`}>
+                  <p className={`text-xs font-bold uppercase ${urgenciaText[a.urgencia]}`}>{a.urgencia}</p>
+                  <p className="text-sm font-medium text-[#f5f5f5]">{a.titulo}</p>
+                  <p className="text-xs text-[#a0a0a0] mt-0.5 line-clamp-1">{a.descricao}</p>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Banner de boas-vindas */}
