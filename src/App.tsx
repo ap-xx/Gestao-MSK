@@ -6,20 +6,9 @@ import Login from './pages/Login';
 import LicenseGate from './components/LicenseGate';
 
 // ── Bootstrap ─────────────────────────────────────────────────
-// Check for existing user data BEFORE seeding so we can distinguish
-// a returning machine from a brand-new one.
-const _hadData      = !!localStorage.getItem('msk_users');
-// If this machine ever saw the LicenseGate it's NOT a legacy machine —
-// it's a new install where initializeDatabase() seeded msk_users on
-// the first visit, causing a false-positive on every subsequent visit.
-const _gateShown    = !!localStorage.getItem('msk_gate_shown');
-
-// Seed localStorage with initial data if this is a fresh browser
+const _hadData   = !!localStorage.getItem('msk_users');
+const _gateShown = !!localStorage.getItem('msk_gate_shown');
 initializeDatabase();
-
-// Auto-license ONLY machines that had real pre-existing data AND never
-// saw the LicenseGate (i.e. were running before the license system was
-// introduced). New machines will see the gate, which sets msk_gate_shown.
 if (!LicenseDB.get() && _hadData && !_gateShown) {
   LicenseDB.set({
     machineId:   LicenseDB.getMachineId(),
@@ -35,22 +24,33 @@ if (!LicenseDB.get() && _hadData && !_gateShown) {
 import Layout, { type PageKey } from './components/Layout';
 import { useAutoBackup } from './hooks/useAutoBackup';
 import { useRecorrencia } from './hooks/useRecorrencia';
-import Dashboard     from './pages/Dashboard';
-import Clientes      from './pages/Clientes';
-import Contratos     from './pages/Contratos';
-import Processos     from './pages/Processos';
-import Honorarios    from './pages/Honorarios';
-import Inadimplencia from './pages/Inadimplencia';
-import Avisos        from './pages/Avisos';
-import Agenda        from './pages/Agenda';
-import Configuracoes from './pages/Configuracoes';
-import Relatorios    from './pages/Relatorios';
-import Licencas      from './pages/Licencas';
-import Documentos    from './pages/Documentos';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { canAccessPage } from './utils/permissions';
 
-/** Roda o hook de backup + recorrência apenas quando o usuário está autenticado. */
+// ── Lazy-loaded pages ─────────────────────────────────────────
+// Each page is split into its own chunk → faster initial load
+const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const Clientes      = lazy(() => import('./pages/Clientes'));
+const Contratos     = lazy(() => import('./pages/Contratos'));
+const Processos     = lazy(() => import('./pages/Processos'));
+const Honorarios    = lazy(() => import('./pages/Honorarios'));
+const Inadimplencia = lazy(() => import('./pages/Inadimplencia'));
+const Avisos        = lazy(() => import('./pages/Avisos'));
+const Agenda        = lazy(() => import('./pages/Agenda'));
+const Configuracoes = lazy(() => import('./pages/Configuracoes'));
+const Relatorios    = lazy(() => import('./pages/Relatorios'));
+const Licencas      = lazy(() => import('./pages/Licencas'));
+const Documentos    = lazy(() => import('./pages/Documentos'));
+// ──────────────────────────────────────────────────────────────
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-48">
+      <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function AutoBackupChecker() {
   useAutoBackup();
   useRecorrencia();
@@ -68,14 +68,11 @@ function AppContent() {
     }
   }, [user?.role, currentPage]);
 
-  // License check — shown before login if no valid license in localStorage
   const [licensed, setLicensed] = useState<boolean>(
     () => validateLicenseKey(LicenseDB.get()?.licenseKey ?? '')
   );
 
-  if (!licensed) {
-    return <LicenseGate onActivated={() => setLicensed(true)} />;
-  }
+  if (!licensed) return <LicenseGate onActivated={() => setLicensed(true)} />;
 
   if (loading) {
     return (
@@ -88,9 +85,7 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
+  if (!user) return <Login />;
 
   const pages: Record<PageKey, React.ReactNode> = {
     dashboard:     <Dashboard />,
@@ -110,7 +105,9 @@ function AppContent() {
   return (
     <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
       <AutoBackupChecker />
-      {pages[currentPage]}
+      <Suspense fallback={<PageLoader />}>
+        {pages[currentPage]}
+      </Suspense>
     </Layout>
   );
 }

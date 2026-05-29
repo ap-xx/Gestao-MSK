@@ -345,6 +345,14 @@ export default function Contratos() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Atalho de teclado: N → Novo Contrato
+  useEffect(() => {
+    if (isReadOnly) return;
+    function handle() { setEditContrato(undefined); setModalOpen(true); }
+    window.addEventListener('msk:shortcut:novo', handle);
+    return () => window.removeEventListener('msk:shortcut:novo', handle);
+  }, [isReadOnly]);
+
   const filtered = useMemo(() => {
     return contratos.filter(c => {
       const q = search.toLowerCase();

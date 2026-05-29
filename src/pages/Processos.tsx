@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, Gavel, Search, Edit2, Trash2, Eye,
   Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
-  Paperclip, FileText, Download, Upload,
+  Paperclip, FileText, Download, Upload, Layers, GripVertical,
 } from 'lucide-react';
 import { processosApi, clientesApi, documentosApi, escritorioApi } from '../services/api';
 import type { Documento, CategoriaDocumento } from '../services/api';
@@ -11,6 +11,8 @@ import type { TipoModelo, ModeloDados } from '../components/modelos/ModeloDocume
 import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
+import { adicionarDiasUteis } from '../utils/prazos';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -46,9 +48,14 @@ function AndamentosSection({ processoId, andamentos, onAdded }: {
   onAdded: () => void;
 }) {
   const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const { showToast } = useToast();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ tipo: 'petição' as Andamento['tipo'], descricao: '', data: new Date().toISOString().split('T')[0] });
+  const [prazoCalc, setPrazoCalc] = useState(false);
+  const [prazoBase, setPrazoBase] = useState(new Date().toISOString().split('T')[0]);
+  const [prazoDias, setPrazoDias] = useState(15);
+  const prazoResultado = prazoCalc ? adicionarDiasUteis(prazoBase, prazoDias) : null;
 
   async function handleAdd() {
     if (!form.descricao.trim()) { showToast('warning', 'Informe a descrição'); return; }
@@ -72,13 +79,69 @@ function AndamentosSection({ processoId, andamentos, onAdded }: {
     <div className="border-t border-[#2a2a2a] pt-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-[#505050] font-medium uppercase tracking-wider">Andamentos ({andamentos.length})</p>
-        <button
-          onClick={() => setAdding(a => !a)}
-          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
-        >
-          <Plus className="w-3 h-3" /> Adicionar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPrazoCalc(v => !v)}
+            className={`text-xs flex items-center gap-1 transition-colors ${prazoCalc ? 'text-amber-400' : 'text-[#505050] hover:text-amber-400'}`}
+            title="Calculadora de prazo em dias úteis"
+          >
+            <Calendar className="w-3 h-3" /> Prazo
+          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => setAdding(a => !a)}
+              className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Adicionar
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Calculadora de prazo */}
+      {prazoCalc && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 mb-3">
+          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+            <Clock className="w-3 h-3" /> Calculadora de Dias Úteis
+          </p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="text-[10px] text-[#505050] block mb-1">Data base</label>
+              <DateInput
+                className="bg-[#1e1e1e] border border-[#2a2a2a] rounded px-2 py-1 text-xs text-[#f5f5f5] [color-scheme:dark]"
+                value={prazoBase}
+                onChange={e => setPrazoBase(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[#505050] block mb-1">Dias úteis</label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={prazoDias}
+                onChange={e => setPrazoDias(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-20 bg-[#1e1e1e] border border-[#2a2a2a] rounded px-2 py-1 text-xs text-[#f5f5f5]"
+              />
+            </div>
+            {prazoResultado && (
+              <div className="flex items-center gap-1.5 pb-1">
+                <ChevronRight className="w-3 h-3 text-[#505050]" />
+                <span className="text-sm font-bold text-amber-400">
+                  {new Date(prazoResultado + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+                <button
+                  onClick={() => { setForm(f => ({ ...f, data: prazoResultado })); setAdding(true); }}
+                  className="text-[10px] text-amber-500 hover:text-amber-300 underline ml-1"
+                  title="Usar esta data no novo andamento"
+                >
+                  usar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {adding && (
         <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg p-3 mb-3 space-y-2">
@@ -145,6 +208,8 @@ const CATEGORIAS: Array<{ value: CategoriaDocumento; label: string; color: strin
 // ─── Documentos section ───────────────────────────────────────
 function DocumentosSection({ processoId }: { processoId: string }) {
   const { showToast } = useToast();
+  const { user: docUser } = useAuth();
+  const isReadOnly = docUser?.role === 'assistente';
   const [docs, setDocs] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -222,18 +287,22 @@ function DocumentosSection({ processoId }: { processoId: string }) {
           <Paperclip className="w-3 h-3" /> Documentos ({docs.length})
         </p>
         <div className="flex items-center gap-2">
-          <select
-            value={novaCategoria}
-            onChange={e => setNovaCategoria(e.target.value as CategoriaDocumento)}
-            className="bg-[#1e1e1e] border border-[#2a2a2a] rounded text-[10px] text-[#a0a0a0] px-2 py-1"
-          >
-            {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
-          <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
-            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-            Anexar
-            <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
-          </label>
+          {!isReadOnly && (
+            <>
+              <select
+                value={novaCategoria}
+                onChange={e => setNovaCategoria(e.target.value as CategoriaDocumento)}
+                className="bg-[#1e1e1e] border border-[#2a2a2a] rounded text-[10px] text-[#a0a0a0] px-2 py-1"
+              >
+                {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+              <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
+                {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                Anexar
+                <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
+              </label>
+            </>
+          )}
         </div>
       </div>
 
@@ -270,9 +339,11 @@ function DocumentosSection({ processoId }: { processoId: string }) {
                 <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors" title="Baixar">
                   <Download className="w-3 h-3" />
                 </button>
-                <button onClick={() => handleRemove(doc.id)} className="p-1 text-[#505050] hover:text-red-400 transition-colors" title="Remover">
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                {!isReadOnly && (
+                  <button onClick={() => handleRemove(doc.id)} className="p-1 text-[#505050] hover:text-red-400 transition-colors" title="Remover">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -733,6 +804,10 @@ export default function Processos() {
   const [deleting,    setDeleting]    = useState(false);
   const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
   const [quickStatusPos, setQuickStatusPos] = useState<{ x: number; y: number; above: boolean } | null>(null);
+  const [viewMode, setViewMode] = useState<'tabela' | 'kanban'>(
+    () => (localStorage.getItem('msk_proc_view') as 'tabela' | 'kanban') || 'tabela'
+  );
+  const [dragFase, setDragFase] = useState<string | null>(null); // fase being dragged over
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -748,6 +823,14 @@ export default function Processos() {
   }, [showToast]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Atalho de teclado: N → Novo Processo
+  useEffect(() => {
+    if (isReadOnly) return;
+    function handle() { setEditProcesso(undefined); setModalOpen(true); }
+    window.addEventListener('msk:shortcut:novo', handle);
+    return () => window.removeEventListener('msk:shortcut:novo', handle);
+  }, [isReadOnly]);
 
   const handleRefreshProcesso = useCallback((id: string) => {
     processosApi.getById(id).then(updated => {
@@ -835,6 +918,28 @@ export default function Processos() {
     setQuickStatusId(p.id);
   }
 
+  // ─── Kanban handlers ─────────────────────────────────────────
+  function handleDragStart(e: React.DragEvent, processoId: string) {
+    e.dataTransfer.setData('processoId', processoId);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  async function handleKanbanDrop(e: React.DragEvent, novaFase: FaseProcessual) {
+    e.preventDefault();
+    setDragFase(null);
+    const id = e.dataTransfer.getData('processoId');
+    if (!id) return;
+    const proc = processos.find(p => p.id === id);
+    if (!proc || proc.fase === novaFase) return;
+    try {
+      await processosApi.update(id, { fase: novaFase });
+      setProcessos(prev => prev.map(p => p.id === id ? { ...p, fase: novaFase } : p));
+      showToast('success', 'Fase atualizada!', `${proc.numeroCNJ} → ${novaFase}`);
+    } catch (err: any) {
+      showToast('error', 'Erro ao mover processo', err.message);
+    }
+  }
+
   return (
     <div className="space-y-5 animate-fade-in-up">
       {/* Header */}
@@ -843,15 +948,52 @@ export default function Processos() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Processos</h1>
           <p className="text-[#a0a0a0] text-sm">{filtered.length} processos encontrados</p>
         </div>
-        {!isReadOnly && (
+        <div className="ml-auto flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex gap-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-0.5">
+            <button
+              onClick={() => { setViewMode('tabela'); localStorage.setItem('msk_proc_view', 'tabela'); }}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === 'tabela' ? 'bg-amber-500 text-white shadow-sm' : 'text-[#505050] hover:text-[#a0a0a0]'}`}
+              title="Visualização em tabela"
+            >
+              <RefreshCw className="w-3 h-3" style={{ transform: 'none' }} />
+              Tabela
+            </button>
+            <button
+              onClick={() => { setViewMode('kanban'); localStorage.setItem('msk_proc_view', 'kanban'); }}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === 'kanban' ? 'bg-amber-500 text-white shadow-sm' : 'text-[#505050] hover:text-[#a0a0a0]'}`}
+              title="Visualização Kanban por fase"
+            >
+              <Layers className="w-3 h-3" />
+              Kanban
+            </button>
+          </div>
+          {/* Export CSV */}
           <button
-            onClick={() => { setEditProcesso(undefined); setModalOpen(true); }}
-            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            onClick={() => downloadCsv(
+              `processos_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Nº CNJ', 'Cliente', 'Área', 'Vara', 'Fase', 'Status', 'Polo', 'Distribuição', 'Próx. Audiência'],
+              sorted.map(p => [
+                p.numeroCNJ, p.clienteNome, p.areaAtuacao, p.vara, p.fase, p.status,
+                p.polo || '', fmtCsvDate(p.criadoEm), fmtCsvDate(p.proximaAudiencia),
+              ]),
+            )}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar lista filtrada para CSV"
           >
-            <Plus className="w-4 h-4" />
-            Novo Processo
+            <FileText className="w-4 h-4" />
+            CSV
           </button>
-        )}
+          {!isReadOnly && (
+            <button
+              onClick={() => { setEditProcesso(undefined); setModalOpen(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Processo
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -875,8 +1017,8 @@ export default function Processos() {
         </select>
       </div>
 
-      {/* Tabela */}
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
+      {/* ── Tabela ──────────────────────────────────────────── */}
+      {viewMode === 'tabela' && <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -973,7 +1115,67 @@ export default function Processos() {
           </table>
         </div>
         <Pagination {...pagination} />
-      </div>
+      </div>}
+
+      {/* ── Kanban ──────────────────────────────────────────── */}
+      {viewMode === 'kanban' && (
+        <div className="overflow-x-auto pb-3">
+          <div className="flex gap-3 min-w-max">
+            {FASES.map(fase => {
+              const cards = filtered.filter(p => p.fase === fase);
+              const isOver = dragFase === fase;
+              return (
+                <div
+                  key={fase}
+                  className={`flex flex-col w-56 rounded-xl border transition-all ${
+                    isOver
+                      ? 'border-amber-500/50 bg-amber-500/5'
+                      : 'border-[#2a2a2a] bg-[#141414]'
+                  }`}
+                  onDragOver={e => { e.preventDefault(); setDragFase(fase); }}
+                  onDragLeave={() => setDragFase(null)}
+                  onDrop={e => handleKanbanDrop(e, fase)}
+                >
+                  {/* Column header */}
+                  <div className="px-3 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between shrink-0">
+                    <span className={`text-xs font-semibold ${FASE_COLORS[fase]?.split(' ')[0] || 'text-[#a0a0a0]'}`}>{fase}</span>
+                    <span className="text-[10px] bg-[#1e1e1e] text-[#505050] px-1.5 py-0.5 rounded-full font-medium">{cards.length}</span>
+                  </div>
+                  {/* Cards */}
+                  <div className="flex flex-col gap-2 p-2 min-h-[120px]">
+                    {cards.map(p => (
+                      <div
+                        key={p.id}
+                        draggable={!isReadOnly}
+                        onDragStart={e => handleDragStart(e, p.id)}
+                        onClick={() => setViewProcesso(p)}
+                        className={`bg-[#1e1e1e] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg p-2.5 cursor-pointer transition-all group ${!isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      >
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <span className="text-[10px] font-mono text-amber-400 truncate leading-relaxed">{p.numeroCNJ}</span>
+                          {!isReadOnly && <GripVertical className="w-3 h-3 text-[#404040] group-hover:text-[#606060] shrink-0 mt-0.5" />}
+                        </div>
+                        <p className="text-xs font-medium text-[#f5f5f5] truncate mb-1">{p.clienteNome}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-[#505050]">{p.areaAtuacao}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${STATUS_PROC_COLORS[p.status] ?? ''}`}>
+                            {p.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {cards.length === 0 && (
+                      <div className="flex items-center justify-center flex-1 py-4">
+                        <span className="text-[11px] text-[#303030]">Vazio</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmOpen}

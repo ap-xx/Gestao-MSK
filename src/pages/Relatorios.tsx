@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   BarChart2, TrendingUp, TrendingDown, Users, Gavel, FileText,
-  DollarSign, Calendar, AlertTriangle, Download, Printer, RefreshCw,
-  CheckCircle, Clock, Star,
+  Calendar, AlertTriangle, Printer, RefreshCw,
+  CheckCircle, Star,
 } from 'lucide-react';
 import { clientesApi, processosApi, lancamentosApi, contratosApi, escritorioApi } from '../services/api';
 import { useToast } from '../context/ToastContext';

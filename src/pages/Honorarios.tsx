@@ -3,7 +3,7 @@ import {
   Plus, X, DollarSign, CheckCircle, Clock, TrendingDown,
   Search, Edit2, Trash2, Receipt, CreditCard, Printer,
   Percent, Tag, ChevronDown, ChevronUp, TrendingUp, Layers,
-  RefreshCw, FileText,
+  RefreshCw, FileText, Download,
 } from 'lucide-react';
 import { lancamentosApi, clientesApi, escritorioApi } from '../services/api';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import { printRecibo } from '../utils/printRecibo';
 import { printHonorarios } from '../utils/printRelatorio';
+import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -681,6 +682,22 @@ export default function Honorarios() {
           <p className="text-[#a0a0a0] text-sm">Controle financeiro</p>
         </div>
         <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => downloadCsv(
+              `honorarios_${tab}_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Cliente', 'Tipo', 'Descrição', 'Valor', 'Vencimento', 'Pagamento', 'Status', 'Forma Pagamento'],
+              sorted.map(l => [
+                l.clienteNome || '', l.tipo, l.descricao, fmtCsvCurrency(l.valor),
+                fmtCsvDate(l.dataVencimento), fmtCsvDate(l.dataPagamento),
+                l.status, l.formaPagamento || '',
+              ]),
+            )}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para CSV"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
           <button
             onClick={() => printHonorarios({
               items: sorted,

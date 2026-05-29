@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, X, Users, FileText, Gavel, Loader2, ArrowRight, Building2, Star } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Search, X, FileText, Gavel, Loader2, ArrowRight, Building2, Star } from 'lucide-react';
 import type { PageKey } from './Layout';
 import { clientesApi, contratosApi, processosApi } from '../services/api';
 import type { Cliente, Contrato, Processo } from '../types';

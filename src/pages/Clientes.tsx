@@ -9,6 +9,7 @@ import type { Documento } from '../services/api';
 import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTelefone, validarCNPJ, validarCPF } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -59,6 +60,8 @@ function StarRating({ value, onChange, readOnly }: { value: number; onChange?: (
 // ─── Documentos do Cliente ─────────────────────────────────────
 function ClienteDocumentosSection({ clienteId }: { clienteId: string }) {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'assistente';
   const [docs, setDocs] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -111,11 +114,13 @@ function ClienteDocumentosSection({ clienteId }: { clienteId: string }) {
         <p className="text-xs text-[#505050] font-medium uppercase tracking-wider flex items-center gap-1.5">
           <Paperclip className="w-3 h-3" /> Documentos ({docs.length})
         </p>
-        <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
-          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-          Anexar
-          <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
-        </label>
+        {!isReadOnly && (
+          <label className={`text-xs flex items-center gap-1 cursor-pointer transition-colors ${uploading ? 'text-amber-500' : 'text-amber-400 hover:text-amber-300'}`}>
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            Anexar
+            <input type="file" className="sr-only" onChange={handleUpload} disabled={uploading} />
+          </label>
+        )}
       </div>
       {loading ? (
         <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
@@ -129,7 +134,7 @@ function ClienteDocumentosSection({ clienteId }: { clienteId: string }) {
               <span className="text-[#a0a0a0] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
               <span className="text-[#505050] shrink-0">{fmtSize(doc.tamanho)}</span>
               <button onClick={() => handleDownload(doc)} className="p-1 text-[#505050] hover:text-blue-400 transition-colors"><Download className="w-3 h-3" /></button>
-              <button onClick={async () => { await documentosApi.remove(doc.id); carregar(); }} className="p-1 text-[#505050] hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+              {!isReadOnly && <button onClick={async () => { await documentosApi.remove(doc.id); carregar(); }} className="p-1 text-[#505050] hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>}
             </div>
           ))}
         </div>
@@ -648,6 +653,14 @@ export default function Clientes() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Atalho de teclado: N → Novo Cliente
+  useEffect(() => {
+    if (isReadOnly) return;
+    function handle() { setEditCliente(undefined); setModalOpen(true); }
+    window.addEventListener('msk:shortcut:novo', handle);
+    return () => window.removeEventListener('msk:shortcut:novo', handle);
+  }, [isReadOnly]);
+
   const filtered = useMemo(() => {
     return clientes.filter(c => {
       const q = search.toLowerCase();
@@ -722,15 +735,33 @@ export default function Clientes() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Clientes</h1>
           <p className="text-[#a0a0a0] text-sm">{filtered.length} clientes encontrados</p>
         </div>
-        {!isReadOnly && (
+        <div className={`${isReadOnly ? 'ml-auto' : ''} flex items-center gap-2`}>
           <button
-            onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
-            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            onClick={() => downloadCsv(
+              `clientes_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Nome', 'Tipo', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Status', 'Cadastro'],
+              sorted.map(c => [
+                c.nome, c.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica',
+                c.cpf || c.cnpj || '', c.email, c.telefone || '', c.status,
+                fmtCsvDate(c.criadoEm as string | undefined),
+              ]),
+            )}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar lista filtrada para CSV"
           >
-            <Plus className="w-4 h-4" />
-            Novo Cliente
+            <FileText className="w-4 h-4" />
+            Exportar CSV
           </button>
-        )}
+          {!isReadOnly && (
+            <button
+              onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Cliente
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}

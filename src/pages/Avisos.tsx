@@ -148,6 +148,14 @@ export default function Avisos() {
     reload();
   }, [reload]);
 
+  // Atalho de teclado: N → Novo Aviso
+  useEffect(() => {
+    if (isReadOnly) return;
+    function handle() { setModalOpen(true); }
+    window.addEventListener('msk:shortcut:novo', handle);
+    return () => window.removeEventListener('msk:shortcut:novo', handle);
+  }, [isReadOnly]);
+
   // Silently generate automatic notices on mount
   useEffect(() => {
     avisosApi.gerar().then(({ criados }) => {
@@ -226,7 +234,7 @@ export default function Avisos() {
           <p className="text-[#a0a0a0] text-sm">{naoLidos} não lido(s) · {avisos.length} total</p>
         </div>
         <div className="ml-auto flex gap-2">
-          {naoLidos > 0 && (
+          {naoLidos > 0 && !isReadOnly && (
             <button
               onClick={marcarTodosLidos}
               className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#a0a0a0] hover:text-amber-400 rounded-lg text-sm font-medium transition-all"
@@ -329,7 +337,7 @@ export default function Avisos() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {!aviso.lido && (
+                    {!aviso.lido && !isReadOnly && (
                       <button
                         onClick={() => marcarLido(aviso.id)}
                         className="p-1.5 text-[#505050] hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"

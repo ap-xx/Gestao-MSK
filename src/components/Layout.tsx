@@ -95,12 +95,21 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
     mainRef.current?.scrollTo({ top: 0 });
   }, [currentPage]);
 
-  // Ctrl+K / Cmd+K → abre busca global
+  // Ctrl+K / Cmd+K → busca global
+  // N (sem modificador, fora de inputs) → novo item na página atual
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setSearchOpen(o => !o);
+        return;
+      }
+      // 'N' shortcut — ignored when typing inside inputs/textareas/selects
+      const tag = (e.target as HTMLElement).tagName;
+      const isEditing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement).isContentEditable;
+      if (!isEditing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'n') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('msk:shortcut:novo'));
       }
     }
     window.addEventListener('keydown', onKey);
@@ -375,10 +384,17 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex-1">
+          <div className="flex-1 flex items-center gap-2">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">
               {NAV_ITEMS.find(n => n.key === currentPage)?.label}
             </h2>
+            {/* Keyboard shortcut hint */}
+            {['clientes','processos','contratos','avisos'].includes(currentPage) && user?.role !== 'assistente' && (
+              <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-[#303030]">
+                <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px] font-mono">N</kbd>
+                <span>novo</span>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

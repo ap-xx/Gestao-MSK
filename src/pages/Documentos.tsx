@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   FileText, X, Plus, Download, ExternalLink, Copy,
-  CheckCircle, Clock, AlertTriangle, RefreshCw,
+  CheckCircle, AlertTriangle, RefreshCw,
   Printer, Settings, Eye, EyeOff, Loader2, Receipt,
   CreditCard, Building2, Search,
 } from 'lucide-react';
@@ -1092,7 +1092,7 @@ function NovoBoletoModal({ provider, asaasConfig, clientes, onClose, onSaved, sh
 // ══════════════════════════════════════════════════════════════
 // Modal: Nova Nota Fiscal (NFS-e via NFe.io)
 // ══════════════════════════════════════════════════════════════
-function NovaNotaModal({ config, clientes, escritorio, onClose, onSaved, showToast }: {
+function NovaNotaModal({ config, clientes, escritorio: _escritorio, onClose, onSaved, showToast }: {
   config: NfeioConfig;
   clientes: Cliente[];
   escritorio: Escritorio | null;
