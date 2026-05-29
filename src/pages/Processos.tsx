@@ -13,6 +13,9 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
 import { adicionarDiasUteis } from '../utils/prazos';
+import { maskCNJ } from '../utils/masks';
+import { usePersistedFilter } from '../hooks/usePersistedFilter';
+import { useUndoDelete } from '../hooks/useUndoDelete';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -174,20 +177,47 @@ function AndamentosSection({ processoId, andamentos, onAdded }: {
         </div>
       )}
 
-      <div className="space-y-2 max-h-48 overflow-y-auto">
+      {/* Timeline */}
+      <div className="max-h-56 overflow-y-auto pr-1">
         {andamentos.length === 0 ? (
           <p className="text-xs text-[#505050] text-center py-4">Nenhum andamento registrado</p>
         ) : (
-          [...andamentos].reverse().map(a => (
-            <div key={a.id} className="bg-[#1e1e1e] rounded-lg px-3 py-2 text-xs">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-amber-400 font-medium">{new Date(a.data).toLocaleDateString('pt-BR')}</span>
-                <span className="text-[#505050] bg-[#252525] px-1.5 py-0.5 rounded">{a.tipo}</span>
-                <span className="text-[#505050] ml-auto">{a.usuarioNome}</span>
-              </div>
-              <p className="text-[#a0a0a0] leading-relaxed">{a.descricao}</p>
+          <div className="relative">
+            {/* Vertical line */}
+            <div className="absolute left-[7px] top-2 bottom-2 w-px bg-[#2a2a2a]" />
+            <div className="space-y-3">
+              {[...andamentos].reverse().map((a, i) => {
+                const TIPO_COLORS: Record<string, string> = {
+                  petição:   'bg-purple-500 shadow-purple-500/30',
+                  decisão:   'bg-red-500 shadow-red-500/30',
+                  despacho:  'bg-amber-500 shadow-amber-500/30',
+                  certidão:  'bg-green-500 shadow-green-500/30',
+                  audiência: 'bg-blue-500 shadow-blue-500/30',
+                  recurso:   'bg-orange-500 shadow-orange-500/30',
+                  outro:     'bg-[#505050] shadow-none',
+                };
+                const dot = TIPO_COLORS[a.tipo] ?? TIPO_COLORS.outro;
+                return (
+                  <div key={a.id} className={`flex gap-3 ${i === 0 ? '' : ''}`}>
+                    {/* Dot */}
+                    <div className={`w-3.5 h-3.5 rounded-full shrink-0 mt-1 shadow-lg ${dot}`} />
+                    <div className="flex-1 pb-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-[10px] font-semibold text-amber-400">
+                          {new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                        <span className="text-[10px] text-[#505050] bg-[#1a1a1a] border border-[#2a2a2a] px-1.5 py-0.5 rounded-full capitalize">
+                          {a.tipo}
+                        </span>
+                        <span className="text-[10px] text-[#404040] ml-auto">{a.usuarioNome}</span>
+                      </div>
+                      <p className="text-xs text-[#a0a0a0] leading-relaxed">{a.descricao}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))
+          </div>
         )}
       </div>
     </div>
@@ -490,7 +520,14 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
           <div>
             <label className={labelClass}>Número CNJ *</label>
             <div className="flex gap-2">
-              <input className={inputClass} value={form.numeroCNJ} onChange={e => set('numeroCNJ', e.target.value)} required placeholder="0000000-00.0000.0.00.0000" />
+              <input
+                className={inputClass}
+                value={form.numeroCNJ}
+                onChange={e => set('numeroCNJ', maskCNJ(e.target.value))}
+                required
+                placeholder="0000000-00.0000.0.00.0000"
+                maxLength={25}
+              />
               <select className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm min-w-28" value={form.tribunalAlias} onChange={e => set('tribunalAlias', e.target.value)}>
                 {tribunaisLista.map(([alias]) => <option key={alias} value={alias}>{alias.toUpperCase()}</option>)}
               </select>
@@ -793,9 +830,11 @@ export default function Processos() {
   const [processos, setProcessos] = useState<Processo[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterFase, setFilterFase] = useState('todos');
-  const [filterArea, setFilterArea] = useState('todos');
+  const [search,     setSearch]     = usePersistedFilter('proc_search', '');
+  const [filterFase, setFilterFase] = usePersistedFilter('proc_fase', 'todos');
+  const [filterArea, setFilterArea] = usePersistedFilter('proc_area', 'todos');
+  const [pageSize,   setPageSize]   = usePersistedFilter<number>('proc_pagesize', 15);
+  const undoDelete = useUndoDelete<Processo>('Processo');
   const [modalOpen, setModalOpen] = useState(false);
   const [editProcesso, setEditProcesso] = useState<Processo | undefined>();
   const [viewProcesso, setViewProcesso] = useState<Processo | null>(null);
@@ -851,11 +890,15 @@ export default function Processos() {
   }, [processos, search, filterFase, filterArea]);
 
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
-  const pagination = usePagination(sorted, 15);
+  const pagination = usePagination(sorted, pageSize);
 
   function handleDelete(p: Processo) {
-    setToDelete(p);
-    setConfirmOpen(true);
+    undoDelete(
+      p,
+      item => setProcessos(prev => prev.filter(x => x.id !== item.id)),
+      item => setProcessos(prev => [...prev, item]),
+      item => processosApi.remove(item.id).then(() => {}),
+    );
   }
 
   async function doDelete() {
@@ -1015,6 +1058,13 @@ export default function Processos() {
           <option value="todos">Todas as áreas</option>
           {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
+        {viewMode === 'tabela' && (
+          <select className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} title="Itens por página">
+            <option value={15}>15 / pág</option>
+            <option value={30}>30 / pág</option>
+            <option value={50}>50 / pág</option>
+          </select>
+        )}
       </div>
 
       {/* ── Tabela ──────────────────────────────────────────── */}

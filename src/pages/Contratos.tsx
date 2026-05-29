@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, FileText, Search, Edit2, Trash2, DollarSign,
-  TrendingUp, Building2, User, Eye,
+  TrendingUp, Building2, User, Eye, Download,
 } from 'lucide-react';
 import { contratosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
+import { usePersistedFilter } from '../hooks/usePersistedFilter';
+import { useUndoDelete } from '../hooks/useUndoDelete';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
@@ -320,15 +323,17 @@ export default function Contratos() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterTipo, setFilterTipo] = useState('todos');
-  const [filterStatus, setFilterStatus] = useState('todos');
+  const [search,       setSearch]      = usePersistedFilter('cont_search', '');
+  const [filterTipo,   setFilterTipo]  = usePersistedFilter('cont_tipo', 'todos');
+  const [filterStatus, setFilterStatus]= usePersistedFilter('cont_status', 'todos');
+  const [pageSize,     setPageSize]    = usePersistedFilter<number>('cont_pagesize', 15);
   const [modalOpen, setModalOpen] = useState(false);
   const [editContrato, setEditContrato] = useState<Contrato | undefined>();
   const [viewContrato, setViewContrato] = useState<Contrato | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toDelete,    setToDelete]    = useState<Contrato | null>(null);
   const [deleting,    setDeleting]    = useState(false);
+  const undoDelete = useUndoDelete<Contrato>('Contrato');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -364,7 +369,7 @@ export default function Contratos() {
   }, [contratos, search, filterTipo, filterStatus]);
 
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
-  const pagination = usePagination(sorted, 15);
+  const pagination = usePagination(sorted, pageSize);
 
   function handleDelete(c: Contrato) {
     setToDelete(c);
@@ -404,15 +409,32 @@ export default function Contratos() {
           <h1 className="font-playfair text-2xl font-bold text-[#f5f5f5]">Contratos</h1>
           <p className="text-[#a0a0a0] text-sm">{stats.ativos} ativos · Receita mensal: {formatCurrency(stats.valorMensalTotal)}</p>
         </div>
-        {!isReadOnly && (
+        <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => { setEditContrato(undefined); setModalOpen(true); }}
-            className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            onClick={() => downloadCsv(
+              `contratos_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Cliente', 'Tipo', 'Área', 'Descrição', 'Status', 'Início', 'Encerramento', 'Valor Mensal'],
+              sorted.map(c => [
+                c.clienteNome, c.tipo, c.areaAtuacao, c.descricao, c.status,
+                fmtCsvDate(c.dataInicio), fmtCsvDate(c.dataFim), fmtCsvCurrency(c.valorMensal),
+              ]),
+            )}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para CSV"
           >
-            <Plus className="w-4 h-4" />
-            Novo Contrato
+            <FileText className="w-4 h-4" />
+            CSV
           </button>
-        )}
+          {!isReadOnly && (
+            <button
+              onClick={() => { setEditContrato(undefined); setModalOpen(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Contrato
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -436,6 +458,11 @@ export default function Contratos() {
           <option value="negociando">Negociando</option>
           <option value="suspenso">Suspenso</option>
           <option value="encerrado">Encerrado</option>
+        </select>
+        <select className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} title="Itens por página">
+          <option value={15}>15 / pág</option>
+          <option value={30}>30 / pág</option>
+          <option value={50}>50 / pág</option>
         </select>
       </div>
 

@@ -7,6 +7,7 @@ import {
 import { lancamentosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
+import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import type { Cliente, Lancamento } from '../types';
 import Portal from '../components/ui/Portal';
@@ -197,8 +198,8 @@ export default function Inadimplencia() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>('diasMaxAtraso');
-  const [busca, setBusca] = useState('');
+  const [sortKey, setSortKey] = usePersistedFilter<SortKey>('inad_sort', 'diasMaxAtraso');
+  const [busca, setBusca]     = usePersistedFilter('inad_busca', '');
 
   const reload = useCallback(async () => {
     setLoading(true);

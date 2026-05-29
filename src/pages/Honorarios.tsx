@@ -12,6 +12,7 @@ import { formatCurrency } from '../utils/cn';
 import { printRecibo } from '../utils/printRecibo';
 import { printHonorarios } from '../utils/printRelatorio';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
+import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -546,8 +547,9 @@ export default function Honorarios() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TipoLancamento>('recebimento');
-  const [search, setSearch] = useState('');
+  const [tab,      setTab]     = usePersistedFilter<TipoLancamento>('hon_tab', 'recebimento');
+  const [search,   setSearch]  = usePersistedFilter('hon_search', '');
+  const [pageSize, setPageSize]= usePersistedFilter<number>('hon_pagesize', 15);
   const [modalOpen, setModalOpen] = useState(false);
   const [editLancamento, setEditLancamento] = useState<Lancamento | undefined>();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -585,7 +587,7 @@ export default function Honorarios() {
   }, [lancamentos, tab, search]);
 
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'dataVencimento', 'desc');
-  const pagination = usePagination(sorted, 15);
+  const pagination = usePagination(sorted, pageSize);
 
   const stats = useMemo(() => {
     const recebido = lancamentos
@@ -772,15 +774,22 @@ export default function Honorarios() {
         ))}
       </div>
 
-      {/* Busca */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#505050]" />
-        <input
-          className="w-full bg-[#141414] border border-[#2a2a2a] rounded-lg pl-9 pr-4 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050]"
-          placeholder="Buscar lançamentos..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      {/* Busca + page size */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#505050]" />
+          <input
+            className="w-full bg-[#141414] border border-[#2a2a2a] rounded-lg pl-9 pr-4 py-2.5 text-[#f5f5f5] text-sm placeholder-[#505050]"
+            placeholder="Buscar lançamentos..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} title="Itens por página">
+          <option value={15}>15 / pág</option>
+          <option value={30}>30 / pág</option>
+          <option value={50}>50 / pág</option>
+        </select>
       </div>
 
       {/* Tabela */}

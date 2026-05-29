@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, Search, X, Building2, User, Users, Loader2,
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
-  Star, Paperclip, FileText, Download, Upload, Gavel,
+  Star, Paperclip, FileText, Download, Upload, Gavel, CheckSquare, Square,
 } from 'lucide-react';
 import { clientesApi, processosApi, documentosApi } from '../services/api';
 import type { Documento } from '../services/api';
@@ -10,6 +10,9 @@ import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTe
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
+import { usePersistedFilter } from '../hooks/usePersistedFilter';
+import { useUndoDelete } from '../hooks/useUndoDelete';
+import ImportCsvModal from '../components/ImportCsvModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -219,6 +222,7 @@ interface ModalProps {
 function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!cliente;
+  const [dupWarning, setDupWarning] = useState<string | null>(null);
 
   const [tipoPessoa, setTipoPessoa] = useState<TipoPessoa>(cliente?.tipoPessoa || 'PF');
   const [form, setForm] = useState({
@@ -320,6 +324,18 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
     }
   }
 
+  async function checkDuplicate(doc: string) {
+    if (!doc || isEdit) return;
+    const digits = doc.replace(/\D/g, '');
+    if (digits.length < 11) return;
+    const all = await clientesApi.getAll();
+    const dup = all.find(c => {
+      const cd = (c.cpf || c.cnpj || '').replace(/\D/g, '');
+      return cd === digits;
+    });
+    setDupWarning(dup ? `⚠️ Já existe um cliente com este documento: "${dup.nome}"` : null);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const now = new Date().toISOString();
@@ -406,7 +422,9 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                     if (val.length <= 14) val = formatCNPJ(val);
                     set('cnpj', val);
                     setCnpjStatus('idle');
+                    setDupWarning(null);
                   }}
+                  onBlur={e => checkDuplicate(e.target.value)}
                   placeholder="00.000.000/0000-00"
                   maxLength={18}
                 />
@@ -430,6 +448,11 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                   <AlertCircle className="w-3 h-3" /> Não foi possível buscar o CNPJ
                 </p>
               )}
+              {dupWarning && (
+                <p className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" /> {dupWarning}
+                </p>
+              )}
             </div>
           ) : (
             <div>
@@ -442,9 +465,15 @@ function ClienteModal({ cliente, onClose, onSave }: ModalProps) {
                   if (val.length <= 11) val = formatCPF(val);
                   set('cpf', val);
                 }}
+                onBlur={e => checkDuplicate(e.target.value)}
                 placeholder="000.000.000-00"
                 maxLength={14}
               />
+              {dupWarning && (
+                <p className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" /> {dupWarning}
+                </p>
+              )}
               {form.cpf.replace(/\D/g, '').length === 11 && (
                 validarCPF(form.cpf)
                   ? <p className="text-xs text-green-400 flex items-center gap-1 mt-1"><CheckCircle className="w-3 h-3" /> CPF válido</p>
@@ -630,15 +659,19 @@ export default function Clientes() {
   const isReadOnly = user?.role === 'assistente';
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('todos');
-  const [filterTipo, setFilterTipo] = useState<string>('todos');
+  const [search,        setSearch]       = usePersistedFilter('cli_search', '');
+  const [filterStatus,  setFilterStatus] = usePersistedFilter<string>('cli_status', 'todos');
+  const [filterTipo,    setFilterTipo]   = usePersistedFilter<string>('cli_tipo', 'todos');
+  const [pageSize,      setPageSize]     = usePersistedFilter<number>('cli_pagesize', 15);
   const [modalOpen, setModalOpen] = useState(false);
   const [editCliente, setEditCliente] = useState<Cliente | undefined>();
   const [viewCliente, setViewCliente] = useState<Cliente | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete,    setToDelete]    = useState<Cliente | null>(null);
-  const [deleting,    setDeleting]    = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const undoDelete = useUndoDelete<Cliente>('Cliente');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -674,7 +707,80 @@ export default function Clientes() {
   }, [clientes, search, filterStatus, filterTipo]);
 
   const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'nome');
-  const pagination = usePagination(sorted, 15);
+  const pagination = usePagination(sorted, pageSize);
+
+  // ── Bulk delete ──────────────────────────────────────────────
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map(id => clientesApi.remove(id)));
+      await reload();
+      setSelectedIds(new Set());
+      showToast('success', `${selectedIds.size} cliente(s) excluído(s)`);
+    } catch {
+      showToast('error', 'Erro ao excluir selecionados');
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === pagination.items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pagination.items.map(c => c.id)));
+    }
+  }
+
+  // ── CSV import handler ───────────────────────────────────────
+  async function handleCsvImport(rows: Record<string, string>[]) {
+    const existing = await clientesApi.getAll();
+    const existingDocs = new Set([
+      ...existing.map(c => c.cpf).filter(Boolean),
+      ...existing.map(c => c.cnpj).filter(Boolean),
+    ]);
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+      const nome = row['nome']?.trim();
+      if (!nome) { errors.push(`Linha sem nome: ${JSON.stringify(row)}`); continue; }
+
+      const doc = (row['cpf'] || row['cnpj'] || '').replace(/\D/g, '');
+      if (doc && existingDocs.has(doc)) { skipped++; continue; }
+
+      try {
+        await clientesApi.create({
+          tipoPessoa: (row['tipo']?.toLowerCase().includes('j') ? 'PJ' : 'PF') as TipoPessoa,
+          nome,
+          cpf:      row['cpf']  || undefined,
+          cnpj:     row['cnpj'] || undefined,
+          email:    row['email'] || '',
+          telefone: row['telefone'] || undefined,
+          celular:  row['celular']  || undefined,
+          status:   'ativo' as const,
+          observacoes: row['observacoes'] || undefined,
+          endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+        } as unknown as Omit<Cliente, 'id'>);
+        if (doc) existingDocs.add(doc);
+        imported++;
+      } catch (e: any) {
+        errors.push(`${nome}: ${e.message}`);
+      }
+    }
+    await reload();
+    return { imported, skipped, errors };
+  }
 
   async function handleSave(c: Omit<Cliente, 'id'> | Cliente) {
     try {
@@ -703,24 +809,15 @@ export default function Clientes() {
   }
 
   function handleDelete(c: Cliente) {
-    setToDelete(c);
-    setConfirmOpen(true);
-  }
-
-  async function doDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
-    try {
-      await clientesApi.remove(toDelete.id);
-      await reload();
-      showToast('info', 'Cliente removido', toDelete.nome);
-    } catch (err: any) {
-      showToast('error', 'Erro ao excluir', err.message);
-    } finally {
-      setDeleting(false);
-      setConfirmOpen(false);
-      setToDelete(null);
-    }
+    undoDelete(
+      c,
+      // Remove from UI immediately
+      item => setClientes(prev => prev.filter(x => x.id !== item.id)),
+      // Restore on undo
+      item => setClientes(prev => [...prev, item].sort((a, b) => a.nome.localeCompare(b.nome))),
+      // Confirm delete
+      item => clientesApi.remove(item.id).then(() => {}),
+    );
   }
 
   const SortIcon = ({ col }: { col: keyof Cliente }) => (
@@ -753,13 +850,23 @@ export default function Clientes() {
             Exportar CSV
           </button>
           {!isReadOnly && (
-            <button
-              onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Cliente
-            </button>
+            <>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-blue-500/30 text-[#a0a0a0] hover:text-blue-400 rounded-lg text-sm font-medium transition-all"
+                title="Importar clientes de arquivo CSV"
+              >
+                <Upload className="w-4 h-4" />
+                Importar CSV
+              </button>
+              <button
+                onClick={() => { setEditCliente(undefined); setModalOpen(true); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-amber-500/20"
+              >
+                <Plus className="w-4 h-4" />
+                Novo Cliente
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -801,7 +908,50 @@ export default function Clientes() {
           <option value="PF">Pessoa Física</option>
           <option value="PJ">Pessoa Jurídica</option>
         </select>
+
+        {/* Page size */}
+        <select
+          className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm"
+          value={pageSize}
+          onChange={e => setPageSize(Number(e.target.value))}
+          title="Itens por página"
+        >
+          <option value={15}>15 por página</option>
+          <option value={30}>30 por página</option>
+          <option value={50}>50 por página</option>
+          <option value={100}>100 por página</option>
+        </select>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && !isReadOnly && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+          <span className="text-sm text-amber-400 font-medium">{selectedIds.size} selecionado(s)</span>
+          <button
+            onClick={() => downloadCsv(
+              `clientes_selecionados.csv`,
+              ['Nome', 'Tipo', 'CPF/CNPJ', 'E-mail', 'Status'],
+              sorted.filter(c => selectedIds.has(c.id)).map(c => [
+                c.nome, c.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica',
+                c.cpf || c.cnpj || '', c.email, c.status,
+              ]),
+            )}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-xs font-medium transition-all"
+          >
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> {bulkDeleting ? 'Excluindo…' : 'Excluir'}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-[#505050] hover:text-[#a0a0a0]">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabela */}
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
@@ -809,6 +959,15 @@ export default function Clientes() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
+                {!isReadOnly && (
+                  <th className="px-3 py-3.5 w-10">
+                    <button onClick={toggleSelectAll} className="text-[#505050] hover:text-amber-400 transition-colors">
+                      {selectedIds.size === pagination.items.length && pagination.items.length > 0
+                        ? <CheckSquare className="w-4 h-4 text-amber-400" />
+                        : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
+                )}
                 <th
                   onClick={() => toggle('nome')}
                   className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]"
@@ -845,7 +1004,14 @@ export default function Clientes() {
                 </tr>
               ) : (
                 pagination.items.map(c => (
-                  <tr key={c.id} className="hover:bg-[#1a1a1a] transition-colors">
+                  <tr key={c.id} className={`hover:bg-[#1a1a1a] transition-colors ${selectedIds.has(c.id) ? 'bg-amber-500/5' : ''}`}>
+                    {!isReadOnly && (
+                      <td className="px-3 py-4 w-10">
+                        <button onClick={() => toggleSelect(c.id)} className="text-[#505050] hover:text-amber-400 transition-colors">
+                          {selectedIds.has(c.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${c.tipoPessoa === 'PJ' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
@@ -933,14 +1099,23 @@ export default function Clientes() {
         />
       )}
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Excluir Cliente"
-        message={`Tem certeza que deseja excluir "${toDelete?.nome}"? Esta ação não pode ser desfeita.`}
-        onConfirm={doDelete}
-        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
-        loading={deleting}
-      />
+      {importOpen && (
+        <ImportCsvModal
+          title="Importar Clientes via CSV"
+          fields={[
+            { key: 'nome',       label: 'Nome',           required: true },
+            { key: 'tipo',       label: 'Tipo (PF/PJ)' },
+            { key: 'cpf',        label: 'CPF' },
+            { key: 'cnpj',       label: 'CNPJ' },
+            { key: 'email',      label: 'E-mail' },
+            { key: 'telefone',   label: 'Telefone' },
+            { key: 'celular',    label: 'Celular' },
+            { key: 'observacoes',label: 'Observações' },
+          ]}
+          onImport={handleCsvImport}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
 
       {/* Modal visualização */}
       {viewCliente && (
