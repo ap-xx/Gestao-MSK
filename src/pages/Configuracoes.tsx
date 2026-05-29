@@ -188,6 +188,11 @@ export default function Configuracoes() {
   // ── Auditoria ──
   const [auditorias, setAuditorias] = useState<AuditEntry[]>([]);
   const [loadingAuditoria, setLoadingAuditoria] = useState(false);
+  // Cleanup
+  const [limpezaModo, setLimpezaModo] = useState<'periodo' | 'antes' | 'tudo'>('antes');
+  const [limpezaInicio, setLimpezaInicio] = useState('');
+  const [limpezaFim,    setLimpezaFim]    = useState('');
+  const [limpezaLoading, setLimpezaLoading] = useState(false);
 
   const loadAuditoria = useCallback(async () => {
     setLoadingAuditoria(true);
@@ -1871,7 +1876,52 @@ export default function Configuracoes() {
       )}
 
       {/* ── Tab: Auditoria ──────────────────────────────────── */}
-      {tab === 'auditoria' && (
+      {tab === 'auditoria' && (() => {
+        // Preview: count how many entries would be removed
+        const limpezaPreview = auditorias.filter(e => {
+          const t = e.criadoEm;
+          if (limpezaModo === 'tudo') return true;
+          if (limpezaModo === 'antes') {
+            return limpezaFim ? t <= limpezaFim + 'T23:59:59Z' : false;
+          }
+          // periodo
+          const from = limpezaInicio ? limpezaInicio + 'T00:00:00Z' : undefined;
+          const to   = limpezaFim    ? limpezaFim    + 'T23:59:59Z' : undefined;
+          if (from && t < from) return false;
+          if (to   && t > to  ) return false;
+          return true;
+        }).length;
+
+        async function executarLimpeza() {
+          if (limpezaModo !== 'tudo' && !limpezaFim && !limpezaInicio) {
+            showToast('warning', 'Informe pelo menos uma data de referência');
+            return;
+          }
+          setLimpezaLoading(true);
+          try {
+            let removed = 0;
+            if (limpezaModo === 'tudo') {
+              removed = await auditoriaApi.limparTudo();
+            } else if (limpezaModo === 'antes') {
+              const to = limpezaFim ? limpezaFim + 'T23:59:59.999Z' : undefined;
+              removed = await auditoriaApi.limpar(undefined, to);
+            } else {
+              const from = limpezaInicio ? limpezaInicio + 'T00:00:00.000Z' : undefined;
+              const to   = limpezaFim    ? limpezaFim    + 'T23:59:59.999Z' : undefined;
+              removed = await auditoriaApi.limpar(from, to);
+            }
+            await loadAuditoria();
+            setLimpezaInicio('');
+            setLimpezaFim('');
+            showToast('success', `${removed} registro${removed !== 1 ? 's' : ''} removido${removed !== 1 ? 's' : ''} do log`);
+          } catch {
+            showToast('error', 'Erro ao limpar auditoria');
+          } finally {
+            setLimpezaLoading(false);
+          }
+        }
+
+        return (
         <div className="space-y-5">
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-[#2a2a2a] flex items-center justify-between">
@@ -2007,8 +2057,104 @@ export default function Configuracoes() {
               </div>
             )}
           </div>
+
+          {/* ── Limpeza do Log ── */}
+          {isAdmin && (
+            <div className="bg-[#141414] border border-orange-500/20 rounded-xl p-5">
+              <h3 className="font-semibold text-orange-400 mb-1 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> Limpeza do Log
+              </h3>
+              <p className="text-xs text-[#505050] mb-4 leading-relaxed">
+                Remove entradas do log de auditoria de forma permanente e irreversível.
+                Use para reduzir o tamanho do armazenamento ou apagar dados antigos.
+              </p>
+
+              {/* Modo */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {([
+                  { key: 'antes',   label: 'Anteriores a uma data' },
+                  { key: 'periodo', label: 'Em um período'         },
+                  { key: 'tudo',    label: 'Tudo'                  },
+                ] as const).map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => { setLimpezaModo(m.key); setLimpezaInicio(''); setLimpezaFim(''); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                      limpezaModo === m.key
+                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400'
+                        : 'bg-[#1e1e1e] border-[#2a2a2a] text-[#a0a0a0] hover:text-[#f5f5f5]'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date inputs */}
+              {limpezaModo !== 'tudo' && (
+                <div className="flex flex-wrap gap-3 mb-4 items-center">
+                  {limpezaModo === 'periodo' && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-[#505050]">De</span>
+                      <input
+                        type="date"
+                        value={limpezaInicio}
+                        onChange={e => setLimpezaInicio(e.target.value)}
+                        className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#f5f5f5] text-sm [color-scheme:dark]"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[#505050]">
+                      {limpezaModo === 'antes' ? 'Anteriores a' : 'até'}
+                    </span>
+                    <input
+                      type="date"
+                      value={limpezaFim}
+                      onChange={e => setLimpezaFim(e.target.value)}
+                      className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#f5f5f5] text-sm [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Preview + action */}
+              <div className="flex items-center gap-4">
+                {auditorias.length > 0 && (
+                  <p className="text-xs text-[#505050]">
+                    {limpezaPreview === 0
+                      ? 'Nenhum registro seria removido'
+                      : <span>
+                          Serão removidos{' '}
+                          <strong className="text-orange-400">{limpezaPreview}</strong>
+                          {' '}de {auditorias.length} registro{auditorias.length !== 1 ? 's' : ''}
+                        </span>
+                    }
+                  </p>
+                )}
+                <button
+                  onClick={() => openConfirm(
+                    'Limpar Log de Auditoria',
+                    limpezaModo === 'tudo'
+                      ? `Isso removerá permanentemente todos os ${auditorias.length} registros do log. Não é possível desfazer.`
+                      : `Isso removerá permanentemente ${limpezaPreview} registro${limpezaPreview !== 1 ? 's' : ''} do log. Não é possível desfazer.`,
+                    'Limpar',
+                    executarLimpeza,
+                  )}
+                  disabled={limpezaLoading || limpezaPreview === 0}
+                  className="ml-auto flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {limpezaLoading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Limpando…</>
+                    : <><Trash2 className="w-4 h-4" /> Limpar {limpezaPreview > 0 ? `(${limpezaPreview})` : ''}</>
+                  }
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Generic Confirm Dialog */}
       <ConfirmDialog

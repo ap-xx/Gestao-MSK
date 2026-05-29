@@ -520,6 +520,36 @@ export const auditoriaApi = {
       const all = [...getAll<AuditEntry>(AUDIT_KEY)].reverse();
       return entidade ? all.filter(e => e.entidade === entidade) : all;
     }),
+
+  /**
+   * Remove entradas do log de auditoria dentro do intervalo fornecido.
+   *
+   * @param from  ISO string — remove entradas com criadoEm >= from  (undefined = sem limite inferior)
+   * @param to    ISO string — remove entradas com criadoEm <= to    (undefined = sem limite superior)
+   * @returns     Número de entradas removidas
+   */
+  limpar: (from?: string, to?: string): Promise<number> =>
+    lp(() => {
+      const all = getAll<AuditEntry>(AUDIT_KEY);
+      const kept = all.filter(e => {
+        const t = e.criadoEm;
+        if (from && t < from) return false; // before from → remove
+        if (to   && t > to  ) return false; // after to   → remove
+        return true;
+      });
+      const removed = all.length - kept.length;
+      saveAll(AUDIT_KEY, kept);
+      return removed;
+    }),
+
+  /** Apaga todo o log de auditoria */
+  limparTudo: (): Promise<number> =>
+    lp(() => {
+      const count = getAll<AuditEntry>(AUDIT_KEY).length;
+      saveAll(AUDIT_KEY, []);
+      return count;
+    }),
+
   /** Grava manualmente um evento de auditoria (login, logout, etc.) */
   log: (acao: string, entidade: string, entidadeId?: string, detalhe?: string) =>
     lp(() => logAudit(acao, entidade, entidadeId, detalhe)),
