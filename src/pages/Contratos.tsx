@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, FileText, Search, Edit2, Trash2, DollarSign,
-  TrendingUp, Building2, User, Eye, Download,
+  TrendingUp, Building2, User, Eye, Download, CheckSquare, Square,
 } from 'lucide-react';
 import { contratosApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
+import { downloadXlsx, xlsxDate, xlsxCurrency } from '../utils/exportXlsx';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
@@ -14,7 +15,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
-import { useSort } from '../hooks/useSort';
+import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Contrato, TipoContrato, StatusContrato, Cliente } from '../types';
 import Portal from '../components/ui/Portal';
@@ -337,6 +338,26 @@ export default function Contratos() {
   const [toDelete,    setToDelete]    = useState<Contrato | null>(null);
   const [deleting,    setDeleting]    = useState(false);
   const undoDelete = useUndoDelete<Contrato>('Contrato');
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  function toggleSelectCont(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleSelectAllCont() {
+    if (selectedIds.size === pagination.items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(pagination.items.map(c => c.id)));
+  }
+  async function handleBulkDeleteCont() {
+    if (!selectedIds.size) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all([...selectedIds].map(id => contratosApi.remove(id)));
+      await reload(); setSelectedIds(new Set());
+      showToast('success', `${selectedIds.size} contrato(s) excluído(s)`);
+    } catch { showToast('error', 'Erro ao excluir selecionados'); }
+    finally { setBulkDeleting(false); }
+  }
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -371,7 +392,7 @@ export default function Contratos() {
     });
   }, [contratos, search, filterTipo, filterStatus]);
 
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
+  const { sorted, sortKey, sortDir, toggle } = usePersistedSort(filtered, 'clienteNome', 'cont');
   const pagination = usePagination(sorted, pageSize);
 
   function handleDelete(c: Contrato) {
@@ -416,6 +437,21 @@ export default function Contratos() {
             <FileText className="w-4 h-4" />
             CSV
           </button>
+          <button
+            onClick={() => downloadXlsx(`contratos_${new Date().toISOString().slice(0,10)}`, [{
+              name: 'Contratos',
+              headers: ['Cliente', 'Tipo', 'Área', 'Descrição', 'Status', 'Início', 'Encerramento', 'Valor Mensal'],
+              rows: sorted.map(c => [
+                c.clienteNome, c.tipo, c.areaAtuacao, c.descricao, c.status,
+                xlsxDate(c.dataInicio), xlsxDate(c.dataFim), xlsxCurrency(c.valorMensal),
+              ]),
+            }])}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para Excel (.xlsx)"
+          >
+            <Download className="w-4 h-4" />
+            XLSX
+          </button>
           {!isReadOnly && (
             <button
               onClick={() => { setEditContrato(undefined); setModalOpen(true); }}
@@ -457,12 +493,35 @@ export default function Contratos() {
         </select>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && !isReadOnly && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+          <span className="text-sm text-amber-400 font-medium">{selectedIds.size} selecionado(s)</span>
+          <button onClick={() => downloadCsv(`contratos_sel.csv`, ['Cliente','Tipo','Área','Status','Início'], sorted.filter(c => selectedIds.has(c.id)).map(c => [c.clienteNome, c.tipo, c.areaAtuacao, c.status, fmtCsvDate(c.dataInicio)]))}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-xs font-medium transition-all">
+            <Download className="w-3.5 h-3.5" /> Exportar
+          </button>
+          <button onClick={handleBulkDeleteCont} disabled={bulkDeleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-lg text-xs font-medium transition-all disabled:opacity-50">
+            <Trash2 className="w-3.5 h-3.5" /> {bulkDeleting ? 'Excluindo…' : 'Excluir'}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-[#505050] hover:text-[#a0a0a0]"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
+                {!isReadOnly && (
+                  <th className="px-3 py-3.5 w-10">
+                    <button onClick={toggleSelectAllCont} className="text-[#505050] hover:text-amber-400 transition-colors">
+                      {selectedIds.size === pagination.items.length && pagination.items.length > 0 ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
+                )}
                 <th onClick={() => toggle('clienteNome')} className="text-left px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider cursor-pointer select-none hover:text-[#a0a0a0]">
                   Cliente <SortIcon col="clienteNome" />
                 </th>
@@ -494,7 +553,14 @@ export default function Contratos() {
                   const cliente = clientes.find(cl => cl.id === c.clienteId);
                   const valorExito = c.percentualExito && c.valorCausa ? (c.percentualExito / 100) * c.valorCausa : 0;
                   return (
-                    <tr key={c.id} className="hover:bg-[#1a1a1a] transition-colors">
+                    <tr key={c.id} className={`hover:bg-[#1a1a1a] transition-colors ${selectedIds.has(c.id) ? 'bg-amber-500/5' : ''}`}>
+                      {!isReadOnly && (
+                        <td className="px-3 py-4 w-10">
+                          <button onClick={() => toggleSelectCont(c.id)} className="text-[#505050] hover:text-amber-400 transition-colors">
+                            {selectedIds.has(c.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+                          </button>
+                        </td>
+                      )}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.tipo === 'Mensal' ? 'bg-blue-500/15' : c.tipo === 'Êxito' ? 'bg-amber-500/15' : c.tipo === 'Misto' ? 'bg-purple-500/15' : 'bg-green-500/15'}`}>

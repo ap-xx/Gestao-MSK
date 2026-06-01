@@ -12,6 +12,7 @@ import { consultarProcessoDataJud, TRIBUNAIS } from '../services/apis';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
+import { downloadXlsx, xlsxDate } from '../utils/exportXlsx';
 import { adicionarDiasUteis } from '../utils/prazos';
 import { maskCNJ } from '../utils/masks';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
@@ -22,7 +23,7 @@ import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
-import { useSort } from '../hooks/useSort';
+import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Processo, FaseProcessual, PoloProcessual, Andamento, Cliente, Escritorio, PrazoProcessual } from '../types';
 
@@ -1093,7 +1094,7 @@ export default function Processos() {
     });
   }, [processos, search, filterFase, filterArea]);
 
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'clienteNome');
+  const { sorted, sortKey, sortDir, toggle } = usePersistedSort(filtered, 'clienteNome', 'proc');
   const pagination = usePagination(sorted, pageSize);
 
   function handleDelete(p: Processo) {
@@ -1226,10 +1227,26 @@ export default function Processos() {
               ]),
             )}
             className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
-            title="Exportar lista filtrada para CSV"
+            title="Exportar para CSV"
           >
             <FileText className="w-4 h-4" />
             CSV
+          </button>
+          <button
+            onClick={() => downloadXlsx(`processos_${new Date().toISOString().slice(0,10)}`, [{
+              name: 'Processos',
+              headers: ['Nº CNJ', 'Cliente', 'Área', 'Tribunal', 'Vara', 'Fase', 'Status', 'Polo', 'Criado em', 'Próx. Audiência'],
+              rows: sorted.map(p => [
+                p.numeroCNJ, p.clienteNome, p.areaAtuacao, p.tribunalAlias.toUpperCase(),
+                p.vara, p.fase, p.status, p.polo,
+                xlsxDate(p.criadoEm), xlsxDate(p.proximaAudiencia),
+              ]),
+            }])}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para Excel (.xlsx)"
+          >
+            <Download className="w-4 h-4" />
+            XLSX
           </button>
           {!isReadOnly && (
             <button

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   BarChart2, TrendingUp, TrendingDown, Users, Gavel, FileText,
   Calendar, AlertTriangle, Printer, RefreshCw,
-  CheckCircle, Star,
+  CheckCircle, Star, User,
 } from 'lucide-react';
 import { clientesApi, processosApi, lancamentosApi, contratosApi, escritorioApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -168,6 +168,25 @@ export default function Relatorios() {
       .slice(0, 5),
     [clientes]
   );
+
+  // ── Produtividade por usuário ─────────────────────────────────
+  const produtividade = useMemo(() => {
+    const map: Record<string, { nome: string; andamentos: number; processos: number; lancamentos: number }> = {};
+    for (const p of processos) {
+      (p.andamentos || []).forEach(a => {
+        const k = a.usuarioNome || 'Sistema';
+        if (!map[k]) map[k] = { nome: k, andamentos: 0, processos: 0, lancamentos: 0 };
+        map[k].andamentos++;
+      });
+      // Count unique users that authored andamentos
+      const users = new Set((p.andamentos || []).map(a => a.usuarioNome).filter(Boolean));
+      users.forEach(u => {
+        if (!map[u]) map[u] = { nome: u, andamentos: 0, processos: 0, lancamentos: 0 };
+        map[u].processos++;
+      });
+    }
+    return Object.values(map).sort((a, b) => b.andamentos - a.andamentos).slice(0, 10);
+  }, [processos]);
 
   const periodoLabel = { mes: 'Este mês', trimestre: 'Este trimestre', ano: 'Este ano' }[periodo];
 
@@ -442,6 +461,57 @@ export default function Relatorios() {
           );
         })()}
       </div>
+
+      {/* ── Produtividade ── */}
+      {produtividade.length > 0 && (
+        <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xs font-bold uppercase tracking-widest text-[#444]">Produtividade por Usuário</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#2a2a2a]">
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Usuário</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Andamentos</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden md:table-cell">Processos</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-[#505050] uppercase tracking-wider hidden lg:table-cell">Participação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1e1e1e]">
+                {produtividade.map((u, i) => {
+                  const maxAnd = produtividade[0].andamentos;
+                  const pct = maxAnd > 0 ? Math.round((u.andamentos / maxAnd) * 100) : 0;
+                  return (
+                    <tr key={i} className="hover:bg-[#1a1a1a] transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                            <User className="w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                          <span className="text-[#f5f5f5] font-medium">{u.nome}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-amber-400 font-semibold">{u.andamentos}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right hidden md:table-cell text-[#a0a0a0]">{u.processos}</td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-[#2a2a2a] rounded-full h-1.5">
+                            <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-[#505050] w-8 text-right">{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

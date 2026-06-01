@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, Search, X, Building2, User, Users, Loader2,
   MapPin, Phone, Mail, Edit2, Trash2, CheckCircle, AlertCircle, Eye,
-  Star, Paperclip, FileText, Download, Upload, Gavel, CheckSquare, Square,
+  Star, Paperclip, FileText, Download, Upload, Gavel, CheckSquare, Square, Clock,
 } from 'lucide-react';
 import { clientesApi, processosApi, documentosApi } from '../services/api';
 import type { Documento } from '../services/api';
@@ -10,6 +10,7 @@ import { consultarCNPJ, consultarCEP, formatCNPJ, formatCPF, formatCEP, formatTe
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
+import { downloadXlsx, xlsxDate } from '../utils/exportXlsx';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
@@ -18,7 +19,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
-import { useSort } from '../hooks/useSort';
+import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
 import type { Cliente, TipoPessoa, StatusCliente, Processo } from '../types';
 
@@ -141,6 +142,86 @@ function ClienteDocumentosSection({ clienteId }: { clienteId: string }) {
               {!isReadOnly && <button onClick={async () => { await documentosApi.remove(doc.id); carregar(); }} className="p-1 text-[#505050] hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Feed de Atividade do Cliente ─────────────────────────────
+function ClienteAtividadeFeed({ clienteId }: { clienteId: string }) {
+  const [itens, setItens] = useState<Array<{ tipo: string; titulo: string; detalhe?: string; data: string; cor: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [procs, conts, lancs] = await Promise.all([
+          processosApi.getAll(),
+          import('../services/api').then(m => m.contratosApi.getAll()),
+          import('../services/api').then(m => m.lancamentosApi.getAll()),
+        ]);
+        const feed: typeof itens = [];
+
+        // Processos
+        procs.filter(p => p.clienteId === clienteId).forEach(p => {
+          feed.push({ tipo: 'Processo', titulo: `Processo ${p.numeroCNJ}`, detalhe: `${p.areaAtuacao} · ${p.status}`, data: p.criadoEm, cor: 'text-purple-400' });
+          (p.andamentos || []).forEach(a => {
+            feed.push({ tipo: 'Andamento', titulo: a.tipo.charAt(0).toUpperCase() + a.tipo.slice(1), detalhe: a.descricao.slice(0, 80), data: a.data + 'T12:00:00', cor: 'text-blue-400' });
+          });
+        });
+
+        // Contratos
+        (conts as any[]).filter((c: any) => c.clienteId === clienteId).forEach((c: any) => {
+          feed.push({ tipo: 'Contrato', titulo: `Contrato ${c.tipo}`, detalhe: c.descricao, data: c.criadoEm, cor: 'text-green-400' });
+        });
+
+        // Lançamentos
+        (lancs as any[]).filter((l: any) => l.clienteId === clienteId).forEach((l: any) => {
+          const val = Number(l.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const status = l.status === 'pago' ? '✓ pago' : l.status === 'vencido' ? '⚠ vencido' : 'pendente';
+          feed.push({ tipo: 'Lançamento', titulo: l.descricao, detalhe: `${val} · ${status}`, data: l.criadoEm, cor: 'text-amber-400' });
+        });
+
+        feed.sort((a, b) => b.data.localeCompare(a.data));
+        setItens(feed.slice(0, 30));
+      } catch { /* silencioso */ }
+      finally { setLoading(false); }
+    }
+    load();
+  }, [clienteId]);
+
+  return (
+    <div className="border-t border-[#2a2a2a] pt-4">
+      <p className="text-xs text-[#505050] font-medium uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <Clock className="w-3 h-3" /> Feed de Atividade ({itens.length})
+      </p>
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-amber-500" /></div>
+      ) : itens.length === 0 ? (
+        <p className="text-xs text-[#505050] text-center py-3">Nenhuma atividade registrada</p>
+      ) : (
+        <div className="relative max-h-56 overflow-y-auto pr-1">
+          <div className="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-[#2a2a2a]" />
+          <div className="space-y-3 pl-4">
+            {itens.map((item, i) => (
+              <div key={i} className="relative">
+                <div className={`absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full border-2 border-[#141414] bg-[#2a2a2a]`} />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] font-semibold ${item.cor}`}>{item.tipo}</span>
+                      <span className="text-xs text-[#f5f5f5] truncate">{item.titulo}</span>
+                    </div>
+                    {item.detalhe && <p className="text-[11px] text-[#505050] truncate">{item.detalhe}</p>}
+                  </div>
+                  <span className="text-[10px] text-[#404040] shrink-0 mt-0.5">
+                    {new Date(item.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -734,7 +815,7 @@ export default function Clientes() {
     });
   }, [clientes, search, filterStatus, filterTipo]);
 
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'nome');
+  const { sorted, sortKey, sortDir, toggle } = usePersistedSort(filtered, 'nome', 'cli');
   const pagination = usePagination(sorted, pageSize);
 
   // ── Bulk delete ──────────────────────────────────────────────
@@ -875,7 +956,24 @@ export default function Clientes() {
             title="Exportar lista filtrada para CSV"
           >
             <FileText className="w-4 h-4" />
-            Exportar CSV
+            CSV
+          </button>
+          <button
+            onClick={() => downloadXlsx(`clientes_${new Date().toISOString().slice(0,10)}`, [{
+              name: 'Clientes',
+              headers: ['Nome', 'Tipo', 'CPF/CNPJ', 'E-mail', 'Telefone', 'Cidade/UF', 'Status', 'Cadastro'],
+              rows: sorted.map(c => [
+                c.nome, c.tipoPessoa === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica',
+                c.cpf || c.cnpj || '', c.email, c.telefone || '',
+                `${c.endereco.cidade || ''}/${c.endereco.uf || ''}`, c.status,
+                xlsxDate(c.criadoEm as string | undefined),
+              ]),
+            }])}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para Excel (.xlsx)"
+          >
+            <Download className="w-4 h-4" />
+            XLSX
           </button>
           {!isReadOnly && (
             <>
@@ -1207,6 +1305,7 @@ export default function Clientes() {
                 </div>
               )}
               <ClienteProcessosSection clienteId={viewCliente.id} />
+              <ClienteAtividadeFeed clienteId={viewCliente.id} />
               <ClienteDocumentosSection clienteId={viewCliente.id} />
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">

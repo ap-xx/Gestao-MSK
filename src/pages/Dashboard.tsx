@@ -100,25 +100,50 @@ export default function Dashboard() {
   }, [load]);
 
   const kpis = useMemo(() => {
-    const now = new Date();
+    const now  = new Date();
     const curM = now.getMonth();
     const curY = now.getFullYear();
+    const prevM = curM === 0 ? 11 : curM - 1;
+    const prevY = curM === 0 ? curY - 1 : curY;
 
-    const ativos = clientes.filter(c => c.status === 'ativo').length;
+    const ativos         = clientes.filter(c => c.status === 'ativo').length;
     const contratosAtivos = contratos.filter(c => c.status === 'ativo').length;
     const processosAtivos = processos.filter(p => p.status === 'ativo').length;
-    const recebidoMes = lancamentos
-      .filter(l => {
-        if (l.tipo !== 'recebimento' || l.status !== 'pago' || !l.dataPagamento) return false;
-        const d = new Date(l.dataPagamento);
-        return d.getMonth() === curM && d.getFullYear() === curY;
-      })
-      .reduce((s, l) => s + l.valor, 0);
-    const aReceber = lancamentos
+
+    function recebidoNoMes(m: number, y: number) {
+      return lancamentos
+        .filter(l => {
+          if (l.tipo !== 'recebimento' || l.status !== 'pago' || !l.dataPagamento) return false;
+          const d = new Date(l.dataPagamento);
+          return d.getMonth() === m && d.getFullYear() === y;
+        })
+        .reduce((s, l) => s + l.valor, 0);
+    }
+
+    const recebidoMes  = recebidoNoMes(curM, curY);
+    const recebidoPrev = recebidoNoMes(prevM, prevY);
+    const aReceber     = lancamentos
       .filter(l => l.tipo === 'a_receber' && l.status === 'pendente')
       .reduce((s, l) => s + l.valor, 0);
 
-    return { ativos, contratosAtivos, processosAtivos, recebidoMes, aReceber };
+    // Prazos processuais vencendo nos próximos N dias
+    const prazosUrgentes = processos.flatMap(p =>
+      (p.prazos || [])
+        .filter(pz => pz.status === 'pendente')
+        .map(pz => ({
+          ...pz,
+          numeroCNJ: p.numeroCNJ,
+          clienteNome: p.clienteNome,
+          diasRestantes: Math.ceil((new Date(pz.dataFinal + 'T12:00:00').getTime() - Date.now()) / 86400000),
+        }))
+    ).filter(pz => pz.diasRestantes <= 30).sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+    // Delta vs mês anterior
+    const deltaRecebido = recebidoPrev > 0
+      ? ((recebidoMes - recebidoPrev) / recebidoPrev * 100).toFixed(0)
+      : null;
+
+    return { ativos, contratosAtivos, processosAtivos, recebidoMes, recebidoPrev, aReceber, prazosUrgentes, deltaRecebido };
   }, [clientes, contratos, processos, lancamentos]);
 
   const mesAtualLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -307,8 +332,6 @@ export default function Dashboard() {
           value={kpis.ativos}
           sub={`${clientes.length} total`}
           color="bg-blue-500/15 text-blue-400"
-          delta="+2 este mês"
-          positivo
         />
         <KPICard
           icon={FileText}
@@ -330,7 +353,8 @@ export default function Dashboard() {
           value={formatCurrency(kpis.aReceber)}
           sub="lançamentos pendentes"
           color="bg-amber-500/15 text-amber-400"
-          delta="Este mês"
+          delta={kpis.deltaRecebido !== null ? `${kpis.deltaRecebido}% vs mês ant.` : undefined}
+          positivo={Number(kpis.deltaRecebido) >= 0}
         />
       </div>
 
@@ -401,6 +425,47 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Widget: Prazos processuais vencendo */}
+      {kpis.prazosUrgentes.length > 0 && (
+        <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-4 h-4 text-orange-400" />
+            <h3 className="font-semibold text-[#f5f5f5]">Prazos Vencendo</h3>
+            <span className="ml-auto text-xs text-[#505050]">próximos 30 dias</span>
+          </div>
+          <div className="space-y-2">
+            {kpis.prazosUrgentes.slice(0, 5).map((pz, i) => (
+              <div key={i} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${
+                pz.diasRestantes < 0 ? 'bg-red-500/5 border-red-500/20' :
+                pz.diasRestantes <= 5 ? 'bg-red-500/5 border-red-500/10' :
+                pz.diasRestantes <= 15 ? 'bg-amber-500/5 border-amber-500/10' :
+                'bg-[#1e1e1e] border-[#2a2a2a]'
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#f5f5f5] truncate">{pz.tipo}</p>
+                  <p className="text-xs text-[#505050] truncate">{pz.clienteNome} · {pz.numeroCNJ}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-sm font-bold ${
+                    pz.diasRestantes < 0 ? 'text-red-400' :
+                    pz.diasRestantes <= 5 ? 'text-red-400' :
+                    pz.diasRestantes <= 15 ? 'text-amber-400' : 'text-[#a0a0a0]'
+                  }`}>
+                    {pz.diasRestantes < 0
+                      ? `${Math.abs(pz.diasRestantes)}d vencido`
+                      : pz.diasRestantes === 0 ? 'Hoje!'
+                      : `${pz.diasRestantes}d`}
+                  </p>
+                  <p className="text-[10px] text-[#505050]">
+                    {new Date(pz.dataFinal + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Audiências + Alertas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

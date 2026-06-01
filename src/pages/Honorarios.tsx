@@ -12,13 +12,15 @@ import { formatCurrency } from '../utils/cn';
 import { printRecibo } from '../utils/printRecibo';
 import { printHonorarios } from '../utils/printRelatorio';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
+import { downloadXlsx, xlsxDate, xlsxCurrency } from '../utils/exportXlsx';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
+import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
 import PixModal from '../components/PixModal';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
-import { useSort } from '../hooks/useSort';
+import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
 import { addDias } from '../hooks/useRecorrencia';
 import type { Lancamento, TipoLancamento, StatusPagamento, Cliente, Escritorio } from '../types';
@@ -556,9 +558,7 @@ export default function Honorarios() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editLancamento, setEditLancamento] = useState<Lancamento | undefined>();
   const [pixLancamento, setPixLancamento] = useState<Lancamento | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete, setToDelete] = useState<Lancamento | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const undoDelete = useUndoDelete<Lancamento>('Lançamento');
   const [reciboTarget, setReciboTarget] = useState<Lancamento | null>(null);
   const [escritorio, setEscritorio] = useState<Escritorio | null>(null);
 
@@ -590,7 +590,7 @@ export default function Honorarios() {
     });
   }, [lancamentos, tab, search]);
 
-  const { sorted, sortKey, sortDir, toggle } = useSort(filtered, 'dataVencimento', 'desc');
+  const { sorted, sortKey, sortDir, toggle } = usePersistedSort(filtered, 'dataVencimento', 'hon', 'desc');
   const pagination = usePagination(sorted, pageSize);
 
   const stats = useMemo(() => {
@@ -648,24 +648,12 @@ export default function Honorarios() {
   }
 
   function handleDelete(l: Lancamento) {
-    setToDelete(l);
-    setConfirmOpen(true);
-  }
-
-  async function doDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
-    try {
-      await lancamentosApi.remove(toDelete.id);
-      await reload();
-      showToast('info', 'Lançamento removido');
-    } catch (err: any) {
-      showToast('error', 'Erro', err.message);
-    } finally {
-      setDeleting(false);
-      setConfirmOpen(false);
-      setToDelete(null);
-    }
+    undoDelete(
+      l,
+      item => setLancamentos(prev => prev.filter(x => x.id !== item.id)),
+      item => setLancamentos(prev => [...prev, item]),
+      item => lancamentosApi.remove(item.id).then(() => {}),
+    );
   }
 
   const [showCashFlow, setShowCashFlow] = usePersistedFilter('hon_cashflow', false);
@@ -737,6 +725,22 @@ export default function Honorarios() {
           >
             <Download className="w-4 h-4" />
             CSV
+          </button>
+          <button
+            onClick={() => downloadXlsx(`honorarios_${tab}_${new Date().toISOString().slice(0,10)}`, [{
+              name: tabs.find(t => t.key === tab)?.label ?? tab,
+              headers: ['Cliente', 'Tipo', 'Descrição', 'Valor', 'Vencimento', 'Pagamento', 'Status', 'Forma Pgto'],
+              rows: sorted.map(l => [
+                l.clienteNome || '', l.tipo, l.descricao, xlsxCurrency(l.valor),
+                xlsxDate(l.dataVencimento), xlsxDate(l.dataPagamento),
+                l.status, l.formaPagamento || '',
+              ]),
+            }])}
+            className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#a0a0a0] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Exportar para Excel (.xlsx)"
+          >
+            <FileText className="w-4 h-4" />
+            XLSX
           </button>
           <button
             onClick={() => printHonorarios({
@@ -1049,15 +1053,6 @@ export default function Honorarios() {
           <Pagination {...pagination} />
         </div>
       </div>
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Excluir Lançamento"
-        message={`Tem certeza que deseja excluir "${toDelete?.descricao}"?`}
-        onConfirm={doDelete}
-        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
-        loading={deleting}
-      />
 
       {modalOpen && (
         <LancamentoModal
