@@ -13,7 +13,9 @@ export default function CalculadoraHonorarios() {
   const [percExito,  setPercExito]  = useState('20');
   const [parcelas,   setParcelas]   = useState('1');
 
-  const causa  = parseFloat(valorCausa.replace(/\D/g, '')) || 0;
+  // fmtInput armazena os dígitos como centavos (divide por 100 ao exibir),
+  // então aqui também dividimos por 100 para obter o valor real em reais.
+  const causa  = (parseFloat(valorCausa.replace(/\D/g, '')) || 0) / 100;
   const base   = parseFloat(percBase)   || 0;
   const exito  = parseFloat(percExito)  || 0;
   const nParc  = Math.max(1, parseInt(parcelas) || 1);
