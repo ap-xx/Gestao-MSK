@@ -19,11 +19,11 @@ export default function PixModal({ lancamento: l, escritorio: e, onClose }: Prop
 
   const brCode = temChave ? gerarPixBRCode({
     chave:          e!.pixKey!,
+    chaveType:      e!.pixKeyType,
     nomeRecebedor:  e!.responsavel || e!.nome,
     cidade:         e!.endereco?.cidade,
     valor:          l.valor,
-    descricao:      l.descricao.slice(0, 72),
-    txid:           l.id.replace(/[^A-Za-z0-9]/g, '').slice(0, 25),
+    descricao:      l.descricao,
   }) : '';
 
   const qrUrl = temChave ? pixQrCodeUrl(brCode, 240) : '';

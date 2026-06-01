@@ -1,102 +1,152 @@
 /**
  * Gerador de PIX estático (BR Code / EMV Merchant-Presented QR Code)
  *
- * Especificação: https://www.bcb.gov.br/content/estabilidadefinanceira/pix/Regulamento_Pix/
- *   - II-Anexo-I-Padrões-para-Iniciação-do-Pix.pdf
- *
- * Funciona com qualquer chave PIX (CPF, CNPJ, e-mail, telefone ou aleatória).
- * Não requer nenhuma API externa — o código gerado é válido em todos os bancos.
+ * Especificação BCB: Resolução BCB nº 1 de 12/08/2020 — Anexo II
+ * https://www.bcb.gov.br/content/estabilidadefinanceira/pix/
+ *   Regulamento_Pix/II-Anexo-I-Padrões-para-Iniciação-do-Pix.pdf
  */
 
 // ── CRC-16/CCITT-FALSE ────────────────────────────────────────
-// Polinômio: 0x1021, valor inicial: 0xFFFF, entrada/saída sem inversão.
+// Poly: 0x1021 | Init: 0xFFFF | RefIn: false | RefOut: false | XorOut: 0x0000
+// IMPORTANTE: o & 0xffff dentro do loop é obrigatório para evitar overflow
+// em JavaScript (inteiros de 32 bits com sinal).
 
-function crc16(data: string): string {
+function crc16(str: string): string {
   let crc = 0xffff;
-  for (let i = 0; i < data.length; i++) {
-    crc ^= data.charCodeAt(i) << 8;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
     for (let j = 0; j < 8; j++) {
-      crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
+      crc = crc & 0x8000
+        ? ((crc << 1) ^ 0x1021) & 0xffff   // ← & 0xffff impede overflow
+        : (crc << 1) & 0xffff;
     }
   }
-  return (crc & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+  return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// ── EMV field builder ─────────────────────────────────────────
+// ── EMV TLV field ─────────────────────────────────────────────
 
-function field(id: string, value: string): string {
-  const len = String(value.length).padStart(2, '0');
-  return `${id}${len}${value}`;
+function f(id: string, value: string): string {
+  return `${id}${String(value.length).padStart(2, '0')}${value}`;
+}
+
+// ── Normalize strings for PIX (ISO 8859-1 safe) ──────────────
+
+function clean(str: string, maxLen: number): string {
+  return str
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // remove diacritics
+    .replace(/[^\x20-\x7E]/g, '')   // remove non-ASCII printable chars
+    .trim()
+    .slice(0, maxLen);
+}
+
+// ── PIX key normalization ─────────────────────────────────────
+
+export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+
+/**
+ * Normalizes a PIX key to the format expected by the BCB.
+ */
+function normalizeKey(key: string, type?: PixKeyType): string {
+  const k = key.trim();
+  switch (type) {
+    case 'cpf':
+      return k.replace(/\D/g, ''); // 11 digits
+    case 'cnpj':
+      return k.replace(/\D/g, ''); // 14 digits
+    case 'telefone': {
+      // Must be +55XXXXXXXXXXX format
+      const digits = k.replace(/\D/g, '');
+      return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
+    }
+    case 'email':
+      return k.toLowerCase();
+    default:
+      return k; // UUID / random key — use as-is
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────
 
 export interface PixPayload {
-  /** Chave PIX do recebedor */
   chave: string;
-  /** Nome do recebedor (máx 25 caracteres) */
+  chaveType?: PixKeyType;
+  /** Merchant name, shown in the payer's bank app (max 25 chars) */
   nomeRecebedor: string;
-  /** Cidade do recebedor (máx 15 caracteres) */
+  /** Merchant city (max 15 chars) */
   cidade?: string;
-  /** Valor em reais — omitir para deixar em aberto */
+  /** Amount in BRL — omit to leave amount open */
   valor?: number;
-  /** Descrição curta da cobrança (exibida no app do pagador) */
+  /**
+   * Transaction description shown to the payer (max 72 chars).
+   * Use simple ASCII text; special characters are stripped.
+   */
   descricao?: string;
-  /** ID único da transação (txid), usado para conciliação — máx 25 chars */
-  txid?: string;
 }
 
 /**
- * Gera o payload BR Code (Pix Copia e Cola) conforme padrão EMV do Banco Central.
- * O retorno é a string que deve ser codificada no QR Code.
+ * Generates a valid BR Code (Pix Copia e Cola) payload.
+ * Compatible with all Brazilian banks.
+ *
+ * @throws never — sanitizes inputs silently
  */
 export function gerarPixBRCode(p: PixPayload): string {
-  const chave      = p.chave.trim();
-  const nome       = p.nomeRecebedor.normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 25);
-  const cidade     = (p.cidade ?? 'Brasil').normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 15);
-  const txid       = (p.txid ?? '***').replace(/[^A-Za-z0-9]/g, '').slice(0, 25) || '***';
-  const descricao  = p.descricao ? p.descricao.normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 72) : undefined;
+  const chave   = normalizeKey(p.chave, p.chaveType);
+  const nome    = clean(p.nomeRecebedor || 'Recebedor', 25) || 'Recebedor';
+  const cidade  = clean(p.cidade || 'Brasil', 15) || 'Brasil';
 
-  // 00 — Format Indicator
-  const f00 = field('00', '01');
+  // ── Field 00: Format Indicator ────────────────────────────
+  const f00 = f('00', '01');
 
-  // 26 — Merchant Account Information (PIX)
-  const gui = field('00', 'br.gov.bcb.pix');
-  const key = field('01', chave);
-  const inf = descricao ? field('02', descricao) : '';
-  const f26 = field('26', gui + key + inf);
+  // ── Field 26: Merchant Account Information (PIX) ──────────
+  // Sub-fields:
+  //   00 = GUI (always "br.gov.bcb.pix")
+  //   01 = PIX key
+  //   02 = Additional info shown to payer (optional, ASCII only)
+  const mai_gui = f('00', 'br.gov.bcb.pix');
+  const mai_key = f('01', chave);
+  const mai_inf = p.descricao
+    ? f('02', clean(p.descricao, 72))
+    : '';
+  const f26 = f('26', mai_gui + mai_key + mai_inf);
 
-  // 52 — Merchant Category Code
-  const f52 = field('52', '0000');
+  // ── Field 52: Merchant Category Code ─────────────────────
+  const f52 = f('52', '0000');
 
-  // 53 — Transaction Currency (BRL = 986)
-  const f53 = field('53', '986');
+  // ── Field 53: Transaction Currency (BRL = 986) ───────────
+  const f53 = f('53', '986');
 
-  // 54 — Transaction Amount (optional)
-  const f54 = p.valor != null ? field('54', p.valor.toFixed(2)) : '';
+  // ── Field 54: Amount (optional) ──────────────────────────
+  const f54 = p.valor != null ? f('54', p.valor.toFixed(2)) : '';
 
-  // 58 — Country Code
-  const f58 = field('58', 'BR');
+  // ── Field 58: Country Code ───────────────────────────────
+  const f58 = f('58', 'BR');
 
-  // 59 — Merchant Name
-  const f59 = field('59', nome);
+  // ── Field 59: Merchant Name ──────────────────────────────
+  const f59 = f('59', nome);
 
-  // 60 — Merchant City
-  const f60 = field('60', cidade);
+  // ── Field 60: Merchant City ──────────────────────────────
+  const f60 = f('60', cidade);
 
-  // 62 — Additional Data Field (txid inside)
-  const f62 = field('62', field('05', txid));
+  // ── Field 62: Additional Data Field Template ─────────────
+  // Sub-field 05 = Transaction ID.
+  // For static QR codes, BCB spec mandates "***" (three asterisks).
+  const f62 = f('62', f('05', '***'));
 
-  // Build payload without CRC
-  const payload = f00 + f26 + f52 + f53 + f54 + f58 + f59 + f60 + f62 + '6304';
+  // ── Build payload (without CRC) ──────────────────────────
+  const body = f00 + f26 + f52 + f53 + f54 + f58 + f59 + f60 + f62;
 
-  return payload + crc16(payload);
+  // Append CRC sentinel "6304" before calculating checksum
+  const withCrcId = body + '6304';
+
+  return withCrcId + crc16(withCrcId);
 }
 
 /**
- * Returns a URL for a QR code image using the free qrserver.com API.
- * No API key required. Suitable for display; not for production PDFs.
+ * Returns the URL of a free QR code image via api.qrserver.com.
+ * The image is ~200×200 px by default and requires an internet connection.
  */
 export function pixQrCodeUrl(brCode: string, size = 200): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(brCode)}&qzone=1&color=000000&bgcolor=ffffff`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(brCode)}&qzone=2&color=000000&bgcolor=ffffff&ecc=M`;
 }
