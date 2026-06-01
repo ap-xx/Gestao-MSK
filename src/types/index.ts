@@ -16,6 +16,8 @@ export interface User {
   criadoEm: string;
 }
 
+export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+
 export interface Escritorio {
   nome: string;
   cnpj: string;
@@ -32,6 +34,10 @@ export interface Escritorio {
     prazosDias: number;
     inadimplenciaAuto: boolean;
   };
+  /** Chave PIX para geração de cobranças estáticas */
+  pixKey?: string;
+  /** Tipo da chave PIX */
+  pixKeyType?: PixKeyType;
 }
 
 export interface Endereco {

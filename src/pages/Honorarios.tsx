@@ -14,6 +14,7 @@ import { printHonorarios } from '../utils/printRelatorio';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useCtrlSave } from '../hooks/useCtrlSave';
+import PixModal from '../components/PixModal';
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -554,6 +555,7 @@ export default function Honorarios() {
   const [pageSize, setPageSize]= usePersistedFilter<number>('hon_pagesize', 15);
   const [modalOpen, setModalOpen] = useState(false);
   const [editLancamento, setEditLancamento] = useState<Lancamento | undefined>();
+  const [pixLancamento, setPixLancamento] = useState<Lancamento | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Lancamento | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -1003,13 +1005,25 @@ export default function Honorarios() {
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
                         {(l.status === 'pendente' || l.status === 'vencido') && (
-                          <button
-                            onClick={() => marcarPago(l)}
-                            className="text-xs px-2.5 py-1.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 rounded-lg transition-colors whitespace-nowrap"
-                            title="Marcar como pago"
-                          >
-                            Marcar Pago
-                          </button>
+                          <>
+                            <button
+                              onClick={() => marcarPago(l)}
+                              className="text-xs px-2.5 py-1.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 rounded-lg transition-colors whitespace-nowrap"
+                              title="Marcar como pago"
+                            >
+                              Marcar Pago
+                            </button>
+                            {/* Botão PIX — só aparece se for a_receber e a chave PIX estiver configurada */}
+                            {l.tipo === 'a_receber' && escritorio?.pixKey && (
+                              <button
+                                onClick={() => setPixLancamento(l)}
+                                className="text-xs px-2.5 py-1.5 bg-[#0d5c3a]/40 hover:bg-[#0d5c3a]/60 border border-green-600/30 text-green-400 rounded-lg transition-colors whitespace-nowrap flex items-center gap-1"
+                                title="Gerar cobrança PIX"
+                              >
+                                <span className="text-green-400 font-bold text-xs">◆</span> PIX
+                              </button>
+                            )}
+                          </>
                         )}
                         {l.status === 'pago' && (
                           <button
@@ -1061,6 +1075,15 @@ export default function Honorarios() {
           lancamento={reciboTarget}
           escritorio={escritorio}
           onClose={() => setReciboTarget(null)}
+        />
+      )}
+
+      {/* ── Modal PIX ── */}
+      {pixLancamento && (
+        <PixModal
+          lancamento={pixLancamento}
+          escritorio={escritorio}
+          onClose={() => setPixLancamento(null)}
         />
       )}
     </div>

@@ -4,13 +4,14 @@ import {
   CheckCircle, Phone, Calendar, User, Building2, Loader2,
   Download, ArrowUpDown,
 } from 'lucide-react';
-import { lancamentosApi, clientesApi } from '../services/api';
+import { lancamentosApi, clientesApi, escritorioApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import type { Cliente, Lancamento } from '../types';
+import type { Cliente, Lancamento, Escritorio } from '../types';
 import Portal from '../components/ui/Portal';
+import PixModal from '../components/PixModal';
 
 type SortKey = 'totalDevido' | 'diasMaxAtraso' | 'nome';
 
@@ -194,6 +195,12 @@ export default function Inadimplencia() {
   const { showToast } = useToast();
   const [notifTarget, setNotifTarget] = useState<ClienteInadimplente | null>(null);
   const [regularizarTarget, setRegularizarTarget] = useState<ClienteInadimplente | null>(null);
+  const [pixTarget, setPixTarget] = useState<Lancamento | null>(null);
+  const [escritorio, setEscritorio] = useState<Escritorio | null>(null);
+
+  useEffect(() => {
+    escritorioApi.get().then(e => setEscritorio(e)).catch(() => {});
+  }, []);
   const [regularizando, setRegularizando] = useState(false);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -422,7 +429,7 @@ export default function Inadimplencia() {
                   </div>
 
                   {/* Actions */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={`grid gap-2 ${escritorio?.pixKey ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <button
                       onClick={() => setNotifTarget(item)}
                       className="flex items-center justify-center gap-1.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-xs font-medium transition-colors"
@@ -430,6 +437,18 @@ export default function Inadimplencia() {
                       <Mail className="w-3 h-3" />
                       Notificar
                     </button>
+                    {escritorio?.pixKey && (
+                      <button
+                        onClick={() => {
+                          // Usa o primeiro lançamento vencido do cliente para gerar o PIX
+                          const primeiro = item.lancamentos[0];
+                          if (primeiro) setPixTarget({ ...primeiro, valor: item.totalDevido, descricao: `Honorários em atraso — ${item.cliente.nome}` });
+                        }}
+                        className="flex items-center justify-center gap-1.5 py-2 bg-[#0d5c3a]/40 hover:bg-[#0d5c3a]/60 border border-green-600/30 text-green-400 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <span className="font-bold">◆</span> PIX
+                      </button>
+                    )}
                     <button
                       onClick={() => setRegularizarTarget(item)}
                       className="flex items-center justify-center gap-1.5 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-xs font-medium transition-colors"
@@ -461,6 +480,14 @@ export default function Inadimplencia() {
         onCancel={() => setRegularizarTarget(null)}
         loading={regularizando}
       />
+
+      {pixTarget && (
+        <PixModal
+          lancamento={pixTarget}
+          escritorio={escritorio}
+          onClose={() => setPixTarget(null)}
+        />
+      )}
     </div>
   );
 }

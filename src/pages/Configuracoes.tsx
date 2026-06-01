@@ -874,6 +874,55 @@ export default function Configuracoes() {
               </div>
             </div>
 
+            {/* ── Chave PIX ── */}
+            <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5 space-y-3">
+              <div>
+                <h3 className="font-semibold text-[#f5f5f5] mb-0.5 flex items-center gap-2 text-sm">
+                  <span className="text-green-400">◆</span> Chave PIX
+                </h3>
+                <p className="text-xs text-[#505050]">
+                  Usada para gerar cobranças PIX estáticas diretamente dos lançamentos.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Tipo da chave</label>
+                  <select
+                    className={inputClass}
+                    value={escritorio.pixKeyType || ''}
+                    onChange={e => setEscritorio(prev => ({ ...prev, pixKeyType: e.target.value as any }))}
+                  >
+                    <option value="">Selecione…</option>
+                    <option value="cpf">CPF</option>
+                    <option value="cnpj">CNPJ</option>
+                    <option value="email">E-mail</option>
+                    <option value="telefone">Telefone (+55…)</option>
+                    <option value="aleatoria">Chave Aleatória</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Chave PIX</label>
+                  <input
+                    className={inputClass}
+                    value={escritorio.pixKey || ''}
+                    onChange={e => setEscritorio(prev => ({ ...prev, pixKey: e.target.value }))}
+                    placeholder={
+                      escritorio.pixKeyType === 'cpf'      ? '000.000.000-00' :
+                      escritorio.pixKeyType === 'cnpj'     ? '00.000.000/0000-00' :
+                      escritorio.pixKeyType === 'email'    ? 'seuemail@exemplo.com' :
+                      escritorio.pixKeyType === 'telefone' ? '+5511999999999' :
+                      'Cole sua chave aleatória aqui'
+                    }
+                  />
+                </div>
+              </div>
+              {escritorio.pixKey && (
+                <p className="text-xs text-green-400 flex items-center gap-1">
+                  ✓ Chave configurada — botão PIX aparecerá nos lançamentos &quot;A Receber&quot;
+                </p>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={saving}
