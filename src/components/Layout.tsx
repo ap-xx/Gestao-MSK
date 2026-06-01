@@ -389,11 +389,17 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
             <h2 className="text-sm font-semibold text-[#f5f5f5]">
               {NAV_ITEMS.find(n => n.key === currentPage)?.label}
             </h2>
-            {/* Keyboard shortcut hint */}
+            {/* Keyboard shortcut hints */}
             {['clientes','processos','contratos','avisos'].includes(currentPage) && user?.role !== 'assistente' && (
               <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-[#303030]">
                 <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px] font-mono">N</kbd>
                 <span>novo</span>
+              </span>
+            )}
+            {user?.role !== 'assistente' && (
+              <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-[#303030]">
+                <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px] font-mono">Alt+C</kbd>
+                <span>calc</span>
               </span>
             )}
           </div>

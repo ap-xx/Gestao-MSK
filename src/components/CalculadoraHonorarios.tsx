@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Calculator, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calculator, X } from 'lucide-react';
 import { formatCurrency } from '../utils/cn';
 
 /**
@@ -7,7 +7,19 @@ import { formatCurrency } from '../utils/cn';
  * Calcula honorários com base no valor da causa, percentual de êxito e parcelamento.
  */
 export default function CalculadoraHonorarios() {
-  const [open, setOpen]             = useState(false);
+  const [open, setOpen] = useState(false);
+
+  // Alt+C abre/fecha a calculadora
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.altKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setOpen(o => !o);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [valorCausa, setValorCausa] = useState('');
   const [percBase,   setPercBase]   = useState('10');
   const [percExito,  setPercExito]  = useState('20');
@@ -33,18 +45,18 @@ export default function CalculadoraHonorarios() {
 
   return (
     <>
-      {/* Trigger */}
+      {/* Trigger — direita, acima da área de toasts (bottom-6 right-6) */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-6 left-6 z-40 w-11 h-11 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/40 rounded-xl flex items-center justify-center text-[#505050] hover:text-amber-400 shadow-lg transition-all"
-        title="Calculadora de Honorários"
+        className="fixed bottom-24 right-6 z-40 w-11 h-11 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/40 rounded-xl flex items-center justify-center text-[#505050] hover:text-amber-400 shadow-lg transition-all"
+        title="Calculadora de Honorários (Alt+C)"
       >
         <Calculator className="w-5 h-5" />
       </button>
 
-      {/* Panel */}
+      {/* Panel — abre para cima a partir do trigger */}
       {open && (
-        <div className="fixed bottom-20 left-6 z-50 w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed bottom-40 right-6 z-50 w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a]">
             <div className="flex items-center gap-2">
