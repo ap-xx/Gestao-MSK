@@ -434,7 +434,11 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
     try {
       const result = await consultarProcessoDataJud(form.numeroCNJ, form.tribunalAlias);
       if (result.hits.hits.length === 0) {
-        showToast('warning', 'Processo não encontrado', 'Verifique o número CNJ e o tribunal selecionado.');
+        showToast(
+          'warning',
+          'Processo não encontrado no DataJud',
+          'O CNJ não consta na base do CNJ. Isso ocorre com processos do e-Proc, processos arquivados ou tribunais com integração parcial. Preencha os dados manualmente.',
+        );
         return;
       }
       const hit = result.hits.hits[0]._source;
