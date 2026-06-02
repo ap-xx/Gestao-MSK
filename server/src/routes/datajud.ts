@@ -29,16 +29,25 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
+  // DataJud stores the process number in different formats depending on the tribunal:
+  //   formatted:   5025109-02.2022.8.24.0038
+  //   digits only: 50251090220228240038
+  // We try both so archived/older processes are found regardless of how they were indexed.
+  const digitsOnly = numeroCNJ.replace(/\D/g, '');
+
   const body = {
     query: {
       bool: {
         should: [
           { term: { 'numeroProcesso.keyword': numeroCNJ } },
+          { term: { 'numeroProcesso.keyword': digitsOnly } },
           { match: { numeroProcesso: numeroCNJ } },
+          { match: { numeroProcesso: digitsOnly } },
         ],
         minimum_should_match: 1,
       },
     },
+    size: 5, // return up to 5 hits (handles edge cases with duplicate entries)
   };
 
   console.log(`[datajud] ${numeroCNJ} → ${tribunalUrl}`);
