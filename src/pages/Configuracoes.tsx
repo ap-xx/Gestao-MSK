@@ -25,6 +25,7 @@ import Portal from '../components/ui/Portal';
 import type { Escritorio, User as UserType, UserRole } from '../types';
 import AbaAuditoria from './configuracoes/AbaAuditoria';
 import AbaEproc    from './configuracoes/AbaEproc';
+import AbaAparencia from './configuracoes/AbaAparencia';
 
 // ─── Two-Factor Auth Section ──────────────────────────────────
 function TwoFactorSection() {
@@ -201,7 +202,7 @@ function TwoFactorSection() {
   );
 }
 
-type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes' | 'eproc';
+type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes' | 'eproc' | 'aparencia';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -833,6 +834,7 @@ export default function Configuracoes() {
     { key: 'responsavel', label: 'OAB & Responsável',   icon: User },
     { key: 'notificacoes',label: 'Notificações',         icon: Bell },
     { key: 'google',      label: 'Google Calendar',      icon: Calendar },
+    { key: 'aparencia',   label: 'Aparência',            icon: ToggleLeft },
     { key: 'eproc',       label: 'e-Proc',               icon: Server },
     { key: 'usuarios',    label: 'Usuários',             icon: Users,        adminOnly: true },
     { key: 'permissoes',  label: 'Permissões',           icon: ShieldCheck,  adminOnly: true },
@@ -2063,6 +2065,9 @@ export default function Configuracoes() {
         </div>
       )}
 
+
+      {/* ── Tab: Aparência ──────────────────────────────────── */}
+      {tab === 'aparencia' && <AbaAparencia />}
 
       {/* ── Tab: e-Proc ─────────────────────────────────────── */}
       {tab === 'eproc' && <AbaEproc />}

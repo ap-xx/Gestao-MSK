@@ -11,6 +11,8 @@ import { avisosApi } from '../services/api';
 import NotificacoesPanel from './NotificacoesPanel';
 import { canAccessPage } from '../utils/permissions';
 import CalculadoraHonorarios from './CalculadoraHonorarios';
+import { useTheme } from '../context/ThemeContext';
+import { Moon, Sun } from 'lucide-react';
 
 export type PageKey =
   | 'dashboard'
@@ -60,6 +62,7 @@ const PILL_H   = 24; // px — height of the sliding active indicator
 
 export default function Layout({ currentPage, onNavigate, children }: LayoutProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [sidebarOpen,      setSidebarOpen]      = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen,        setNotifOpen]        = useState(false);
@@ -421,6 +424,17 @@ export default function Layout({ currentPage, onNavigate, children }: LayoutProp
               title="Busca global"
             >
               <Search className="w-5 h-5" />
+            </button>
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              className="text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors"
+            >
+              {theme === 'dark'
+                ? <Sun className="w-5 h-5" />
+                : <Moon className="w-5 h-5" />}
             </button>
 
             <button

@@ -218,6 +218,13 @@ db.exec(`
     reportedAt  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS sync_snapshots (
+    id        TEXT PRIMARY KEY,  -- 'latest_<userId>'
+    userId    TEXT NOT NULL,
+    data      TEXT NOT NULL,     -- JSON blob of the full backup
+    criadoEm  TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS license_keys (
     id          TEXT PRIMARY KEY,
     key         TEXT UNIQUE NOT NULL,

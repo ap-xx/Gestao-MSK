@@ -153,4 +153,42 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
+// ─── POST /api/backup/sync — store latest snapshot on server ──────────────────
+// Called by the "Enviar para servidor" button in Configurações → Aparência.
+// Stores the full backup as a single row in the `sync_snapshots` table.
+//
+// GET /api/backup/sync — retrieve the latest snapshot
+// Called by "Receber do servidor" on the destination PC.
+
+router.post('/sync', (req: Request, res: Response) => {
+  try {
+    const payload = JSON.stringify(req.body);
+    db.prepare(`
+      INSERT INTO sync_snapshots (id, userId, data, criadoEm)
+      VALUES ('latest_' || @userId, @userId, @data, @now)
+      ON CONFLICT(id) DO UPDATE SET data = excluded.data, criadoEm = excluded.criadoEm
+    `).run({ userId: req.user!.id, data: payload, now: new Date().toISOString() });
+    res.json({ ok: true, syncedAt: new Date().toISOString() });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: 'Erro ao salvar snapshot.', detail: msg });
+  }
+});
+
+router.get('/sync', (req: Request, res: Response) => {
+  try {
+    const row = db.prepare(
+      "SELECT data FROM sync_snapshots WHERE id = 'latest_' || ?"
+    ).get(req.user!.id) as { data: string } | undefined;
+    if (!row) {
+      res.status(404).json({ error: 'Nenhum snapshot encontrado. Envie os dados de outro PC primeiro.' });
+      return;
+    }
+    res.json(JSON.parse(row.data));
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: 'Erro ao ler snapshot.', detail: msg });
+  }
+});
+
 export default router;
