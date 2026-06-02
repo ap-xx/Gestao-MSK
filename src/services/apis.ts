@@ -144,19 +144,26 @@ export async function consultarProcessoDataJud(
   const tribunal = TRIBUNAIS[tribunalAlias];
   if (!tribunal) throw new Error(`Tribunal '${tribunalAlias}' não encontrado.`);
 
-  // ── Chama o proxy do backend em vez da API diretamente ──────
-  // O DataJud bloqueia chamadas CORS diretas do browser.
-  // O servidor faz a chamada server-to-server e devolve o resultado.
-  const API_BASE = (import.meta.env?.VITE_API_URL as string) ?? 'https://msk-api.onrender.com';
+  // ── Proxy pelo backend (DataJud bloqueia CORS direto do browser) ──
+  // VITE_API_URL já contém '/api' (ex: https://msk-api.onrender.com/api),
+  // portanto o endpoint é ${BASE}/datajud (sem repetir /api).
+  const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
+    ?? 'https://msk-api.onrender.com/api';
 
-  const response = await fetch(`${API_BASE}/api/datajud`, {
+  const response = await fetch(`${API_BASE}/datajud`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tribunalUrl: tribunal.url, numeroCNJ }),
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as any;
+    const text = await response.text().catch(() => '');
+    // If server returned HTML, it means the route doesn't exist yet
+    if (text.startsWith('<')) {
+      throw new Error('Servidor indisponível ou rota DataJud não encontrada. Verifique se o Render foi atualizado.');
+    }
+    const err = JSON.parse(text || '{}');
     throw new Error(err?.error ?? `DataJud erro ${response.status}`);
   }
 

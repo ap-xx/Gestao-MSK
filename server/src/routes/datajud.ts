@@ -41,6 +41,8 @@ router.post('/', async (req: Request, res: Response) => {
     },
   };
 
+  console.log(`[datajud] ${numeroCNJ} → ${tribunalUrl}`);
+
   try {
     const upstream = await fetch(tribunalUrl, {
       method: 'POST',
@@ -49,25 +51,27 @@ router.post('/', async (req: Request, res: Response) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
-      // @ts-ignore — Node 18+ native fetch timeout via AbortController
+      // @ts-ignore — Node 18+ native fetch timeout
       signal: AbortSignal.timeout(15_000),
     });
 
+    const text = await upstream.text();
+    console.log(`[datajud] status=${upstream.status} body=${text.slice(0, 120)}`);
+
     if (!upstream.ok) {
-      const text = await upstream.text().catch(() => '');
       res.status(upstream.status).json({
         error: `DataJud respondeu ${upstream.status}`,
-        detail: text.slice(0, 200),
+        detail: text.slice(0, 300),
       });
       return;
     }
 
-    const data = await upstream.json();
-    res.json(data);
+    res.json(JSON.parse(text));
   } catch (err: any) {
     const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
+    console.error('[datajud] erro:', err?.message);
     res.status(504).json({
-      error: isTimeout ? 'DataJud não respondeu (timeout)' : 'Falha ao conectar ao DataJud',
+      error: isTimeout ? 'DataJud não respondeu (timeout 15s)' : 'Falha ao conectar ao DataJud',
       detail: err?.message,
     });
   }
