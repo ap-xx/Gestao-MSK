@@ -12,7 +12,7 @@ import { downloadXlsx, xlsxDate, xlsxCurrency } from '../utils/exportXlsx';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+// ConfirmDialog removed — handleDelete now uses undoDelete toast pattern
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -561,9 +561,7 @@ export default function Contratos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editContrato, setEditContrato] = useState<Contrato | undefined>();
   const [viewContrato, setViewContrato] = useState<Contrato | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete,    setToDelete]    = useState<Contrato | null>(null);
-  const [deleting,    setDeleting]    = useState(false);
+  // (confirmOpen/toDelete/deleting removed — handleDelete uses undoDelete now)
   const undoDelete = useUndoDelete<Contrato>('Contrato');
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -854,7 +852,6 @@ export default function Contratos() {
         <Pagination {...pagination} />
       </div>
 
-      {/* ConfirmDialog replaced by undo-delete toast pattern */}
 
       {modalOpen && (
         <ContratoModal

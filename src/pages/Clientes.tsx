@@ -156,10 +156,12 @@ function ClienteAtividadeFeed({ clienteId }: { clienteId: string }) {
   useEffect(() => {
     async function load() {
       try {
+        // Use static imports — module is already loaded
+        const { contratosApi: cApi, lancamentosApi: lApi } = await import('../services/api');
         const [procs, conts, lancs] = await Promise.all([
           processosApi.getAll(),
-          import('../services/api').then(m => m.contratosApi.getAll()),
-          import('../services/api').then(m => m.lancamentosApi.getAll()),
+          cApi.getAll(),
+          lApi.getAll(),
         ]);
         const feed: typeof itens = [];
 

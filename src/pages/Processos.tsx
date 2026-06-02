@@ -19,7 +19,7 @@ import { parseCNJ } from '../utils/parseCNJ';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+// ConfirmDialog removed — handleDelete now uses undoDelete toast pattern
 import { DateInput } from '../components/ui/Input';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -425,12 +425,12 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   const [consultandoDataJud, setConsultandoDataJud] = useState(false);
   const [dadosDataJud, setDadosDataJud] = useState<any>(null);
   const [consultandoEproc, setConsultandoEproc] = useState(false);
-  const [eprocConfigurado, setEprocConfigurado] = useState(false);
+  const [eprocTribunais, setEprocTribunais] = useState<string[]>([]);
 
-  // Check if e-Proc is configured for the current tribunal
+  // Load which tribunals have e-Proc credentials configured
   useEffect(() => {
     eprocApi.getConfigurados()
-      .then(list => setEprocConfigurado(list.length > 0))
+      .then(list => setEprocTribunais(list.map(c => c.tribunal)))
       .catch(() => {});
   }, []);
 
@@ -587,7 +587,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
                 {consultandoDataJud ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 DataJud
               </button>
-              {eprocConfigurado && (
+              {eprocTribunais.includes(form.tribunalAlias) && (
                 <button type="button" onClick={consultarEproc} disabled={consultandoEproc || consultandoDataJud}
                   title="Buscar dados no e-Proc (login configurado)"
                   className="flex items-center gap-2 px-3 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 text-green-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
@@ -610,7 +610,7 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
                     <>
                       <span className="text-[#505050]">·</span>
                       <span className="text-amber-400/70 text-[10px]">Tribunal detectado</span>
-                  {eprocConfigurado && <span className="text-green-400/70 text-[10px]">· Botão e-Proc disponível</span>}
+                  {eprocTribunais.includes(form.tribunalAlias) && <span className="text-green-400/70 text-[10px]">· e-Proc disponível</span>}
                     </>
                   )}
                 </p>
@@ -1098,9 +1098,7 @@ export default function Processos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editProcesso, setEditProcesso] = useState<Processo | undefined>();
   const [viewProcesso, setViewProcesso] = useState<Processo | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete,    setToDelete]    = useState<Processo | null>(null);
-  const [deleting,    setDeleting]    = useState(false);
+  // (confirmOpen/toDelete/deleting removed — handleDelete uses undoDelete now)
   const [quickStatusId, setQuickStatusId] = useState<string | null>(null);
   const [quickStatusPos, setQuickStatusPos] = useState<{ x: number; y: number; above: boolean } | null>(null);
   const [viewMode, setViewMode] = useState<'tabela' | 'kanban'>(
@@ -1182,21 +1180,6 @@ export default function Processos() {
     );
   }
 
-  async function doDelete() {
-    if (!toDelete) return;
-    setDeleting(true);
-    try {
-      await processosApi.remove(toDelete.id);
-      await reload();
-      showToast('info', 'Processo removido', toDelete.numeroCNJ);
-    } catch (err: any) {
-      showToast('error', 'Erro ao excluir', err.message);
-    } finally {
-      setDeleting(false);
-      setConfirmOpen(false);
-      setToDelete(null);
-    }
-  }
 
   async function handleQuickStatus(p: Processo, newStatus: string) {
     setQuickStatusId(null);
@@ -1553,15 +1536,6 @@ export default function Processos() {
           </div>
         </div>
       )}
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Excluir Processo"
-        message={`Tem certeza que deseja excluir o processo ${toDelete?.numeroCNJ}? Todos os andamentos serão perdidos.`}
-        onConfirm={doDelete}
-        onCancel={() => { setConfirmOpen(false); setToDelete(null); }}
-        loading={deleting}
-      />
 
       {modalOpen && (
         <ProcessoModal

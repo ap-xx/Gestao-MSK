@@ -80,15 +80,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signal:  AbortSignal.timeout(65_000),
     })
       .then(res => res.ok ? res.json() : null)
-      .then((data: { token?: string; refreshToken?: string; totpEnabled?: boolean } | null) => {
+      .then(async (data: { token?: string; refreshToken?: string; totpEnabled?: boolean } | null) => {
         if (!data) return;
         if (data.token)        sessionStorage.setItem(TOKEN_KEY, data.token);
         if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
         // Sync totpEnabled from server to local user
+        // Fix: use dynamic import (no require() in ESM/browser) and update via
+        // SessionDB + setUser directly to avoid stale closure on updateUser.
         if (data.totpEnabled !== undefined) {
-          const { UsersDB: DB } = require('../data/db');
+          const { UsersDB: DB } = await import('../data/db');
           DB.update(found.id, { totpEnabled: data.totpEnabled });
-          updateUser({ totpEnabled: data.totpEnabled });
+          const current = SessionDB.get();
+          if (current) {
+            const updated = { ...current, totpEnabled: data.totpEnabled };
+            SessionDB.set(updated);
+            setUser(updated);
+          }
         }
       })
       .catch(() => {});
