@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { initializeDatabase, LicenseDB } from './data/db';
+import { migrateFromLocalStorage } from './data/idb';
 import { generateLicenseKey, validateLicenseKey } from './utils/license';
 import Login from './pages/Login';
 import LicenseGate from './components/LicenseGate';
@@ -9,6 +10,8 @@ import LicenseGate from './components/LicenseGate';
 const _hadData   = !!localStorage.getItem('msk_users');
 const _gateShown = !!localStorage.getItem('msk_gate_shown');
 initializeDatabase();
+// One-time migration of existing localStorage data to IndexedDB
+void migrateFromLocalStorage();
 if (!LicenseDB.get() && _hadData && !_gateShown) {
   LicenseDB.set({
     machineId:   LicenseDB.getMachineId(),

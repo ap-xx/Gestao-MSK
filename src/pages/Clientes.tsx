@@ -15,12 +15,14 @@ import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
 import ImportCsvModal from '../components/ImportCsvModal';
+import MergeClientesModal from '../components/MergeClientesModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import Portal from '../components/ui/Portal';
 import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
+import { useVirtualTable, VIRTUAL_THRESHOLD } from '../hooks/useVirtualTable';
 import type { Cliente, TipoPessoa, StatusCliente, Processo } from '../types';
 
 const STATUS_BADGE: Record<StatusCliente, string> = {
@@ -753,6 +755,7 @@ export default function Clientes() {
   const [editCliente, setEditCliente] = useState<Cliente | undefined>();
   const [viewCliente, setViewCliente] = useState<Cliente | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [mergeOpen,  setMergeOpen]  = useState(false);
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -819,6 +822,8 @@ export default function Clientes() {
 
   const { sorted, sortKey, sortDir, toggle } = usePersistedSort(filtered, 'nome', 'cli');
   const pagination = usePagination(sorted, pageSize);
+  // Virtual scroll activates automatically for large datasets
+  const vt = useVirtualTable(sorted);
 
   // ── Bulk delete ──────────────────────────────────────────────
   async function handleBulkDelete() {
@@ -980,6 +985,14 @@ export default function Clientes() {
           {!isReadOnly && (
             <>
               <button
+                onClick={() => setMergeOpen(true)}
+                className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-purple-500/30 text-[#a0a0a0] hover:text-purple-400 rounded-lg text-sm font-medium transition-all"
+                title="Detectar e mesclar clientes com mesmo CPF/CNPJ"
+              >
+                <Users className="w-4 h-4" />
+                Duplicatas
+              </button>
+              <button
                 onClick={() => setImportOpen(true)}
                 className="flex items-center gap-2 px-3 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-blue-500/30 text-[#a0a0a0] hover:text-blue-400 rounded-lg text-sm font-medium transition-all"
                 title="Importar clientes de arquivo CSV"
@@ -1082,8 +1095,18 @@ export default function Clientes() {
       )}
 
       {/* Tabela */}
+      {vt.isVirtual && (
+        <p className="text-xs text-amber-400/70 flex items-center gap-1.5">
+          ⚡ {sorted.length} registros — rolagem virtual ativada (renderiza apenas o visível)
+        </p>
+      )}
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Virtual scroll container — used only when dataset is large */}
+        <div
+          ref={vt.isVirtual ? vt.parentRef : undefined}
+          style={vt.isVirtual ? { height: '600px', overflowY: 'auto' } : undefined}
+          className="overflow-x-auto"
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#2a2a2a]">
@@ -1120,10 +1143,10 @@ export default function Clientes() {
                 <th className="text-right px-5 py-3.5 text-xs font-medium text-[#505050] uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1e1e1e]">
+            <tbody className="divide-y divide-[#1e1e1e]" style={vt.tbodyStyle}>
               {loading ? (
                 <LoadingTable cols={7} />
-              ) : pagination.items.length === 0 ? (
+              ) : sorted.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-[#505050]">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -1131,8 +1154,10 @@ export default function Clientes() {
                   </td>
                 </tr>
               ) : (
-                pagination.items.map(c => (
-                  <tr key={c.id} className={`hover:bg-[#1a1a1a] transition-colors ${selectedIds.has(c.id) ? 'bg-amber-500/5' : ''}`}>
+                (vt.isVirtual ? vt.visibleItems : pagination.items.map(item => ({ item, virtualItem: null }))).map(({ item: c, virtualItem: vi }) => (
+                  <tr key={c.id}
+                    style={vt.trStyle(vi)}
+                    className={`hover:bg-[#1a1a1a] transition-colors ${selectedIds.has(c.id) ? 'bg-amber-500/5' : ''}`}>
                     {!isReadOnly && (
                       <td className="px-3 py-4 w-10">
                         <button onClick={() => toggleSelect(c.id)} className="text-[#505050] hover:text-amber-400 transition-colors">
@@ -1227,7 +1252,7 @@ export default function Clientes() {
             </tbody>
           </table>
         </div>
-        <Pagination {...pagination} />
+        {!vt.isVirtual && <Pagination {...pagination} />}
       </div>
 
       {/* Modal cadastro/edição */}
@@ -1236,6 +1261,13 @@ export default function Clientes() {
           cliente={editCliente}
           onClose={() => { setModalOpen(false); setEditCliente(undefined); }}
           onSave={handleSave}
+        />
+      )}
+
+      {mergeOpen && (
+        <MergeClientesModal
+          onClose={() => setMergeOpen(false)}
+          onMerged={() => { reload(); setMergeOpen(false); }}
         />
       )}
 

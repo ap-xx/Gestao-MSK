@@ -2,12 +2,13 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   BarChart2, TrendingUp, TrendingDown, Users, Gavel, FileText,
   Calendar, AlertTriangle, Printer, RefreshCw,
-  CheckCircle, Star, User,
+  CheckCircle, Star, User, Download,
 } from 'lucide-react';
 import { clientesApi, processosApi, lancamentosApi, contratosApi, escritorioApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '../utils/cn';
 import { printRelatorios } from '../utils/printRelatorio';
+import { exportElementToPdf } from '../utils/exportPdf';
 import type { Cliente, Processo, Lancamento, Contrato, Escritorio } from '../types';
 
 // ─── Card KPI ──────────────────────────────────────────────────
@@ -240,11 +241,27 @@ export default function Relatorios() {
           <button onClick={reload} className="p-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#505050] hover:text-amber-400 rounded-lg transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
+          <button
+            onClick={async () => {
+              const el = document.getElementById('relatorios-content');
+              if (el) await exportElementToPdf(el, {
+                filename: `relatorios_${new Date().toISOString().slice(0,10)}.pdf`,
+                orientation: 'portrait',
+              });
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-green-500/30 text-[#505050] hover:text-green-400 rounded-lg text-sm font-medium transition-all"
+            title="Baixar PDF direto (sem dialog de impressão)"
+          >
+            <Download className="w-4 h-4" /> PDF
+          </button>
           <button onClick={() => printRelatorios(null, relatorioData())} className="flex items-center gap-2 px-4 py-2.5 bg-[#141414] border border-[#2a2a2a] hover:border-amber-500/30 text-[#505050] hover:text-amber-400 rounded-lg text-sm font-medium transition-all">
             <Printer className="w-4 h-4" /> Imprimir
           </button>
         </div>
       </div>
+
+      {/* ── Content wrapper for PDF export ── */}
+      <div id="relatorios-content">
 
       {/* ── KPIs gerais ── */}
       <div id="section-kpis" className="report-section">
@@ -512,6 +529,7 @@ export default function Relatorios() {
           </div>
         </div>
       )}
+      </div> {/* end #relatorios-content */}
     </div>
   );
 }

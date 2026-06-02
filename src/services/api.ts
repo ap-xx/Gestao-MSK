@@ -4,11 +4,13 @@
 // ============================================================
 
 import {
-  ClientesDB, ContratosDB, ProcessosDB, LancamentosDB,
-  AvisosDB, UsersDB, EscritoriooDB, generateId,
+  UsersDB, EscritoriooDB, generateId,
   getAll, saveAll, SessionDB, LicenseDB, LicensesRegistryDB,
   PrevisoesDB,
 } from '../data/db';
+import {
+  IDBClientes, IDBContratos, IDBProcessos, IDBLancamentos, IDBAviso, IDBPrevisoes,
+} from '../data/idb';
 import type {
   Cliente, Contrato, Processo, Lancamento, Aviso,
   Escritorio, User, Andamento, LicenseRecord,
@@ -133,29 +135,30 @@ async function serverReq<T>(
 // ─────────────────────────────────────────────────────────────
 
 export const clientesApi = {
-  getAll:  () => lp(() => ClientesDB.getAll()),
-  getById: (id: string) => lp(() => {
-    const c = ClientesDB.getById(id);
+  getAll:  () => IDBClientes.getAll(),
+  getById: async (id: string) => {
+    const c = await IDBClientes.getById(id);
     if (!c) throw new Error('Cliente não encontrado');
     return c;
-  }),
-  create: (c: Omit<Cliente, 'id'>) => lp(() => {
-    const novo = ClientesDB.insert({ ...c, id: generateId() });
+  },
+  create: async (c: Omit<Cliente, 'id'>) => {
+    const novo = { ...c, id: generateId() } as Cliente;
+    await IDBClientes.insert(novo);
     logAudit('criar', 'cliente', novo.id, novo.nome);
     return novo;
-  }),
-  update: (id: string, c: Partial<Cliente>) => lp(() => {
-    const updated = ClientesDB.update(id, c);
+  },
+  update: async (id: string, c: Partial<Cliente>) => {
+    const updated = await IDBClientes.update(id, c);
     if (!updated) throw new Error('Cliente não encontrado');
     logAudit('atualizar', 'cliente', id, updated.nome);
     return updated;
-  }),
-  remove: (id: string) => lp(() => {
-    const c = ClientesDB.getById(id);
-    ClientesDB.remove(id);
+  },
+  remove: async (id: string) => {
+    const c = await IDBClientes.getById(id);
+    await IDBClientes.remove(id);
     logAudit('excluir', 'cliente', id, c?.nome);
     return { ok: true as const };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -163,29 +166,30 @@ export const clientesApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const contratosApi = {
-  getAll:  () => lp(() => ContratosDB.getAll()),
-  getById: (id: string) => lp(() => {
-    const c = ContratosDB.getById(id);
+  getAll:  () => IDBContratos.getAll(),
+  getById: async (id: string) => {
+    const c = await IDBContratos.getById(id);
     if (!c) throw new Error('Contrato não encontrado');
     return c;
-  }),
-  create: (c: Omit<Contrato, 'id'>) => lp(() => {
-    const novo = ContratosDB.insert({ ...c, id: generateId() });
+  },
+  create: async (c: Omit<Contrato, 'id'>) => {
+    const novo = { ...c, id: generateId() } as Contrato;
+    await IDBContratos.insert(novo);
     logAudit('criar', 'contrato', novo.id, novo.clienteNome);
     return novo;
-  }),
-  update: (id: string, c: Partial<Contrato>) => lp(() => {
-    const updated = ContratosDB.update(id, c);
+  },
+  update: async (id: string, c: Partial<Contrato>) => {
+    const updated = await IDBContratos.update(id, c);
     if (!updated) throw new Error('Contrato não encontrado');
     logAudit('atualizar', 'contrato', id, updated.clienteNome);
     return updated;
-  }),
-  remove: (id: string) => lp(() => {
-    const c = ContratosDB.getById(id);
-    ContratosDB.remove(id);
+  },
+  remove: async (id: string) => {
+    const c = await IDBContratos.getById(id);
+    await IDBContratos.remove(id);
     logAudit('excluir', 'contrato', id, c?.clienteNome);
     return { ok: true as const };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -193,31 +197,32 @@ export const contratosApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const processosApi = {
-  getAll:  () => lp(() => ProcessosDB.getAll()),
-  getById: (id: string) => lp(() => {
-    const proc = ProcessosDB.getById(id);
+  getAll:  () => IDBProcessos.getAll(),
+  getById: async (id: string) => {
+    const proc = await IDBProcessos.getById(id);
     if (!proc) throw new Error('Processo não encontrado');
     return proc;
-  }),
-  create: (proc: Omit<Processo, 'id'>) => lp(() => {
-    const novo = ProcessosDB.insert({ ...proc, id: generateId() });
+  },
+  create: async (proc: Omit<Processo, 'id'>) => {
+    const novo = { ...proc, id: generateId() } as Processo;
+    await IDBProcessos.insert(novo);
     logAudit('criar', 'processo', novo.id, novo.numeroCNJ);
     return novo;
-  }),
-  update: (id: string, proc: Partial<Processo>) => lp(() => {
-    const updated = ProcessosDB.update(id, proc);
+  },
+  update: async (id: string, proc: Partial<Processo>) => {
+    const updated = await IDBProcessos.update(id, proc);
     if (!updated) throw new Error('Processo não encontrado');
     logAudit('atualizar', 'processo', id, updated.numeroCNJ);
     return updated;
-  }),
-  remove: (id: string) => lp(() => {
-    const proc = ProcessosDB.getById(id);
-    ProcessosDB.remove(id);
+  },
+  remove: async (id: string) => {
+    const proc = await IDBProcessos.getById(id);
+    await IDBProcessos.remove(id);
     logAudit('excluir', 'processo', id, proc?.numeroCNJ);
     return { ok: true as const };
-  }),
-  addAndamento: (id: string, a: Omit<Andamento, 'id' | 'criadoEm'>) => lp(() => {
-    const proc = ProcessosDB.getById(id);
+  },
+  addAndamento: async (id: string, a: Omit<Andamento, 'id' | 'criadoEm'>) => {
+    const proc = await IDBProcessos.getById(id);
     if (!proc) throw new Error('Processo não encontrado');
     const andamento: Andamento = {
       ...a,
@@ -225,10 +230,10 @@ export const processosApi = {
       criadoEm: new Date().toISOString(),
     };
     const andamentos = [...(proc.andamentos ?? []), andamento];
-    ProcessosDB.update(id, { andamentos, atualizadoEm: new Date().toISOString() });
+    await IDBProcessos.update(id, { andamentos, atualizadoEm: new Date().toISOString() });
     logAudit('andamento', 'processo', id, `${proc.numeroCNJ} — ${a.tipo}`);
     return { andamento };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -236,47 +241,44 @@ export const processosApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const lancamentosApi = {
-  getAll: () => lp(() => {
-    const hoje = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
-    const todos = LancamentosDB.getAll();
-    let mudou = false;
-
-    const resultado = todos.map(l => {
-      // Transita pendente → vencido silenciosamente quando dataVencimento passou
-      if (l.status === 'pendente' && l.dataVencimento && l.dataVencimento < hoje) {
-        mudou = true;
-        return { ...l, status: 'vencido' } as Lancamento;
-      }
-      return l;
-    });
-
-    // Persiste em lote (uma única escrita) para manter o localStorage consistente
-    if (mudou) saveAll('msk_lancamentos', resultado);
-
-    return resultado;
-  }),
-  getById: (id: string) => lp(() => {
-    const l = LancamentosDB.getById(id);
+  getAll: async () => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const todos = await IDBLancamentos.getAll();
+    const vencidos = todos.filter(
+      l => l.status === 'pendente' && l.dataVencimento && l.dataVencimento < hoje,
+    );
+    if (vencidos.length > 0) {
+      // Auto-transition pendente → vencido in bulk
+      await Promise.all(vencidos.map(l => IDBLancamentos.update(l.id, { status: 'vencido' })));
+      return todos.map(l =>
+        vencidos.find(v => v.id === l.id) ? { ...l, status: 'vencido' as const } : l,
+      );
+    }
+    return todos;
+  },
+  getById: async (id: string) => {
+    const l = await IDBLancamentos.getById(id);
     if (!l) throw new Error('Lançamento não encontrado');
     return l;
-  }),
-  create: (l: Omit<Lancamento, 'id'>) => lp(() => {
-    const novo = LancamentosDB.insert({ ...l, id: generateId() });
+  },
+  create: async (l: Omit<Lancamento, 'id'>) => {
+    const novo = { ...l, id: generateId() } as Lancamento;
+    await IDBLancamentos.insert(novo);
     logAudit('criar', 'lancamento', novo.id, novo.descricao);
     return novo;
-  }),
-  update: (id: string, l: Partial<Lancamento>) => lp(() => {
-    const updated = LancamentosDB.update(id, l);
+  },
+  update: async (id: string, l: Partial<Lancamento>) => {
+    const updated = await IDBLancamentos.update(id, l);
     if (!updated) throw new Error('Lançamento não encontrado');
     logAudit('atualizar', 'lancamento', id, updated.descricao);
     return updated;
-  }),
-  remove: (id: string) => lp(() => {
-    const l = LancamentosDB.getById(id);
-    LancamentosDB.remove(id);
+  },
+  remove: async (id: string) => {
+    const l = await IDBLancamentos.getById(id);
+    await IDBLancamentos.remove(id);
     logAudit('excluir', 'lancamento', id, l?.descricao);
     return { ok: true as const };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -284,29 +286,37 @@ export const lancamentosApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const avisosApi = {
-  getAll:     () => lp(() => AvisosDB.getAll()),
-  create:     (a: Omit<Aviso, 'id'>) => lp(() =>
-    AvisosDB.insert({ ...a, id: generateId() })
-  ),
-  update:     (id: string, a: Partial<Aviso>) => lp(() => {
-    const updated = AvisosDB.update(id, a);
+  getAll:  () => IDBAviso.getAll(),
+  create:  async (a: Omit<Aviso, 'id'>) => {
+    const novo = { ...a, id: generateId() } as Aviso;
+    await IDBAviso.insert(novo);
+    return novo;
+  },
+  update:  async (id: string, a: Partial<Aviso>) => {
+    const updated = await IDBAviso.update(id, a);
     if (!updated) throw new Error('Aviso não encontrado');
     return updated;
-  }),
-  marcarLido: (id: string) => lp(() => {
-    const updated = AvisosDB.marcarLido(id);
+  },
+  marcarLido: async (id: string) => {
+    const updated = await IDBAviso.update(id, { lido: true });
     if (!updated) throw new Error('Aviso não encontrado');
     return updated;
-  }),
-  remove: (id: string) => lp(() => { AvisosDB.remove(id); return { ok: true as const }; }),
-  gerar:  () => lp(() => {
+  },
+  remove: async (id: string) => {
+    await IDBAviso.remove(id);
+    return { ok: true as const };
+  },
+  gerar: async () => {
     const hoje = new Date().toISOString().slice(0, 10);
     const em7dias = new Date();
     em7dias.setDate(em7dias.getDate() + 7);
     const fim7 = em7dias.toISOString().slice(0, 10);
-    const processos   = ProcessosDB.getAll();
-    const lancamentos = LancamentosDB.getAll();
-    const existentes  = AvisosDB.getAll();
+
+    const [processos, lancamentos, existentes] = await Promise.all([
+      IDBProcessos.getAll(),
+      IDBLancamentos.getAll(),
+      IDBAviso.getAll(),
+    ]);
     let criados = 0;
 
     // Audiências nos próximos 7 dias
@@ -321,9 +331,9 @@ export const avisosApi = {
           a => a.processoId === proc.id && a.tipo === 'audiencia' && !a.lido
         );
         if (!jaExiste) {
-          AvisosDB.insert({
+          await IDBAviso.insert({
             id: generateId(),
-            titulo:   'Audiência próxima',
+            titulo:    'Audiência próxima',
             descricao: `${proc.clienteNome} — audiência em ${new Date(proc.proximaAudiencia).toLocaleDateString('pt-BR')}.`,
             tipo:      'audiencia',
             urgencia:  'alta',
@@ -351,7 +361,7 @@ export const avisosApi = {
         a => a.clienteId === d.clienteId && a.tipo === 'pagamento' && !a.lido
       );
       if (!jaExiste) {
-        AvisosDB.insert({
+        await IDBAviso.insert({
           id: generateId(),
           titulo:    `Inadimplência — ${d.nome}`,
           descricao: `Cliente com valores vencidos totalizando R$ ${d.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
@@ -366,7 +376,7 @@ export const avisosApi = {
     }
 
     return { criados };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -455,31 +465,37 @@ export const configApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const backupApi = {
-  exportar: () => lp(() => ({
-    clientes:    ClientesDB.getAll(),
-    contratos:   ContratosDB.getAll(),
-    processos:   ProcessosDB.getAll(),
-    lancamentos: LancamentosDB.getAll(),
-    avisos:      AvisosDB.getAll(),
-    users:       UsersDB.getAll(),
-    escritorio:  EscritoriooDB.get(),
-    auditoria:   getAll<AuditEntry>(AUDIT_KEY),
-    exportadoEm: new Date().toISOString(),
-  })),
-  importar: (data: any) => lp(() => {
-    if (data.clientes)    saveAll('msk_clientes',    data.clientes);
-    if (data.contratos)   saveAll('msk_contratos',   data.contratos);
-    if (data.processos)   saveAll('msk_processos',   data.processos);
-    if (data.lancamentos) saveAll('msk_lancamentos', data.lancamentos);
-    if (data.avisos)      saveAll('msk_avisos',      data.avisos);
-    if (data.users)       saveAll('msk_users',       data.users);
+  exportar: async () => {
+    const [clientes, contratos, processos, lancamentos, avisos] = await Promise.all([
+      IDBClientes.getAll(),
+      IDBContratos.getAll(),
+      IDBProcessos.getAll(),
+      IDBLancamentos.getAll(),
+      IDBAviso.getAll(),
+    ]);
+    return {
+      clientes, contratos, processos, lancamentos, avisos,
+      users:      UsersDB.getAll(),
+      escritorio: EscritoriooDB.get(),
+      auditoria:  getAll<AuditEntry>(AUDIT_KEY),
+      exportadoEm: new Date().toISOString(),
+    };
+  },
+  importar: async (data: any) => {
+    // Import into IndexedDB (replacing existing data)
+    if (data.clientes)    await IDBClientes.insertBulk(data.clientes);
+    if (data.contratos)   await IDBContratos.insertBulk(data.contratos);
+    if (data.processos)   await IDBProcessos.insertBulk(data.processos);
+    if (data.lancamentos) await IDBLancamentos.insertBulk(data.lancamentos);
+    if (data.avisos)      await IDBAviso.insertBulk(data.avisos);
+    if (data.users)       saveAll('msk_users', data.users);
     if (data.escritorio)  EscritoriooDB.save(data.escritorio);
     const summary: Record<string, number> = {};
     for (const k of ['clientes', 'contratos', 'processos', 'lancamentos', 'avisos', 'users'] as const) {
       if (data[k]) summary[k] = (data[k] as any[]).length;
     }
     return { ok: true as const, summary };
-  }),
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -545,37 +561,31 @@ export const eprocApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const previsoesApi = {
-  getAll: (): Promise<PrevisaoHonorario[]> =>
-    lp(() => PrevisoesDB.getAll().sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))),
+  getAll: async (): Promise<PrevisaoHonorario[]> => {
+    const all = await IDBPrevisoes.getAll();
+    return all.sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+  },
 
-  create: (data: Omit<PrevisaoHonorario, 'id' | 'criadoEm' | 'atualizadoEm'>): Promise<PrevisaoHonorario> =>
-    lp(() => {
-      const now = new Date().toISOString();
-      const item: PrevisaoHonorario = {
-        ...data,
-        id: generateId(),
-        criadoEm: now,
-        atualizadoEm: now,
-      };
-      PrevisoesDB.insert(item);
-      logAudit('criar', 'previsao', item.id, item.nome);
-      return item;
-    }),
+  create: async (data: Omit<PrevisaoHonorario, 'id' | 'criadoEm' | 'atualizadoEm'>): Promise<PrevisaoHonorario> => {
+    const now = new Date().toISOString();
+    const item: PrevisaoHonorario = { ...data, id: generateId(), criadoEm: now, atualizadoEm: now };
+    await IDBPrevisoes.insert(item);
+    logAudit('criar', 'previsao', item.id, item.nome);
+    return item;
+  },
 
-  update: (id: string, data: Partial<PrevisaoHonorario>): Promise<PrevisaoHonorario> =>
-    lp(() => {
-      const updated = { ...data, atualizadoEm: new Date().toISOString() };
-      PrevisoesDB.update(id, updated);
-      logAudit('atualizar', 'previsao', id);
-      return { ...PrevisoesDB.getAll().find(p => p.id === id)! };
-    }),
+  update: async (id: string, data: Partial<PrevisaoHonorario>): Promise<PrevisaoHonorario> => {
+    const updated = await IDBPrevisoes.update(id, { ...data, atualizadoEm: new Date().toISOString() });
+    if (!updated) throw new Error('Previsão não encontrada');
+    logAudit('atualizar', 'previsao', id);
+    return updated;
+  },
 
-  remove: (id: string): Promise<{ ok: true }> =>
-    lp(() => {
-      PrevisoesDB.remove(id);
-      logAudit('excluir', 'previsao', id);
-      return { ok: true as const };
-    }),
+  remove: async (id: string): Promise<{ ok: true }> => {
+    await IDBPrevisoes.remove(id);
+    logAudit('excluir', 'previsao', id);
+    return { ok: true as const };
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
