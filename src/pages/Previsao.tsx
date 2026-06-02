@@ -46,7 +46,7 @@ interface ModalProps {
   onSave:  () => void;
 }
 
-// ─── OrigemField — select + Adicionar + Deletar ────────────────
+// ─── OrigemField — custom dropdown + Adicionar + Deletar ─────────
 function OrigemField({
   value, onChange, origens, onOrigensList, previsoes, labelClass,
 }: {
@@ -59,6 +59,20 @@ function OrigemField({
 }) {
   const [addOpen,    setAddOpen]    = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [open,       setOpen]       = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  const displayLabel = value || '— Selecione a origem —';
 
   return (
     <div>
@@ -66,27 +80,67 @@ function OrigemField({
         <label className={labelClass} style={{ marginBottom: 0 }}>Origem / Como chegou</label>
         <div className="flex gap-1">
           <button type="button" onClick={() => setAddOpen(true)}
-            title="Adicionar nova origem"
             className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors px-1.5 py-0.5 rounded hover:bg-amber-500/10">
             <Plus className="w-3 h-3" /> Adicionar
           </button>
           {origens.length > 0 && (
             <button type="button" onClick={() => setDeleteOpen(true)}
-              title="Excluir uma origem"
               className="flex items-center gap-1 text-[10px] text-[#505050] hover:text-red-400 transition-colors px-1.5 py-0.5 rounded hover:bg-red-500/10">
               <Trash2 className="w-3 h-3" /> Deletar
             </button>
           )}
         </div>
       </div>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-amber-500/40 transition-colors"
-      >
-        <option value="">— Selecione a origem —</option>
-        {origens.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+
+      {/* Custom dropdown trigger */}
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-all text-left ${
+            open
+              ? 'bg-[#1e1e1e] border-amber-500/40 text-[#f5f5f5]'
+              : 'bg-[#1e1e1e] border-[#2a2a2a] hover:border-[#3a3a3a] text-[#f5f5f5]'
+          }`}
+        >
+          <span className={value ? 'text-[#f5f5f5]' : 'text-[#505050]'}>{displayLabel}</span>
+          <ChevronDown className={`w-4 h-4 text-[#505050] shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Dropdown list */}
+        {open && (
+          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-2xl overflow-hidden"
+               style={{ maxHeight: '220px', overflowY: 'auto' }}>
+            {/* "None" option */}
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false); }}
+              className={`w-full text-left px-3 py-2.5 text-sm transition-colors border-b border-[#2a2a2a] ${
+                !value ? 'text-amber-400 bg-amber-500/10' : 'text-[#505050] hover:bg-white/5 hover:text-[#a0a0a0]'
+              }`}
+            >
+              — Selecione a origem —
+            </button>
+
+            {/* Options */}
+            {origens.map(o => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => { onChange(o); setOpen(false); }}
+                className={`w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between group ${
+                  value === o
+                    ? 'text-amber-400 bg-amber-500/10'
+                    : 'text-[#a0a0a0] hover:bg-white/5 hover:text-[#f5f5f5]'
+                }`}
+              >
+                <span>{o}</span>
+                {value === o && <CheckCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {addOpen && (
         <AddOrigemModal
