@@ -3,7 +3,7 @@ import {
   Scale, LayoutDashboard, Users, FileText, Gavel, DollarSign,
   AlertTriangle, Bell, Settings, LogOut, Menu, X, ChevronRight,
   UserCircle, TrendingDown, Calendar, Search, BarChart2, KeyRound,
-  Stamp,
+  Stamp, Target,
 } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,7 @@ export type PageKey =
   | 'contratos'
   | 'processos'
   | 'honorarios'
+  | 'previsao'
   | 'agenda'
   | 'inadimplencia'
   | 'avisos'
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'contratos',     label: 'Contratos',      icon: FileText },
   { key: 'processos',     label: 'Processos',      icon: Gavel },
   { key: 'honorarios',    label: 'Honorários',     icon: DollarSign },
+  { key: 'previsao',      label: 'Previsão',       icon: Target },
   { key: 'agenda',        label: 'Agenda',         icon: Calendar },
   { key: 'inadimplencia', label: 'Inadimplência',  icon: TrendingDown },
   { key: 'avisos',        label: 'Avisos',         icon: AlertTriangle },

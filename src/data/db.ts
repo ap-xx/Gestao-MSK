@@ -292,4 +292,15 @@ export const LicensesRegistryDB = {
     getAll<LicenseRecord>(LIC_REGISTRY_KEY).find(r => r.key === key),
 };
 
+/** Previsões de honorários (leads/prospectos) */
+const PREVISAO_KEY = 'msk_previsoes';
+export const PrevisoesDB = {
+  getAll:  () => getAll<import('../types').PrevisaoHonorario>(PREVISAO_KEY),
+  insert:  (r: import('../types').PrevisaoHonorario) =>
+    insert<import('../types').PrevisaoHonorario>(PREVISAO_KEY, r),
+  update:  (id: string, u: Partial<import('../types').PrevisaoHonorario>) =>
+    update<import('../types').PrevisaoHonorario>(PREVISAO_KEY, id, u),
+  remove:  (id: string) => remove<import('../types').PrevisaoHonorario>(PREVISAO_KEY, id),
+};
+
 export { DB_KEYS };

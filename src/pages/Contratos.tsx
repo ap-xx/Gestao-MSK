@@ -2,8 +2,9 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Plus, X, FileText, Search, Edit2, Trash2, DollarSign,
   TrendingUp, Building2, User, Eye, Download, CheckSquare, Square,
+  ToggleLeft, ToggleRight, Zap, Loader2,
 } from 'lucide-react';
-import { contratosApi, clientesApi } from '../services/api';
+import { contratosApi, clientesApi, lancamentosApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv, fmtCsvDate, fmtCsvCurrency } from '../utils/exportCsv';
@@ -17,10 +18,10 @@ import { LoadingTable } from '../components/ui/LoadingTable';
 import { Pagination } from '../components/ui/Pagination';
 import { usePersistedSort } from '../hooks/usePersistedSort';
 import { usePagination } from '../hooks/usePagination';
-import type { Contrato, TipoContrato, StatusContrato, Cliente } from '../types';
+import type { Contrato, TipoContrato, StatusContrato, Cliente, PeriodicidadeFaturamento, FaturamentoConfig } from '../types';
 import Portal from '../components/ui/Portal';
 
-const TIPOS: TipoContrato[] = ['Mensal', 'Êxito', 'Misto', 'Avulso'];
+const TIPOS: TipoContrato[] = ['Mensal', 'Êxito', 'Misto', 'Avulso', 'Bônus'];
 const AREAS = ['Cível', 'Trabalhista', 'Criminal', 'Empresarial', 'Tributário', 'Imobiliário', 'Família e Sucessões', 'Previdenciário', 'Administrativo', 'Outro'];
 
 const STATUS_STYLES: Record<StatusContrato, string> = {
@@ -38,10 +39,25 @@ const STATUS_LABELS: Record<StatusContrato, string> = {
 };
 
 const TIPO_STYLES: Record<TipoContrato, string> = {
-  'Mensal': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  'Êxito': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  'Misto': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  'Avulso': 'bg-green-500/10 text-green-400 border-green-500/20',
+  'Mensal':  'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  'Êxito':   'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  'Misto':   'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  'Avulso':  'bg-green-500/10 text-green-400 border-green-500/20',
+  'Bônus':   'bg-pink-500/10 text-pink-400 border-pink-500/20',
+};
+
+const PERIODICIDADE_LABELS: Record<PeriodicidadeFaturamento, string> = {
+  mensal:      'Mensal',
+  bimestral:   'Bimestral',
+  trimestral:  'Trimestral',
+  semestral:   'Semestral',
+  anual:       'Anual',
+  unico:       'Parcela única',
+};
+
+const PERIODICIDADE_DIAS: Record<PeriodicidadeFaturamento, number> = {
+  mensal: 30, bimestral: 60, trimestral: 90,
+  semestral: 180, anual: 365, unico: 0,
 };
 
 // Pipeline de status
@@ -83,45 +99,80 @@ interface ModalProps {
 function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!contrato;
-  // Ctrl+S salva o formulário
   useCtrlSave(() => document.getElementById('contrato-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 
   const [form, setForm] = useState({
-    clienteId: contrato?.clienteId || '',
-    tipo: (contrato?.tipo || 'Mensal') as TipoContrato,
-    valorMensal: contrato?.valorMensal?.toString() || '',
+    clienteId:       contrato?.clienteId || '',
+    tipo:            (contrato?.tipo || 'Mensal') as TipoContrato,
+    valorMensal:     contrato?.valorMensal?.toString() || '',
+    valorBonus:      contrato?.valorBonus?.toString() || '',
     percentualExito: contrato?.percentualExito?.toString() || '',
-    valorCausa: contrato?.valorCausa?.toString() || '',
-    descricao: contrato?.descricao || '',
-    areaAtuacao: contrato?.areaAtuacao || 'Cível',
-    dataInicio: contrato?.dataInicio || new Date().toISOString().split('T')[0],
-    dataFim: contrato?.dataFim || '',
-    status: (contrato?.status || 'ativo') as StatusContrato,
-    observacoes: contrato?.observacoes || '',
+    valorCausa:      contrato?.valorCausa?.toString() || '',
+    descricao:       contrato?.descricao || '',
+    areaAtuacao:     contrato?.areaAtuacao || 'Cível',
+    dataInicio:      contrato?.dataInicio || new Date().toISOString().split('T')[0],
+    dataFim:         contrato?.dataFim || '',
+    status:          (contrato?.status || 'ativo') as StatusContrato,
+    observacoes:     contrato?.observacoes || '',
   });
+
+  // ── Faturamento ────────────────────────────────────────────
+  const [faturamento, setFaturamento] = useState(contrato?.faturamento ?? false);
+  const [fat, setFat] = useState<FaturamentoConfig>(contrato?.faturamentoConfig ?? {
+    valor: 0,
+    periodicidade: 'mensal',
+    parcelas: 1,
+    primeiroVencimento: new Date().toISOString().split('T')[0],
+  });
+
+  // When tipo changes to Bônus, auto-enable faturamento with unico
+  const handleTipo = (t: TipoContrato) => {
+    setForm(f => ({ ...f, tipo: t }));
+    if (t === 'Bônus') {
+      setFaturamento(true);
+      setFat(p => ({ ...p, periodicidade: 'unico', parcelas: 1 }));
+    }
+  };
 
   function set(key: string, val: string) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
 
+  // Sync valor sugerido para faturamento a partir dos campos de valor
+  const valorSugerido = form.tipo === 'Mensal' ? parseFloat(form.valorMensal) || 0
+    : form.tipo === 'Bônus' ? parseFloat(form.valorBonus) || 0
+    : form.tipo === 'Êxito' || form.tipo === 'Misto'
+      ? (parseFloat(form.valorCausa) || 0) * ((parseFloat(form.percentualExito) || 0) / 100)
+    : 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.clienteId) { showToast('warning', 'Selecione um cliente'); return; }
+    if (faturamento && !fat.valor) { showToast('warning', 'Informe o valor do faturamento'); return; }
+    if (faturamento && !fat.primeiroVencimento) { showToast('warning', 'Informe a data do primeiro vencimento'); return; }
+
     const cliente = clientes.find(c => c.id === form.clienteId);
     const now = new Date().toISOString();
     const payload: Omit<Contrato, 'id'> = {
-      clienteId: form.clienteId,
-      clienteNome: cliente?.nome || '',
-      tipo: form.tipo,
-      valorMensal: form.valorMensal ? parseFloat(form.valorMensal) : undefined,
+      clienteId:       form.clienteId,
+      clienteNome:     cliente?.nome || '',
+      tipo:            form.tipo,
+      valorMensal:     form.valorMensal ? parseFloat(form.valorMensal) : undefined,
+      valorBonus:      form.valorBonus ? parseFloat(form.valorBonus) : undefined,
       percentualExito: form.percentualExito ? parseFloat(form.percentualExito) : undefined,
-      valorCausa: form.valorCausa ? parseFloat(form.valorCausa) : undefined,
-      descricao: form.descricao,
-      areaAtuacao: form.areaAtuacao,
-      dataInicio: form.dataInicio,
-      dataFim: form.dataFim || undefined,
-      status: form.status,
-      observacoes: form.observacoes || undefined,
+      valorCausa:      form.valorCausa ? parseFloat(form.valorCausa) : undefined,
+      descricao:       form.descricao,
+      areaAtuacao:     form.areaAtuacao,
+      dataInicio:      form.dataInicio,
+      dataFim:         form.dataFim || undefined,
+      status:          form.status,
+      observacoes:     form.observacoes || undefined,
+      faturamento:     faturamento,
+      faturamentoConfig: faturamento ? {
+        ...fat,
+        // preserve lancamentosGerados from the existing contract if editing
+        lancamentosGerados: contrato?.faturamentoConfig?.lancamentosGerados,
+      } : undefined,
       criadoEm: contrato?.criadoEm || now,
     };
     try {
@@ -146,8 +197,9 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
           <h2 className="font-playfair text-lg font-bold text-[#f5f5f5]">{isEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
           <button onClick={onClose} className="text-[#a0a0a0] hover:text-[#f5f5f5]"><X className="w-5 h-5" /></button>
         </div>
-        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Cliente */}
+        <form id="contrato-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
+
+          {/* ── Cliente ── */}
           <div>
             <label className={labelClass}>Cliente *</label>
             <select className={inputClass} value={form.clienteId} onChange={e => set('clienteId', e.target.value)} required>
@@ -158,53 +210,59 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             </select>
           </div>
 
-          {/* Tipo */}
+          {/* ── Tipo ── */}
           <div>
             <label className={labelClass}>Tipo de Contrato *</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-1.5">
               {TIPOS.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => set('tipo', t)}
+                <button key={t} type="button" onClick={() => handleTipo(t)}
                   className={`py-2 rounded-lg border text-xs font-medium transition-all ${
-                    form.tipo === t ? TIPO_STYLES[t] + ' !border-opacity-100' : 'border-[#2a2a2a] bg-[#1e1e1e] text-[#a0a0a0]'
-                  }`}
-                >
+                    form.tipo === t ? TIPO_STYLES[t] : 'border-[#2a2a2a] bg-[#1e1e1e] text-[#a0a0a0] hover:text-[#f5f5f5]'
+                  }`}>
                   {t}
                 </button>
               ))}
             </div>
+            {form.tipo === 'Bônus' && (
+              <p className="text-[10px] text-pink-400/70 mt-1">Bônus por resultado excepcional — faturamento único habilitado automaticamente.</p>
+            )}
           </div>
 
-          {/* Valores por tipo */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* ── Valores por tipo ── */}
+          <div className="grid grid-cols-2 gap-3">
             {(form.tipo === 'Mensal' || form.tipo === 'Misto') && (
               <div>
                 <label className={labelClass}>Valor Mensal (R$)</label>
-                <input type="number" className={inputClass} value={form.valorMensal} onChange={e => set('valorMensal', e.target.value)} placeholder="0.00" min="0" step="0.01" />
+                <input type="number" className={inputClass} value={form.valorMensal} onChange={e => set('valorMensal', e.target.value)} placeholder="0,00" min="0" step="0.01" />
+              </div>
+            )}
+            {form.tipo === 'Bônus' && (
+              <div className="col-span-2">
+                <label className={labelClass}>Valor do Bônus (R$) *</label>
+                <input type="number" className={inputClass} value={form.valorBonus} onChange={e => set('valorBonus', e.target.value)} placeholder="0,00" min="0" step="0.01" required={form.tipo === 'Bônus'} />
               </div>
             )}
             {(form.tipo === 'Êxito' || form.tipo === 'Misto') && (
               <>
                 <div>
-                  <label className={labelClass}>Percentual Êxito (%)</label>
+                  <label className={labelClass}>% de Êxito</label>
                   <input type="number" className={inputClass} value={form.percentualExito} onChange={e => set('percentualExito', e.target.value)} placeholder="20" min="0" max="100" step="0.1" />
                 </div>
                 <div>
                   <label className={labelClass}>Valor da Causa (R$)</label>
-                  <input type="number" className={inputClass} value={form.valorCausa} onChange={e => set('valorCausa', e.target.value)} placeholder="0.00" min="0" step="0.01" />
+                  <input type="number" className={inputClass} value={form.valorCausa} onChange={e => set('valorCausa', e.target.value)} placeholder="0,00" min="0" step="0.01" />
                 </div>
               </>
             )}
           </div>
 
+          {/* ── Descrição + Área + Status ── */}
           <div>
             <label className={labelClass}>Descrição do Serviço *</label>
             <input className={inputClass} value={form.descricao} onChange={e => set('descricao', e.target.value)} required placeholder="Descreva o serviço prestado" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Área de Atuação</label>
               <select className={inputClass} value={form.areaAtuacao} onChange={e => set('areaAtuacao', e.target.value)}>
@@ -213,7 +271,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             </div>
             <div>
               <label className={labelClass}>Status</label>
-              <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
+              <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value as StatusContrato)}>
                 <option value="ativo">Ativo</option>
                 <option value="negociando">Em negociação</option>
                 <option value="suspenso">Suspenso</option>
@@ -222,7 +280,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Data de Início *</label>
               <DateInput className={inputClass} value={form.dataInicio} onChange={e => set('dataInicio', e.target.value)} required />
@@ -233,6 +291,86 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             </div>
           </div>
 
+          {/* ── Faturamento ── */}
+          <div className={`border rounded-xl p-4 transition-all ${faturamento ? 'border-amber-500/30 bg-amber-500/5' : 'border-[#2a2a2a]'}`}>
+            {/* Toggle */}
+            <button type="button" onClick={() => setFaturamento(v => !v)}
+              className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <Zap className={`w-4 h-4 ${faturamento ? 'text-amber-400' : 'text-[#505050]'}`} />
+                <span className={`text-sm font-medium ${faturamento ? 'text-[#f5f5f5]' : 'text-[#505050]'}`}>Faturamento / Parcelamento</span>
+                <span className="text-[10px] text-[#505050]">Gerar lançamentos automaticamente</span>
+              </div>
+              {faturamento
+                ? <ToggleRight className="w-8 h-8 text-amber-400" />
+                : <ToggleLeft  className="w-8 h-8 text-[#404040]" />}
+            </button>
+
+            {/* Config when enabled */}
+            {faturamento && (
+              <div className="mt-4 space-y-3">
+                {/* Valor + Periodicidade */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>
+                      Valor por parcela (R$) *
+                      {valorSugerido > 0 && (
+                        <button type="button" onClick={() => setFat(f => ({ ...f, valor: valorSugerido }))}
+                          className="ml-2 text-amber-400 hover:text-amber-300 text-[10px] underline">
+                          usar {formatCurrency(valorSugerido)}
+                        </button>
+                      )}
+                    </label>
+                    <input type="number" className={inputClass}
+                      value={fat.valor || ''}
+                      onChange={e => setFat(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0,00" min="0" step="0.01" required={faturamento} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Periodicidade</label>
+                    <select className={inputClass} value={fat.periodicidade}
+                      onChange={e => setFat(f => ({ ...f, periodicidade: e.target.value as PeriodicidadeFaturamento,
+                        parcelas: e.target.value === 'unico' ? 1 : f.parcelas }))}>
+                      {(Object.entries(PERIODICIDADE_LABELS) as [PeriodicidadeFaturamento, string][]).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Parcelas + Primeiro vencimento */}
+                <div className="grid grid-cols-2 gap-3">
+                  {fat.periodicidade !== 'unico' && (
+                    <div>
+                      <label className={labelClass}>Nº de parcelas <span className="text-[#505050] font-normal">(0 = recorrente)</span></label>
+                      <input type="number" className={inputClass}
+                        value={fat.parcelas}
+                        onChange={e => setFat(f => ({ ...f, parcelas: Math.max(0, parseInt(e.target.value) || 0) }))}
+                        min="0" max="360" />
+                    </div>
+                  )}
+                  <div>
+                    <label className={labelClass}>1º vencimento *</label>
+                    <DateInput className={inputClass} value={fat.primeiroVencimento}
+                      onChange={e => setFat(f => ({ ...f, primeiroVencimento: e.target.value }))} required={faturamento} />
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {fat.valor > 0 && fat.parcelas > 0 && (
+                  <div className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2 text-xs text-[#505050]">
+                    {fat.parcelas} × {formatCurrency(fat.valor)} = <strong className="text-amber-400">{formatCurrency(fat.parcelas * fat.valor)}</strong>
+                    {' · '}Primeiro em {new Date(fat.primeiroVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+                {fat.valor > 0 && fat.parcelas === 0 && fat.periodicidade !== 'unico' && (
+                  <p className="text-[10px] text-amber-400/70">Recorrente — lançamentos gerados manualmente conforme necessário.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Observações ── */}
           <div>
             <label className={labelClass}>Observações</label>
             <textarea className={`${inputClass} resize-none`} rows={2} value={form.observacoes} onChange={e => set('observacoes', e.target.value)} placeholder="Cláusulas especiais, observações..." />
@@ -256,6 +394,51 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
 
 // ─── Modal de visualização ─────────────────────────────────────
 function ContratoView({ contrato, onClose, onEdit, canEdit = true }: { contrato: Contrato; onClose: () => void; onEdit: () => void; canEdit?: boolean }) {
+  const { showToast } = useToast();
+  const [gerandoFaturas, setGerandoFaturas] = useState(false);
+
+  async function gerarFaturas() {
+    const cfg = contrato.faturamentoConfig;
+    if (!cfg || !cfg.valor || !cfg.primeiroVencimento) return;
+    if (cfg.lancamentosGerados) {
+      showToast('warning', 'Faturas já geradas', 'As faturas deste contrato já foram criadas anteriormente.');
+      return;
+    }
+    if (cfg.parcelas === 0) {
+      showToast('info', 'Contrato recorrente', 'Para contratos recorrentes, gere as faturas manualmente em Honorários.');
+      return;
+    }
+    setGerandoFaturas(true);
+    try {
+      const dias = PERIODICIDADE_DIAS[cfg.periodicidade];
+      for (let i = 0; i < cfg.parcelas; i++) {
+        const base = new Date(cfg.primeiroVencimento + 'T12:00:00');
+        base.setDate(base.getDate() + dias * i);
+        const venc = base.toISOString().split('T')[0];
+        await lancamentosApi.create({
+          tipo:         'a_receber',
+          clienteId:    contrato.clienteId,
+          clienteNome:  contrato.clienteNome,
+          contratoId:   contrato.id,
+          descricao:    `${contrato.descricao} — Parcela ${i + 1}/${cfg.parcelas}`,
+          valor:        cfg.valor,
+          dataVencimento: venc,
+          status:       'pendente',
+          criadoEm:     new Date().toISOString(),
+        });
+      }
+      await contratosApi.update(contrato.id, {
+        faturamentoConfig: { ...cfg, lancamentosGerados: true },
+      });
+      showToast('success', `${cfg.parcelas} fatura(s) gerada(s)!`, contrato.clienteNome);
+      onClose();
+    } catch (err: any) {
+      showToast('error', 'Erro ao gerar faturas', err.message);
+    } finally {
+      setGerandoFaturas(false);
+    }
+  }
+
   return (
     <Portal>
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
@@ -297,11 +480,39 @@ function ContratoView({ contrato, onClose, onEdit, canEdit = true }: { contrato:
             {contrato.valorCausa && (
               <div><p className="text-xs text-[#505050]">Valor da Causa</p><p className="text-[#f5f5f5]">{formatCurrency(contrato.valorCausa)}</p></div>
             )}
+            {contrato.valorBonus && (
+              <div><p className="text-xs text-[#505050]">Valor do Bônus</p><p className="text-pink-400 font-bold">{formatCurrency(contrato.valorBonus)}</p></div>
+            )}
           </div>
           <div className="border-t border-[#2a2a2a] pt-4">
             <p className="text-xs text-[#505050] mb-1">Descrição</p>
             <p className="text-[#a0a0a0]">{contrato.descricao}</p>
           </div>
+
+          {/* Faturamento info */}
+          {contrato.faturamento && contrato.faturamentoConfig && (
+            <div className={`border-t border-[#2a2a2a] pt-4`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <p className="text-xs font-semibold text-amber-400">Faturamento</p>
+                {contrato.faturamentoConfig.lancamentosGerados && (
+                  <span className="text-[10px] bg-green-500/15 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded-full ml-auto">Faturas geradas ✓</span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div><p className="text-[#505050]">Valor/parcela</p><p className="text-[#f5f5f5] font-medium">{formatCurrency(contrato.faturamentoConfig.valor)}</p></div>
+                <div><p className="text-[#505050]">Periodicidade</p><p className="text-[#f5f5f5]">{PERIODICIDADE_LABELS[contrato.faturamentoConfig.periodicidade]}</p></div>
+                <div><p className="text-[#505050]">Parcelas</p><p className="text-[#f5f5f5]">{contrato.faturamentoConfig.parcelas === 0 ? 'Recorrente' : contrato.faturamentoConfig.parcelas}</p></div>
+              </div>
+              {contrato.faturamentoConfig.parcelas > 0 && (
+                <p className="text-xs text-[#505050] mt-1">
+                  Total: <strong className="text-amber-400">{formatCurrency(contrato.faturamentoConfig.valor * contrato.faturamentoConfig.parcelas)}</strong>
+                  {' · '}1º venc. {new Date(contrato.faturamentoConfig.primeiroVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </p>
+              )}
+            </div>
+          )}
+
           {contrato.observacoes && (
             <div className="border-t border-[#2a2a2a] pt-4">
               <p className="text-xs text-[#505050] mb-1">Observações</p>
@@ -310,6 +521,17 @@ function ContratoView({ contrato, onClose, onEdit, canEdit = true }: { contrato:
           )}
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-[#2a2a2a]">
+          {/* Gerar faturas button */}
+          {canEdit && contrato.faturamento && contrato.faturamentoConfig && !contrato.faturamentoConfig.lancamentosGerados && contrato.faturamentoConfig.parcelas > 0 && (
+            <button
+              onClick={gerarFaturas}
+              disabled={gerandoFaturas}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+            >
+              {gerandoFaturas ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              Gerar {contrato.faturamentoConfig.parcelas} fatura(s)
+            </button>
+          )}
           {canEdit && <button onClick={onEdit} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium">Editar</button>}
           <button onClick={onClose} className="flex-1 py-2.5 bg-[#1e1e1e] hover:bg-[#252525] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm font-medium">Fechar</button>
         </div>

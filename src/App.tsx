@@ -34,6 +34,7 @@ const Clientes      = lazy(() => import('./pages/Clientes'));
 const Contratos     = lazy(() => import('./pages/Contratos'));
 const Processos     = lazy(() => import('./pages/Processos'));
 const Honorarios    = lazy(() => import('./pages/Honorarios'));
+const Previsao      = lazy(() => import('./pages/Previsao'));
 const Inadimplencia = lazy(() => import('./pages/Inadimplencia'));
 const Avisos        = lazy(() => import('./pages/Avisos'));
 const Agenda        = lazy(() => import('./pages/Agenda'));
@@ -93,6 +94,7 @@ function AppContent() {
     contratos:     <Contratos />,
     processos:     <Processos />,
     honorarios:    <Honorarios />,
+    previsao:      <Previsao />,
     agenda:        <Agenda />,
     inadimplencia: <Inadimplencia />,
     avisos:        <Avisos />,

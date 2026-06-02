@@ -4,6 +4,8 @@ import type { UserRole } from '../types';
 export const ASSISTENTE_PAGES = new Set([
   'dashboard', 'clientes', 'processos', 'contratos', 'agenda', 'avisos',
 ]);
+// previsao, honorarios, inadimplencia, relatorios, documentos, configuracoes, licencas
+// are NOT in ASSISTENTE_PAGES → assistente is redirected to dashboard
 
 /**
  * Returns true when the given role may navigate to the given page key.

@@ -7,10 +7,12 @@ import {
   ClientesDB, ContratosDB, ProcessosDB, LancamentosDB,
   AvisosDB, UsersDB, EscritoriooDB, generateId,
   getAll, saveAll, SessionDB, LicenseDB, LicensesRegistryDB,
+  PrevisoesDB,
 } from '../data/db';
 import type {
   Cliente, Contrato, Processo, Lancamento, Aviso,
   Escritorio, User, Andamento, LicenseRecord,
+  PrevisaoHonorario,
 } from '../types';
 import { generateLicenseKey, calcDbSizeKb } from '../utils/license';
 
@@ -506,6 +508,44 @@ export const googleApi = {
   disconnect: () => serverReq<{ ok: true }>('DELETE', '/google/disconnect'),
   sync: () =>
     serverReq<{ ok: true; synced: number; errors: number }>('POST', '/google/sync'),
+};
+
+// ─────────────────────────────────────────────────────────────
+// PREVISÕES DE HONORÁRIOS
+// ─────────────────────────────────────────────────────────────
+
+export const previsoesApi = {
+  getAll: (): Promise<PrevisaoHonorario[]> =>
+    lp(() => PrevisoesDB.getAll().sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))),
+
+  create: (data: Omit<PrevisaoHonorario, 'id' | 'criadoEm' | 'atualizadoEm'>): Promise<PrevisaoHonorario> =>
+    lp(() => {
+      const now = new Date().toISOString();
+      const item: PrevisaoHonorario = {
+        ...data,
+        id: generateId(),
+        criadoEm: now,
+        atualizadoEm: now,
+      };
+      PrevisoesDB.insert(item);
+      logAudit('criar', 'previsao', item.id, item.nome);
+      return item;
+    }),
+
+  update: (id: string, data: Partial<PrevisaoHonorario>): Promise<PrevisaoHonorario> =>
+    lp(() => {
+      const updated = { ...data, atualizadoEm: new Date().toISOString() };
+      PrevisoesDB.update(id, updated);
+      logAudit('atualizar', 'previsao', id);
+      return { ...PrevisoesDB.getAll().find(p => p.id === id)! };
+    }),
+
+  remove: (id: string): Promise<{ ok: true }> =>
+    lp(() => {
+      PrevisoesDB.remove(id);
+      logAudit('excluir', 'previsao', id);
+      return { ok: true as const };
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────

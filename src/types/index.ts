@@ -76,8 +76,21 @@ export interface Cliente {
   socios?: Array<{ nome: string; qualificacao: string }>;
 }
 
-export type TipoContrato = 'Mensal' | 'Êxito' | 'Misto' | 'Avulso';
+export type TipoContrato = 'Mensal' | 'Êxito' | 'Misto' | 'Avulso' | 'Bônus';
 export type StatusContrato = 'ativo' | 'encerrado' | 'suspenso' | 'negociando';
+
+export type PeriodicidadeFaturamento =
+  | 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual' | 'unico';
+
+export interface FaturamentoConfig {
+  valor: number;
+  periodicidade: PeriodicidadeFaturamento;
+  /** Total de parcelas a gerar; 0 = recorrente / sem limite */
+  parcelas: number;
+  primeiroVencimento: string; // YYYY-MM-DD
+  /** true quando os lançamentos já foram gerados para evitar duplicatas */
+  lancamentosGerados?: boolean;
+}
 
 export interface Contrato {
   id: string;
@@ -87,13 +100,43 @@ export interface Contrato {
   valorMensal?: number;
   percentualExito?: number;
   valorCausa?: number;
+  /** Valor do bônus (type = 'Bônus') */
+  valorBonus?: number;
   descricao: string;
   areaAtuacao: string;
   dataInicio: string;
   dataFim?: string;
   status: StatusContrato;
   observacoes?: string;
+  /** Habilita geração automática de faturas */
+  faturamento?: boolean;
+  faturamentoConfig?: FaturamentoConfig;
   criadoEm: string;
+}
+
+// ─── Previsão de Honorários ───────────────────────────────────
+
+export interface ContatoItem {
+  id: string;
+  tipo: 'email' | 'telefone' | 'celular';
+  valor: string;
+}
+
+export type StatusPrevisao = 'ativo' | 'fechado' | 'perdido';
+
+export interface PrevisaoHonorario {
+  id: string;
+  nome: string;
+  tipoPessoa: 'PF' | 'PJ';
+  cpf?: string;
+  cnpj?: string;
+  contatos: ContatoItem[];
+  valorPrevisto?: number;
+  observacoes?: string;
+  status: StatusPrevisao;
+  origem?: string; // indicação, site, etc.
+  criadoEm: string;
+  atualizadoEm: string;
 }
 
 export type FaseProcessual =
