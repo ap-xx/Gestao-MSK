@@ -187,19 +187,25 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
               const cfg = TIPO_CONTATO_CONFIG[c.tipo];
               return (
                 <div key={c.id} className="flex gap-2 items-center">
-                  {/* Type selector */}
-                  <div className="flex items-center gap-1.5 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-2.5 py-2.5 shrink-0">
-                    <cfg.icon className="w-3.5 h-3.5 text-[#505050]" />
-                    <select
-                      value={c.tipo}
-                      onChange={e => setContatos(prev => prev.map(x => x.id === c.id ? { ...x, tipo: e.target.value as ContatoItem['tipo'] } : x))}
-                      className="bg-transparent text-[#a0a0a0] text-xs outline-none cursor-pointer"
-                    >
-                      <option value="telefone">Telefone</option>
-                      <option value="celular">Celular</option>
-                      <option value="email">E-mail</option>
-                    </select>
+                  {/* Tipo — 3 icon pills, clean segmented control */}
+                  <div className="flex gap-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg p-0.5 shrink-0">
+                    {(Object.entries(TIPO_CONTATO_CONFIG) as [ContatoItem['tipo'], typeof TIPO_CONTATO_CONFIG[ContatoItem['tipo']]][]).map(([k, v]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        title={v.label}
+                        onClick={() => setContatos(prev => prev.map(x => x.id === c.id ? { ...x, tipo: k } : x))}
+                        className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
+                          c.tipo === k
+                            ? 'bg-amber-500 text-black shadow-sm'
+                            : 'text-[#505050] hover:text-[#a0a0a0]'
+                        }`}
+                      >
+                        <v.icon className="w-3.5 h-3.5" />
+                      </button>
+                    ))}
                   </div>
+
                   {/* Value input */}
                   <input
                     type={c.tipo === 'email' ? 'email' : 'tel'}
@@ -208,10 +214,11 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
                     placeholder={cfg.placeholder}
                     className="flex-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#404040] outline-none focus:border-amber-500/40 transition-colors"
                   />
-                  {/* Remove (only if more than 1) */}
+
+                  {/* Remove — só aparece quando há mais de 1 */}
                   {contatos.length > 1 && (
                     <button type="button" onClick={() => removeContato(c.id)}
-                      className="text-[#404040] hover:text-red-400 transition-colors p-1">
+                      className="text-[#404040] hover:text-red-400 transition-colors p-1 shrink-0">
                       <X className="w-4 h-4" />
                     </button>
                   )}
