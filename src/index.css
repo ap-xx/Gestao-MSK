@@ -93,6 +93,25 @@ html[data-theme="light"] .placeholder-\[\#404040\]::placeholder { color: #bbb !i
 html[data-theme="light"] aside,
 html[data-theme="light"] header { background-color: var(--bg-1) !important; border-color: var(--bg-3) !important; }
 
+/* Gradients (Dashboard banner, etc.) */
+html[data-theme="light"] .from-\[\#141414\]        { --tw-gradient-from: #ffffff !important; }
+html[data-theme="light"] .to-\[\#141414\]          { --tw-gradient-to:   #f5f5f5 !important; }
+html[data-theme="light"] .to-\[\#1a1500\]          { --tw-gradient-to:   #fffbf0 !important; }
+html[data-theme="light"] .to-\[\#1a1a1a\]          { --tw-gradient-to:   #f0f0f0 !important; }
+html[data-theme="light"] .from-\[\#0a0a0a\]        { --tw-gradient-from: #f8f8f8 !important; }
+
+/* Modals overlay — keep dark for readability */
+html[data-theme="light"] .bg-black\/70 { background-color: rgba(0,0,0,.45) !important; }
+html[data-theme="light"] .bg-black\/60 { background-color: rgba(0,0,0,.35) !important; }
+html[data-theme="light"] .bg-black\/40 { background-color: rgba(0,0,0,.25) !important; }
+
+/* Sidebar in light mode */
+html[data-theme="light"] .bg-\[\#141414\].border-r { background-color: #ffffff !important; }
+
+/* KBD shortcuts */
+html[data-theme="light"] .bg-\[\#2a2a2a\] { background-color: #e8e8e8 !important; color: #333 !important; }
+html[data-theme="light"] .bg-\[\#1a1a1a\] { background-color: #f8f8f8 !important; }
+
 /* Scrollbar */
 html[data-theme="light"] ::-webkit-scrollbar-track { background: var(--bg-2); }
 

@@ -6,6 +6,7 @@ import { migrateFromLocalStorage } from './data/idb';
 import { generateLicenseKey, validateLicenseKey } from './utils/license';
 import Login from './pages/Login';
 import LicenseGate from './components/LicenseGate';
+import OAuthCallback from './pages/OAuthCallback';
 
 // ── Bootstrap ─────────────────────────────────────────────────
 const _hadData   = !!localStorage.getItem('msk_users');
@@ -118,6 +119,11 @@ function AppContent() {
 }
 
 export default function App() {
+  // Handle Google OAuth callback at /oauth/google without license gate
+  if (window.location.pathname === '/oauth/google') {
+    return <OAuthCallback />;
+  }
+
   return (
     <ThemeProvider>
       <ToastProvider>

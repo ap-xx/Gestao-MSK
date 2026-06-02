@@ -3,8 +3,9 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/portal", "destination": "/portal.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/portal",       "destination": "/portal.html" },
+    { "source": "/oauth/google", "destination": "/index.html"  },
+    { "source": "/(.*)",         "destination": "/index.html"  }
   ],
   "headers": [
     {

@@ -10,10 +10,14 @@ const TZ = 'America/Sao_Paulo';
 // ─── OAuth2 client factory ────────────────────────────────────
 
 function makeOAuth2() {
+  // Default redirect: Vercel frontend OAuth callback page (always online).
+  // Overridable via GOOGLE_REDIRECT_URI env var.
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI
+    ?? `${process.env.FRONTEND_URL ?? 'https://gestao-msk.vercel.app'}/oauth/google`;
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3001/api/google/callback',
+    redirectUri,
   );
 }
 

@@ -63,6 +63,44 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// ── POST /api/google/callback-exchange ───────────────────────
+// Called by the Vercel OAuthCallback page instead of the direct GET callback.
+// Accepts { code, state } and exchanges them for tokens.
+// No auth required — the user isn't logged in yet in the popup window.
+
+router.post('/callback-exchange', async (req, res) => {
+  const { code, state } = req.body as { code?: string; state?: string };
+
+  if (!code || !state) {
+    res.status(400).json({ error: 'Parâmetros inválidos.' });
+    return;
+  }
+
+  let userId: string;
+  try {
+    userId = Buffer.from(state, 'base64url').toString('utf8');
+  } catch {
+    res.status(400).json({ error: 'State inválido.' });
+    return;
+  }
+
+  try {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI ?? `${process.env.FRONTEND_URL ?? 'https://gestao-msk.vercel.app'}/oauth/google`,
+    );
+    const { tokens } = await auth.getToken(code);
+    saveToken(userId, tokens);
+    auth.setCredentials(tokens);
+    fullSyncForUser(userId).catch(err => console.error('[google] Erro no sync inicial:', err));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[google] Erro no callback-exchange:', err);
+    res.status(500).json({ error: 'Erro ao trocar código de autorização.' });
+  }
+});
+
 // ── GET /api/google/status ────────────────────────────────────
 router.get('/status', requireAuth, (req, res) => {
   const userId = req.user!.id;
