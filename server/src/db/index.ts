@@ -194,6 +194,16 @@ db.exec(`
     criadoEm TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS eproc_credentials (
+    tribunal     TEXT PRIMARY KEY,  -- ex: tjsc, trf4
+    usuario      TEXT NOT NULL,     -- CPF, login ou OAB
+    senhaCipher  TEXT NOT NULL,     -- AES-256-GCM encrypted password
+    sessionCookie TEXT,             -- reutilizado para evitar login repetido
+    sessionExp   TEXT,              -- ISO expiry of the session
+    criadoEm     TEXT NOT NULL,
+    atualizadoEm TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS machine_reports (
     machineId   TEXT PRIMARY KEY,
     machineName TEXT NOT NULL DEFAULT '',

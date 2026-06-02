@@ -4,7 +4,7 @@ import {
   Loader2, RefreshCw, Calendar, ChevronDown, ChevronRight, Clock,
   Paperclip, FileText, Download, Upload, Layers, GripVertical, CheckSquare, Square,
 } from 'lucide-react';
-import { processosApi, clientesApi, documentosApi, escritorioApi } from '../services/api';
+import { processosApi, clientesApi, documentosApi, escritorioApi, eprocApi } from '../services/api';
 import type { Documento, CategoriaDocumento } from '../services/api';
 import { ModeloDocumento } from '../components/modelos/ModeloDocumento';
 import type { TipoModelo, ModeloDados } from '../components/modelos/ModeloDocumento';
@@ -424,6 +424,15 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
   const [audiencias, setAudiencias] = useState(processo?.audiencias || []);
   const [consultandoDataJud, setConsultandoDataJud] = useState(false);
   const [dadosDataJud, setDadosDataJud] = useState<any>(null);
+  const [consultandoEproc, setConsultandoEproc] = useState(false);
+  const [eprocConfigurado, setEprocConfigurado] = useState(false);
+
+  // Check if e-Proc is configured for the current tribunal
+  useEffect(() => {
+    eprocApi.getConfigurados()
+      .then(list => setEprocConfigurado(list.length > 0))
+      .catch(() => {});
+  }, []);
 
   function set(key: string, val: string) {
     setForm(prev => ({ ...prev, [key]: val }));
@@ -471,6 +480,27 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
 
   function removeAudiencia(i: number) {
     setAudiencias(prev => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function consultarEproc() {
+    if (!form.numeroCNJ) { showToast('warning', 'Informe o número CNJ'); return; }
+    setConsultandoEproc(true);
+    try {
+      const data = await eprocApi.consultar(form.numeroCNJ, form.tribunalAlias);
+      setForm(f => ({
+        ...f,
+        vara:          data.vara        || f.vara,
+        juiz:          data.juiz        || f.juiz,
+        parteAdversa:  data.parteAdversa || f.parteAdversa,
+        valorCausa:    data.valorCausa  || f.valorCausa,
+      }));
+      showToast('success', `Dados preenchidos via ${data.tribunalNome}`,
+        `Vara, partes e valor importados do e-Proc.`);
+    } catch (err: any) {
+      showToast('warning', 'e-Proc', err.message);
+    } finally {
+      setConsultandoEproc(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -552,10 +582,19 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
               <select className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#a0a0a0] text-sm min-w-28" value={form.tribunalAlias} onChange={e => set('tribunalAlias', e.target.value)}>
                 {tribunaisLista.map(([alias]) => <option key={alias} value={alias}>{alias.toUpperCase()}</option>)}
               </select>
-              <button type="button" onClick={consultarDataJud} disabled={consultandoDataJud} className="flex items-center gap-2 px-4 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
+              <button type="button" onClick={consultarDataJud} disabled={consultandoDataJud || consultandoEproc}
+                className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
                 {consultandoDataJud ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 DataJud
               </button>
+              {eprocConfigurado && (
+                <button type="button" onClick={consultarEproc} disabled={consultandoEproc || consultandoDataJud}
+                  title="Buscar dados no e-Proc (login configurado)"
+                  className="flex items-center gap-2 px-3 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 text-green-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
+                  {consultandoEproc ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  e-Proc
+                </button>
+              )}
             </div>
             {/* Show decoded info when CNJ is complete */}
             {(() => {
@@ -570,7 +609,8 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
                   {d.tribunalAlias && (
                     <>
                       <span className="text-[#505050]">·</span>
-                      <span className="text-amber-400/70 text-[10px]">Tribunal detectado automaticamente</span>
+                      <span className="text-amber-400/70 text-[10px]">Tribunal detectado</span>
+                  {eprocConfigurado && <span className="text-green-400/70 text-[10px]">· Botão e-Proc disponível</span>}
                     </>
                   )}
                 </p>

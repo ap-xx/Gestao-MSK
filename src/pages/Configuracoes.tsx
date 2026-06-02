@@ -5,9 +5,9 @@ import {
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
   Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
   ClipboardList, Clock, Edit2, ShieldCheck, ToggleLeft, ToggleRight,
-  KeyRound, QrCode, CheckCircle, XCircle,
+  KeyRound, QrCode, CheckCircle, XCircle, Server,
 } from 'lucide-react';
-import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi } from '../services/api';
+import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi, eprocApi } from '../services/api';
 import {
   type BackupSchedule, type BackupMode,
   BACKUP_SCHED_KEY, BACKUP_LAST_KEY, BACKUP_MODE_KEY,
@@ -24,6 +24,7 @@ import Portal from '../components/ui/Portal';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 import AbaAuditoria from './configuracoes/AbaAuditoria';
+import AbaEproc    from './configuracoes/AbaEproc';
 
 // ─── Two-Factor Auth Section ──────────────────────────────────
 function TwoFactorSection() {
@@ -200,7 +201,7 @@ function TwoFactorSection() {
   );
 }
 
-type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes';
+type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes' | 'eproc';
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -832,6 +833,7 @@ export default function Configuracoes() {
     { key: 'responsavel', label: 'OAB & Responsável',   icon: User },
     { key: 'notificacoes',label: 'Notificações',         icon: Bell },
     { key: 'google',      label: 'Google Calendar',      icon: Calendar },
+    { key: 'eproc',       label: 'e-Proc',               icon: Server },
     { key: 'usuarios',    label: 'Usuários',             icon: Users,        adminOnly: true },
     { key: 'permissoes',  label: 'Permissões',           icon: ShieldCheck,  adminOnly: true },
     { key: 'email',       label: 'E-mail SMTP',          icon: Mail },
@@ -2040,6 +2042,9 @@ export default function Configuracoes() {
         </div>
       )}
 
+
+      {/* ── Tab: e-Proc ─────────────────────────────────────── */}
+      {tab === 'eproc' && <AbaEproc />}
 
       {/* ── Tab: Auditoria ──────────────────────────────────── */}
       {tab === 'auditoria' && <AbaAuditoria />}

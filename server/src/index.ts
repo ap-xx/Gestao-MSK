@@ -23,6 +23,7 @@ import perfisRoutes  from './routes/perfis';
 import boletoRoutes    from './routes/boleto';
 import licensesRoutes  from './routes/licenses';
 import datajudRoutes   from './routes/datajud';
+import eprocRoutes     from './routes/eproc';
 import totpRoutes      from './routes/totp';
 
 const app = express();
@@ -75,6 +76,7 @@ app.use('/api/perfis',      perfisRoutes);
 app.use('/api/boleto',     boletoRoutes);
 app.use('/api/licenses',   licensesRoutes);
 app.use('/api/datajud',    datajudRoutes);
+app.use('/api/eproc',      eprocRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

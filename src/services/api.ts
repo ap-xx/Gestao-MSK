@@ -511,6 +511,36 @@ export const googleApi = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// e-PROC
+// ─────────────────────────────────────────────────────────────
+
+export const eprocApi = {
+  /** Returns supported e-Proc tribunal keys (no auth) */
+  getTribunais: (): Promise<Array<{ key: string; nome: string }>> =>
+    serverReq('GET', '/eproc/tribunais'),
+
+  /** Returns configured tribunals for this account */
+  getConfigurados: (): Promise<Array<{ tribunal: string; nome: string; usuario: string; atualizadoEm: string }>> =>
+    serverReq('GET', '/eproc/config'),
+
+  /** Save or update credentials for a tribunal */
+  salvarCredencial: (tribunal: string, usuario: string, senha: string) =>
+    serverReq<{ ok: true; tribunal: string; nome: string }>('POST', '/eproc/config', { tribunal, usuario, senha }),
+
+  /** Remove credentials for a tribunal */
+  removerCredencial: (tribunal: string) =>
+    serverReq<{ ok: true }>('DELETE', `/eproc/config/${tribunal}`),
+
+  /** Query a process from e-Proc. Returns process data to pre-fill the form. */
+  consultar: (numeroCNJ: string, tribunal: string) =>
+    serverReq<{
+      titulo: string; vara: string; juiz: string; classe: string;
+      parteAdversa: string; clienteNome: string; valorCausa: string;
+      source: string; tribunal: string; tribunalNome: string;
+    }>('POST', '/eproc/consultar', { numeroCNJ, tribunal }),
+};
+
+// ─────────────────────────────────────────────────────────────
 // PREVISÕES DE HONORÁRIOS
 // ─────────────────────────────────────────────────────────────
 
