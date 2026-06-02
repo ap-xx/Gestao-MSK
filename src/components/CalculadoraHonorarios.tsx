@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Calculator, X } from 'lucide-react';
+import { Calculator, X, GripVertical } from 'lucide-react';
 import { formatCurrency } from '../utils/cn';
+import { useDraggable } from '../hooks/useDraggable';
 
 /**
- * Calculadora de Honorários — modal flutuante no canto inferior esquerdo.
- * Calcula honorários com base no valor da causa, percentual de êxito e parcelamento.
+ * Calculadora de Honorários — flutuante e arrastável.
+ * Clique no ícone ⠿ do cabeçalho e arraste para reposicionar.
  */
 export default function CalculadoraHonorarios() {
   const [open, setOpen] = useState(false);
+  const { wrapperStyle, dragHandleProps, dragging } = useDraggable('calculadora', { x: 24, y: 96 });
 
   // Alt+C abre/fecha a calculadora
   useEffect(() => {
@@ -44,26 +46,40 @@ export default function CalculadoraHonorarios() {
   }
 
   return (
-    <>
-      {/* Trigger — direita, acima da área de toasts (bottom-6 right-6) */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="fixed bottom-24 right-6 z-40 w-11 h-11 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/40 rounded-xl flex items-center justify-center text-[#505050] hover:text-amber-400 shadow-lg transition-all"
-        title="Calculadora de Honorários (Alt+C)"
-      >
-        <Calculator className="w-5 h-5" />
-      </button>
+    // Draggable wrapper — position persisted in localStorage
+    <div style={wrapperStyle}>
 
-      {/* Panel — abre para cima a partir do trigger */}
+      {/* Collapsed: just the icon button */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          title="Calculadora de Honorários (Alt+C)"
+          className="w-11 h-11 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/40 rounded-xl flex items-center justify-center text-[#505050] hover:text-amber-400 shadow-lg transition-all"
+        >
+          <Calculator className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Expanded panel */}
       {open && (
-        <div className="fixed bottom-40 right-6 z-50 w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a2a]">
+        <div className="w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden select-none"
+             style={{ opacity: dragging ? 0.85 : 1 }}>
+
+          {/* Drag handle header — grab here to move */}
+          <div
+            className="flex items-center justify-between px-3 py-3 border-b border-[#2a2a2a]"
+            {...dragHandleProps}
+          >
             <div className="flex items-center gap-2">
+              <GripVertical className="w-3.5 h-3.5 text-[#404040]" />
               <Calculator className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-semibold text-[#f5f5f5]">Calculadora de Honorários</span>
+              <span className="text-xs font-semibold text-[#f5f5f5]">Calculadora</span>
             </div>
-            <button onClick={() => setOpen(false)} className="text-[#505050] hover:text-[#f5f5f5]">
+            <button
+              onClick={() => setOpen(false)}
+              onMouseDown={e => e.stopPropagation()}
+              className="text-[#505050] hover:text-[#f5f5f5] transition-colors"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -155,6 +171,6 @@ export default function CalculadoraHonorarios() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

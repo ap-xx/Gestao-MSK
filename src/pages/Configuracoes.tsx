@@ -45,11 +45,20 @@ function TwoFactorSection() {
 
   function getToken() { return sessionStorage.getItem('msk_token') ?? ''; }
 
+  /** Parse JSON safely — detects HTML responses (server sleeping) */
+  async function safeJson(res: Response) {
+    const text = await res.text();
+    if (text.trimStart().startsWith('<')) {
+      throw new Error('Servidor acordando — aguarde 20–30 s e tente novamente.');
+    }
+    return JSON.parse(text);
+  }
+
   async function startSetup() {
     const tok = getToken();
     if (!tok) {
       showToast('warning', '2FA requer conexão ao servidor',
-        'Aguarde alguns segundos para o servidor sincronizar e tente novamente.');
+        'Aguarde o servidor sincronizar (pode levar ~30 s) e tente novamente.');
       return;
     }
     setLoading(true);
@@ -57,8 +66,9 @@ function TwoFactorSection() {
       const res  = await fetch(`${API_BASE}/auth/2fa/setup`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${tok}` },
+        signal: AbortSignal.timeout(30_000),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Erro ao configurar 2FA');
       setQrDataUrl(data.qrDataUrl);
       setSecret(data.secret);
@@ -75,8 +85,9 @@ function TwoFactorSection() {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ totp: code }),
+        signal: AbortSignal.timeout(20_000),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Código inválido');
       updateUser({ totpEnabled: true });
       showToast('success', '2FA ativado!', 'Autenticação em dois fatores habilitada.');
@@ -93,8 +104,9 @@ function TwoFactorSection() {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ totp: code }),
+        signal: AbortSignal.timeout(20_000),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Código inválido');
       updateUser({ totpEnabled: false });
       showToast('info', '2FA desativado');
