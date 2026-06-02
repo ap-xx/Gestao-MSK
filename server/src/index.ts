@@ -53,6 +53,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// 2FA routes must be registered BEFORE /api/auth because Express matches
+// by prefix — /api/auth would otherwise swallow /api/auth/2fa/* requests.
+app.use('/api/auth/2fa',   totpRoutes);
 app.use('/api/auth',        authRoutes);
 app.use('/api/email',       emailRoutes);
 app.use('/api/clientes',    clientesRoutes);
@@ -72,7 +75,6 @@ app.use('/api/perfis',      perfisRoutes);
 app.use('/api/boleto',     boletoRoutes);
 app.use('/api/licenses',   licensesRoutes);
 app.use('/api/datajud',    datajudRoutes);
-app.use('/api/auth/2fa',   totpRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

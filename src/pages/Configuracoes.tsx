@@ -29,7 +29,10 @@ import AbaAuditoria from './configuracoes/AbaAuditoria';
 function TwoFactorSection() {
   const { user, updateUser } = useAuth();
   const { showToast } = useToast();
-  const API_BASE = (import.meta.env?.VITE_API_URL as string) ?? '/api';
+  // Use absolute URL when env var is not set so the call reaches the
+  // Render backend even when the frontend is served from Vercel.
+  const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
+    ?? 'https://msk-api.onrender.com/api';
 
   const enabled = user?.totpEnabled ?? false;
   const [step, setStep]           = useState<'idle' | 'qr' | 'verify' | 'disable'>('idle');
@@ -41,11 +44,17 @@ function TwoFactorSection() {
   function getToken() { return sessionStorage.getItem('msk_token') ?? ''; }
 
   async function startSetup() {
+    const tok = getToken();
+    if (!tok) {
+      showToast('warning', '2FA requer conexão ao servidor',
+        'Aguarde alguns segundos para o servidor sincronizar e tente novamente.');
+      return;
+    }
     setLoading(true);
     try {
       const res  = await fetch(`${API_BASE}/auth/2fa/setup`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { Authorization: `Bearer ${tok}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erro ao configurar 2FA');
