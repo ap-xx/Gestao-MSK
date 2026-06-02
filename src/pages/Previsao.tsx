@@ -62,6 +62,28 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
   );
   const [showAddMenu, setShowAddMenu] = useState(false);
 
+  /** Formata telefone/celular enquanto o usuário digita */
+  function maskPhone(raw: string, tipo: ContatoItem['tipo']): string {
+    if (tipo === 'email') return raw;
+    const d = raw.replace(/\D/g, '');
+    if (!d) return '';
+    // Celular → (DD) 9NNNN-NNNN  (11 dígitos)
+    // Telefone → (DD) NNNN-NNNN  (10 dígitos)
+    const mobile = tipo === 'celular' || d.length === 11;
+    if (d.length <= 2) return `(${d}`;
+    if (mobile) {
+      // (47) 99999-9999
+      if (d.length <= 7)  return `(${d.slice(0,2)}) ${d.slice(2)}`;
+      if (d.length <= 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+      return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;
+    } else {
+      // (47) 9999-9999
+      if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`;
+      if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+      return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6,10)}`;
+    }
+  }
+
   function addContato(tipo: ContatoItem['tipo']) {
     setContatos(prev => [...prev, { id: genId(), tipo, valor: '' }]);
     setShowAddMenu(false);
@@ -69,8 +91,18 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
   function removeContato(id: string) {
     setContatos(prev => prev.filter(c => c.id !== id));
   }
-  function updateContato(id: string, valor: string) {
-    setContatos(prev => prev.map(c => c.id === id ? { ...c, valor } : c));
+  function updateContato(id: string, raw: string) {
+    setContatos(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      return { ...c, valor: maskPhone(raw, c.tipo) };
+    }));
+  }
+  function changeTipo(id: string, tipo: ContatoItem['tipo']) {
+    setContatos(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      // Reformata o valor existente para o novo tipo
+      return { ...c, tipo, valor: maskPhone(c.valor, tipo) };
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -194,7 +226,7 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
                         key={k}
                         type="button"
                         title={v.label}
-                        onClick={() => setContatos(prev => prev.map(x => x.id === c.id ? { ...x, tipo: k } : x))}
+                        onClick={() => changeTipo(c.id, k)}
                         className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
                           c.tipo === k
                             ? 'bg-amber-500 text-black shadow-sm'
@@ -208,10 +240,15 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
 
                   {/* Value input */}
                   <input
-                    type={c.tipo === 'email' ? 'email' : 'tel'}
+                    type={c.tipo === 'email' ? 'email' : 'text'}
+                    inputMode={c.tipo === 'email' ? 'email' : 'numeric'}
                     value={c.valor}
                     onChange={e => updateContato(c.id, e.target.value)}
-                    placeholder={cfg.placeholder}
+                    placeholder={
+                      c.tipo === 'celular'  ? '(47) 99999-9999' :
+                      c.tipo === 'telefone' ? '(47) 9999-9999'  :
+                      'email@exemplo.com'
+                    }
                     className="flex-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#404040] outline-none focus:border-amber-500/40 transition-colors"
                   />
 
