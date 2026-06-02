@@ -3,6 +3,7 @@ import {
   Plus, X, Search, Edit2, Trash2, Target,
   Phone, Mail, Smartphone, ChevronDown,
   TrendingUp, UserPlus, Loader2, CheckCircle, XCircle, Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { previsoesApi, clientesApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -13,6 +14,7 @@ import { useCtrlSave } from '../hooks/useCtrlSave';
 import { formatCPF, formatCNPJ } from '../services/apis';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import Portal from '../components/ui/Portal';
+import { getOrigens, addOrigem, removeOrigem } from '../utils/origens';
 import type { PrevisaoHonorario, ContatoItem, StatusPrevisao } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -39,11 +41,272 @@ const TIPO_CONTATO_CONFIG = {
 
 interface ModalProps {
   previsao?: PrevisaoHonorario;
+  todasPrevisoes: PrevisaoHonorario[];
   onClose: () => void;
   onSave:  () => void;
 }
 
-function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
+// ─── OrigemField — select + Adicionar + Deletar ────────────────
+function OrigemField({
+  value, onChange, origens, onOrigensList, previsoes, labelClass,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  origens: string[];
+  onOrigensList: (list: string[]) => void;
+  previsoes: PrevisaoHonorario[];
+  labelClass: string;
+}) {
+  const [addOpen,    setAddOpen]    = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className={labelClass} style={{ marginBottom: 0 }}>Origem / Como chegou</label>
+        <div className="flex gap-1">
+          <button type="button" onClick={() => setAddOpen(true)}
+            title="Adicionar nova origem"
+            className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors px-1.5 py-0.5 rounded hover:bg-amber-500/10">
+            <Plus className="w-3 h-3" /> Adicionar
+          </button>
+          {origens.length > 0 && (
+            <button type="button" onClick={() => setDeleteOpen(true)}
+              title="Excluir uma origem"
+              className="flex items-center gap-1 text-[10px] text-[#505050] hover:text-red-400 transition-colors px-1.5 py-0.5 rounded hover:bg-red-500/10">
+              <Trash2 className="w-3 h-3" /> Deletar
+            </button>
+          )}
+        </div>
+      </div>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-amber-500/40 transition-colors"
+      >
+        <option value="">— Selecione a origem —</option>
+        {origens.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+
+      {addOpen && (
+        <AddOrigemModal
+          onClose={() => setAddOpen(false)}
+          onAdded={nome => {
+            const updated = getOrigens();
+            onOrigensList(updated);
+            onChange(nome);
+            setAddOpen(false);
+          }}
+        />
+      )}
+
+      {deleteOpen && (
+        <DeleteOrigemModal
+          origens={origens}
+          previsoes={previsoes}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={nome => {
+            const updated = getOrigens();
+            onOrigensList(updated);
+            if (value === nome) onChange('');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── AddOrigemModal ────────────────────────────────────────────
+function AddOrigemModal({ onClose, onAdded }: { onClose: () => void; onAdded: (nome: string) => void }) {
+  const [nome, setNome] = useState('');
+  const [error, setError] = useState('');
+
+  function handleAdd() {
+    const trimmed = nome.trim();
+    if (!trimmed) { setError('Digite o nome da origem.'); return; }
+    const ok = addOrigem(trimmed);
+    if (!ok) { setError('Esta origem já existe.'); return; }
+    onAdded(trimmed);
+    onClose();
+  }
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+        <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-xs shadow-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-[#f5f5f5] text-sm">Nova Origem</h3>
+            <button onClick={onClose} className="text-[#505050] hover:text-[#f5f5f5]"><X className="w-4 h-4" /></button>
+          </div>
+          <input
+            autoFocus
+            className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#404040] outline-none focus:border-amber-500/40 transition-colors mb-1.5"
+            placeholder="Ex: TikTok, Evento, Jornal..."
+            value={nome}
+            onChange={e => { setNome(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            maxLength={40}
+          />
+          {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+          <div className="flex gap-2 mt-3">
+            <button onClick={onClose} className="flex-1 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+            <button onClick={handleAdd} className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg text-sm transition-all">Adicionar</button>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+// ─── DeleteOrigemModal ─────────────────────────────────────────
+// 3-step flow:
+//   Step 1 — select which origin to delete
+//   Step 2 — (if conflicts) warning with Cancel / Excluir mesmo assim
+//   Step 3 — type the origin name exactly to confirm
+
+function DeleteOrigemModal({
+  origens,
+  previsoes,
+  onClose,
+  onDeleted,
+}: {
+  origens: string[];
+  previsoes: PrevisaoHonorario[];
+  onClose: () => void;
+  onDeleted: (nome: string) => void;
+}) {
+  type Step = 'select' | 'conflict' | 'confirm';
+  const [step,        setStep]       = useState<Step>('select');
+  const [selected,    setSelected]   = useState(origens[0] ?? '');
+  const [typed,       setTyped]      = useState('');
+
+  const conflicts = useMemo(
+    () => previsoes.filter(p => p.origem === selected),
+    [previsoes, selected],
+  );
+
+  function handleDelete() {
+    if (conflicts.length > 0) { setStep('conflict'); return; }
+    doDelete();
+  }
+
+  function doDelete() {
+    removeOrigem(selected);
+    onDeleted(selected);
+    onClose();
+  }
+
+  const inputClass = "w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-[#f5f5f5] text-sm placeholder-[#404040] outline-none focus:border-amber-500/40 transition-colors";
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+        <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl w-full max-w-sm shadow-2xl p-5">
+
+          {/* ── Passo 1: selecionar origem ── */}
+          {step === 'select' && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-[#f5f5f5] text-sm">Excluir Origem</h3>
+                <button onClick={onClose} className="text-[#505050] hover:text-[#f5f5f5]"><X className="w-4 h-4" /></button>
+              </div>
+              <p className="text-xs text-[#505050] mb-3">Selecione a origem que deseja remover da lista:</p>
+              <select
+                className={inputClass}
+                value={selected}
+                onChange={e => setSelected(e.target.value)}
+              >
+                {origens.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <div className="flex gap-2 mt-4">
+                <button onClick={onClose} className="flex-1 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+                <button onClick={handleDelete}
+                  className="flex-1 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Passo 2: conflito ── */}
+          {step === 'conflict' && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="font-semibold text-[#f5f5f5] text-sm">Origem em uso</h3>
+              </div>
+              <p className="text-sm text-[#a0a0a0] mb-1">
+                A origem <strong className="text-[#f5f5f5]">"{selected}"</strong> está vinculada a{' '}
+                <strong className="text-amber-400">{conflicts.length}</strong> previsão(ões).
+              </p>
+              <p className="text-xs text-[#505050] mb-4">
+                As previsões existentes não serão afetadas, mas a origem sumirá da lista de seleção.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={onClose}
+                  className="flex-1 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">
+                  Cancelar
+                </button>
+                <button onClick={() => { setTyped(''); setStep('confirm'); }}
+                  className="flex-1 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all">
+                  Excluir mesmo assim
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Passo 3: confirmar digitando o nome ── */}
+          {step === 'confirm' && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                <h3 className="font-semibold text-red-400 text-sm">Confirmação final</h3>
+              </div>
+              <p className="text-sm text-[#a0a0a0] mb-3">
+                Para confirmar a exclusão, escreva a seguir:
+              </p>
+              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 mb-3 text-center">
+                <span className="font-mono font-semibold text-amber-400">{selected}</span>
+              </div>
+              <input
+                autoFocus
+                type="text"
+                value={typed}
+                onChange={e => setTyped(e.target.value)}
+                placeholder={selected}
+                className={`${inputClass} text-center font-mono tracking-wide mb-1.5`}
+                onKeyDown={e => e.key === 'Enter' && typed === selected && doDelete()}
+              />
+              {typed && typed !== selected && (
+                <p className="text-[10px] text-red-400 mb-2">
+                  ✕ Escrita incorreta — atenção às maiúsculas e minúsculas
+                </p>
+              )}
+              {typed === selected && (
+                <p className="text-[10px] text-green-400 mb-2">✓ Confirmado</p>
+              )}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setStep('conflict')}
+                  className="flex-1 py-2 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">
+                  Voltar
+                </button>
+                <button
+                  onClick={doDelete}
+                  disabled={typed !== selected}
+                  className="flex-1 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                  Excluir definitivamente
+                </button>
+              </div>
+            </>
+          )}
+
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+function PrevisaoModal({ previsao, todasPrevisoes, onClose, onSave }: ModalProps) {
   const { showToast } = useToast();
   const isEdit = !!previsao;
 
@@ -57,6 +320,11 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
   const [valorFechado, setValorFechado]= useState(previsao?.valorFechado?.toString() || '');
   const [obs,         setObs]         = useState(previsao?.observacoes || '');
   const [origem,      setOrigem]      = useState(previsao?.origem || '');
+
+  // Origens customizáveis
+  const [origens, setOrigens] = useState<string[]>(getOrigens);
+  const [addOrigemOpen,    setAddOrigemOpen]    = useState(false);
+  const [deleteOrigemOpen, setDeleteOrigemOpen] = useState(false);
   const [status,      setStatus]      = useState<StatusPrevisao>(previsao?.status || 'ativo');
   const [contatos,    setContatos]    = useState<ContatoItem[]>(
     previsao?.contatos?.length ? previsao.contatos : [{ id: genId(), tipo: 'telefone', valor: '' }]
@@ -287,22 +555,27 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
                 placeholder="0,00" min="0" step="0.01" autoFocus={status === 'fechado'} />
             </div>
           ) : (
-            <div>
-              <label className={labelClass}>Origem / Como chegou</label>
-              <input className={inputClass} value={origem}
-                onChange={e => setOrigem(e.target.value)}
-                placeholder="indicação, site, anúncio..." />
-            </div>
+            /* Origem com select + gerenciar */
+            <OrigemField
+              value={origem}
+              onChange={setOrigem}
+              origens={origens}
+              onOrigensList={setOrigens}
+              previsoes={todasPrevisoes}
+              labelClass={labelClass}
+            />
           )}
         </div>
         {/* Origem aparece em linha separada quando fechado */}
         {status === 'fechado' && (
-          <div>
-            <label className={labelClass}>Origem / Como chegou</label>
-            <input className={inputClass} value={origem}
-              onChange={e => setOrigem(e.target.value)}
-              placeholder="indicação, site, anúncio..." />
-          </div>
+          <OrigemField
+            value={origem}
+            onChange={setOrigem}
+            origens={origens}
+            onOrigensList={setOrigens}
+            previsoes={[]}
+            labelClass={labelClass}
+          />
         )}
 
         {/* ── Status ── */}
@@ -406,6 +679,7 @@ export default function Previsao() {
   const { user } = useAuth();
   const isReadOnly = user?.role === 'assistente';
 
+  const [origens, setOrigens] = useState<string[]>(getOrigens);
   const [previsoes, setPrevisoes] = useState<PrevisaoHonorario[]>([]);
   const [loading, setLoading] = useState(true);
   const [search,       setSearch]       = usePersistedFilter('prev_search', '');
@@ -625,6 +899,7 @@ export default function Previsao() {
       {modalOpen && (
         <PrevisaoModal
           previsao={editPrevisao}
+          todasPrevisoes={previsoes}
           onClose={() => { setModalOpen(false); setEditPrevisao(undefined); }}
           onSave={() => { reload(); setModalOpen(false); setEditPrevisao(undefined); }}
         />
