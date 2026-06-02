@@ -207,6 +207,16 @@ db.exec(`
     ip          TEXT,
     reportedAt  TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS license_keys (
+    id          TEXT PRIMARY KEY,
+    key         TEXT UNIQUE NOT NULL,
+    descricao   TEXT DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),
+    criadoPor   TEXT NOT NULL DEFAULT 'admin',
+    criadoEm    TEXT NOT NULL,
+    atualizadoEm TEXT NOT NULL
+  );
 `);
 
 // ─── Migrações não-destrutivas ─────────────────────────────────

@@ -131,7 +131,10 @@ export interface PrevisaoHonorario {
   cpf?: string;
   cnpj?: string;
   contatos: ContatoItem[];
+  /** Valor estimado antes do fechamento */
   valorPrevisto?: number;
+  /** Valor real acordado ao fechar o negócio */
+  valorFechado?: number;
   observacoes?: string;
   status: StatusPrevisao;
   origem?: string; // indicação, site, etc.

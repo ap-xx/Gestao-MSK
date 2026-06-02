@@ -144,31 +144,20 @@ export async function consultarProcessoDataJud(
   const tribunal = TRIBUNAIS[tribunalAlias];
   if (!tribunal) throw new Error(`Tribunal '${tribunalAlias}' não encontrado.`);
 
-  // Use term query on the keyword sub-field for exact CNJ number matching.
-  // Falls back to a match query so older indices without .keyword still work.
-  const body = {
-    query: {
-      bool: {
-        should: [
-          { term: { 'numeroProcesso.keyword': numeroCNJ } },
-          { match: { numeroProcesso: numeroCNJ } },
-        ],
-        minimum_should_match: 1,
-      },
-    },
-  };
+  // ── Chama o proxy do backend em vez da API diretamente ──────
+  // O DataJud bloqueia chamadas CORS diretas do browser.
+  // O servidor faz a chamada server-to-server e devolve o resultado.
+  const API_BASE = (import.meta.env?.VITE_API_URL as string) ?? 'https://msk-api.onrender.com';
 
-  const response = await fetch(tribunal.url, {
+  const response = await fetch(`${API_BASE}/api/datajud`, {
     method: 'POST',
-    headers: {
-      'Authorization': `ApiKey ${DATAJUD_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tribunalUrl: tribunal.url, numeroCNJ }),
   });
 
   if (!response.ok) {
-    throw new Error(`Erro ao consultar DataJud: ${response.status} ${response.statusText}`);
+    const err = await response.json().catch(() => ({})) as any;
+    throw new Error(err?.error ?? `DataJud erro ${response.status}`);
   }
 
   return response.json();

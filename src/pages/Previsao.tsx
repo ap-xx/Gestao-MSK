@@ -53,7 +53,8 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
   const [tipoPessoa,  setTipoPessoa]  = useState<'PF' | 'PJ'>(previsao?.tipoPessoa || 'PF');
   const [cpf,         setCpf]         = useState(previsao?.cpf || '');
   const [cnpj,        setCnpj]        = useState(previsao?.cnpj || '');
-  const [valor,       setValor]       = useState(previsao?.valorPrevisto?.toString() || '');
+  const [valor,        setValor]       = useState(previsao?.valorPrevisto?.toString() || '');
+  const [valorFechado, setValorFechado]= useState(previsao?.valorFechado?.toString() || '');
   const [obs,         setObs]         = useState(previsao?.observacoes || '');
   const [origem,      setOrigem]      = useState(previsao?.origem || '');
   const [status,      setStatus]      = useState<StatusPrevisao>(previsao?.status || 'ativo');
@@ -115,6 +116,7 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
       cnpj:    tipoPessoa === 'PJ' ? cnpj || undefined : undefined,
       contatos: contatos.filter(c => c.valor.trim()),
       valorPrevisto: valor ? parseFloat(valor) : undefined,
+      valorFechado:  valorFechado ? parseFloat(valorFechado) : undefined,
       observacoes: obs || undefined,
       origem: origem || undefined,
       status,
@@ -265,7 +267,7 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
           </div>
         </div>
 
-        {/* ── Valor previsto ── */}
+        {/* ── Valores + Origem ── */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Valor Previsto (R$)</label>
@@ -273,13 +275,35 @@ function PrevisaoModal({ previsao, onClose, onSave }: ModalProps) {
               onChange={e => setValor(e.target.value)}
               placeholder="0,00" min="0" step="0.01" />
           </div>
+          {status === 'fechado' ? (
+            <div>
+              <label className={labelClass}>
+                Valor Fechado (R$)
+                <span className="ml-1 text-green-400/70 font-normal">— real acordado</span>
+              </label>
+              <input type="number" className={`${inputClass} border-green-500/30 focus:border-green-500/50`}
+                value={valorFechado}
+                onChange={e => setValorFechado(e.target.value)}
+                placeholder="0,00" min="0" step="0.01" autoFocus={status === 'fechado'} />
+            </div>
+          ) : (
+            <div>
+              <label className={labelClass}>Origem / Como chegou</label>
+              <input className={inputClass} value={origem}
+                onChange={e => setOrigem(e.target.value)}
+                placeholder="indicação, site, anúncio..." />
+            </div>
+          )}
+        </div>
+        {/* Origem aparece em linha separada quando fechado */}
+        {status === 'fechado' && (
           <div>
             <label className={labelClass}>Origem / Como chegou</label>
             <input className={inputClass} value={origem}
               onChange={e => setOrigem(e.target.value)}
               placeholder="indicação, site, anúncio..." />
           </div>
-        </div>
+        )}
 
         {/* ── Status ── */}
         <div>
@@ -546,11 +570,20 @@ export default function Previsao() {
 
                 {/* Value + origin */}
                 <div className="flex items-center justify-between text-xs">
-                  {p.valorPrevisto ? (
-                    <span className="text-amber-400 font-semibold">{formatCurrency(p.valorPrevisto)}</span>
-                  ) : (
-                    <span className="text-[#404040]">Valor não informado</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {p.valorFechado ? (
+                      <>
+                        <span className="text-green-400 font-semibold">{formatCurrency(p.valorFechado)}</span>
+                        {p.valorPrevisto && p.valorPrevisto !== p.valorFechado && (
+                          <span className="text-[#404040] line-through text-[10px]">{formatCurrency(p.valorPrevisto)}</span>
+                        )}
+                      </>
+                    ) : p.valorPrevisto ? (
+                      <span className="text-amber-400 font-semibold">{formatCurrency(p.valorPrevisto)}</span>
+                    ) : (
+                      <span className="text-[#404040]">Valor não informado</span>
+                    )}
+                  </div>
                   {p.origem && <span className="text-[#505050] truncate max-w-[120px]" title={p.origem}>{p.origem}</span>}
                 </div>
 

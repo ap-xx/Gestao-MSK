@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import { initializeDatabase } from './db/index';
 import authRoutes      from './routes/auth';
 import emailRoutes     from './routes/email';
@@ -20,6 +22,7 @@ import emailCronRoutes from './routes/email-cron';
 import perfisRoutes  from './routes/perfis';
 import boletoRoutes    from './routes/boleto';
 import licensesRoutes  from './routes/licenses';
+import datajudRoutes   from './routes/datajud';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -67,8 +70,20 @@ app.use('/api/cron',        emailCronRoutes);
 app.use('/api/perfis',      perfisRoutes);
 app.use('/api/boleto',     boletoRoutes);
 app.use('/api/licenses',   licensesRoutes);
+app.use('/api/datajud',    datajudRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ── Standalone License Portal ────────────────────────────────
+// Accessible at /portal — works from any browser, any machine
+app.get('/portal', (_req, res) => {
+  const htmlPath = path.join(__dirname, '..', 'portal.html');
+  if (fs.existsSync(htmlPath)) {
+    res.sendFile(path.resolve(htmlPath));
+  } else {
+    res.status(404).send('Portal not found. Build the server first.');
+  }
+});
 
 // ── Cron endpoint (sem JWT, autenticado por CRON_SECRET) ──────
 // Chamado pelo Render Cron Job ou qualquer scheduler externo.

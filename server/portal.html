@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSK Gestor — Portal de Licenças</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg0:#0a0a0a;--bg1:#141414;--bg2:#1e1e1e;--bg3:#2a2a2a;
+    --txt:#f5f5f5;--sub:#a0a0a0;--dim:#505050;
+    --amber:#f59e0b;--amber2:#d97706;
+    --green:#22c55e;--red:#ef4444;--blue:#3b82f6;
+    --border:#2a2a2a;
+  }
+  body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--txt);min-height:100vh;font-size:14px;line-height:1.5}
+  a{color:inherit;text-decoration:none}
+  button{cursor:pointer;border:none;font-family:inherit}
+
+  /* ── Layout ── */
+  #app{display:flex;flex-direction:column;min-height:100vh}
+  header{background:var(--bg1);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--amber),var(--amber2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .logo-text{font-size:13px;font-weight:700;color:var(--txt)}
+  .logo-sub{font-size:10px;color:var(--dim)}
+  main{flex:1;padding:24px;max-width:1100px;margin:0 auto;width:100%}
+
+  /* ── Login ── */
+  #login-screen{display:flex;align-items:center;justify-content:center;flex:1;padding:24px}
+  .login-card{background:var(--bg1);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .login-card h2{font-size:20px;font-weight:700;margin-bottom:6px;color:var(--txt)}
+  .login-card p{font-size:12px;color:var(--dim);margin-bottom:28px}
+  label{display:block;font-size:11px;font-weight:500;color:var(--sub);margin-bottom:6px}
+  input[type=email],input[type=password],input[type=text]{
+    width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;color:var(--txt);font-size:13px;font-family:inherit;
+    transition:border-color .15s;outline:none
+  }
+  input:focus{border-color:rgba(245,158,11,.4)}
+  .field{margin-bottom:16px}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;
+    transition:all .15s;cursor:pointer
+  }
+  .btn-primary{background:linear-gradient(135deg,var(--amber),var(--amber2));color:#000;border:none;width:100%}
+  .btn-primary:hover{filter:brightness(1.1)}
+  .btn-sm{padding:6px 12px;font-size:12px;border-radius:6px}
+  .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--sub)}
+  .btn-ghost:hover{border-color:var(--amber);color:var(--amber)}
+  .btn-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+  .btn-danger:hover{background:rgba(239,68,68,.2)}
+  .btn-success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--green)}
+  .btn-success:hover{background:rgba(34,197,94,.2)}
+  .error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:16px;display:none}
+
+  /* ── KPI cards ── */
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+  .kpi{background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .kpi-value{font-size:28px;font-weight:700;color:var(--txt);margin-bottom:4px}
+  .kpi-label{font-size:11px;color:var(--dim)}
+  .kpi.amber .kpi-value{color:var(--amber)}
+  .kpi.green  .kpi-value{color:var(--green)}
+  .kpi.red    .kpi-value{color:var(--red)}
+  .kpi.blue   .kpi-value{color:var(--blue)}
+
+  /* ── Section headers ── */
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .section-header h3{font-size:14px;font-weight:600;color:var(--txt)}
+  .section-header p{font-size:11px;color:var(--dim);margin-top:2px}
+
+  /* ── Tables ── */
+  .card{background:var(--bg1);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:24px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead tr{border-bottom:1px solid var(--border)}
+  th{padding:10px 14px;text-align:left;font-size:10px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+  td{padding:10px 14px;border-bottom:1px solid #141414;color:var(--sub)}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .mono{font-family:monospace;font-size:11px}
+  .td-main{color:var(--txt);font-weight:500}
+
+  /* ── Badges ── */
+  .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;border:1px solid}
+  .badge-green{background:rgba(34,197,94,.1);color:var(--green);border-color:rgba(34,197,94,.3)}
+  .badge-red  {background:rgba(239,68,68,.1) ;color:var(--red)  ;border-color:rgba(239,68,68,.3)}
+  .badge-amber{background:rgba(245,158,11,.1);color:var(--amber);border-color:rgba(245,158,11,.3)}
+  .badge-gray {background:rgba(100,116,139,.1);color:#94a3b8;border-color:rgba(100,116,139,.3)}
+
+  /* ── Actions ── */
+  .actions{display:flex;gap:4px;flex-wrap:wrap}
+
+  /* ── Generate key section ── */
+  .gen-key-form{display:flex;gap:8px;align-items:flex-end}
+  .gen-key-form input{flex:1}
+  .key-result{background:var(--bg0);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:16px;margin-top:16px;display:none}
+  .key-result .key-val{font-family:monospace;font-size:18px;font-weight:700;color:var(--amber);letter-spacing:2px;margin-bottom:8px}
+  .key-result small{color:var(--dim);font-size:11px}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:20px;width:fit-content}
+  .tab{padding:7px 16px;border-radius:7px;font-size:12px;font-weight:500;color:var(--dim);background:none;transition:all .15s}
+  .tab.active{background:var(--amber);color:#000;box-shadow:0 1px 4px rgba(245,158,11,.3)}
+  .tab:hover:not(.active){color:var(--txt)}
+
+  /* ── Copy btn ── */
+  .copy-btn{background:none;border:none;color:var(--dim);cursor:pointer;padding:2px 6px;font-size:11px;border-radius:4px;transition:all .15s}
+  .copy-btn:hover{color:var(--amber);background:rgba(245,158,11,.1)}
+
+  /* ── Spinner ── */
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(245,158,11,.3);border-top-color:var(--amber);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Toast ── */
+  #toast{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+  .toast-item{background:var(--bg2);border-left:3px solid var(--green);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--txt);box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:auto;animation:fadeIn .2s ease}
+  .toast-item.error{border-color:var(--red)}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ── Responsive ── */
+  @media(max-width:640px){
+    .gen-key-form{flex-direction:column}
+    .kpi-grid{grid-template-columns:1fr 1fr}
+    th,td{padding:8px 10px}
+    .hide-sm{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">⚖️</div>
+      <div>
+        <div class="logo-text">MSK Gestor</div>
+        <div class="logo-sub">Portal de Licenças</div>
+      </div>
+    </div>
+    <div id="user-info" style="display:none;align-items:center;gap:12px">
+      <span style="font-size:12px;color:var(--dim)" id="user-email"></span>
+      <button class="btn btn-sm btn-ghost" onclick="logout()">Sair</button>
+    </div>
+  </header>
+
+  <!-- ── Login ── -->
+  <div id="login-screen">
+    <div class="login-card">
+      <h2>Portal de Licenças</h2>
+      <p>Acesso exclusivo para administradores</p>
+      <div class="error-msg" id="login-error"></div>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="email" placeholder="admin@msksistema.com.br" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input type="password" id="senha" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()" id="login-btn">Entrar</button>
+    </div>
+  </div>
+
+  <!-- ── Dashboard ── -->
+  <main id="dashboard" style="display:none">
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpis">
+      <div class="kpi amber"><div class="kpi-value" id="k-total">—</div><div class="kpi-label">Chaves geradas</div></div>
+      <div class="kpi green"><div class="kpi-value" id="k-active">—</div><div class="kpi-label">Ativas</div></div>
+      <div class="kpi red"><div class="kpi-value" id="k-revoked">—</div><div class="kpi-label">Revogadas</div></div>
+      <div class="kpi blue"><div class="kpi-value" id="k-machines">—</div><div class="kpi-label">Máquinas registradas</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('machines')" id="tab-machines">Máquinas</button>
+      <button class="tab" onclick="showTab('keys')" id="tab-keys">Chaves</button>
+      <button class="tab" onclick="showTab('generate')" id="tab-generate">Gerar Chave</button>
+    </div>
+
+    <!-- Machines tab -->
+    <div id="pane-machines">
+      <div class="section-header">
+        <div>
+          <h3>Máquinas Registradas</h3>
+          <p>Cada máquina reporta ao fazer login — independente do navegador local</p>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="loadAll()">↺ Atualizar</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th>Máquina</th>
+            <th>Chave</th>
+            <th class="hide-sm">Localização</th>
+            <th class="hide-sm">Último acesso</th>
+            <th>Status</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="machines-body"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--dim)"><span class="spin"></span> Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Keys tab -->
+    <div id="pane-keys" style="display:none">
+      <div class="section-header">
+        <div>
+          <h3>Chaves Geradas</h3>
+          <p>Registro server-side — visível de qualquer navegador</p>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th>Chave</th>
+            <th>Descrição</th>
+            <th class="hide-sm">Criado em</th>
+            <th>Status</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="keys-body"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--dim)"><span class="spin"></span></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Generate tab -->
+    <div id="pane-generate" style="display:none">
+      <div class="section-header">
+        <div>
+          <h3>Gerar Nova Chave</h3>
+          <p>A chave é criada no servidor e fica disponível em qualquer máquina</p>
+        </div>
+      </div>
+      <div class="card" style="padding:24px">
+        <div class="gen-key-form">
+          <div style="flex:1">
+            <label>Identificação (opcional)</label>
+            <input type="text" id="gen-desc" placeholder="Ex: PC Recepção, Notebook Dra. Miriam" maxlength="60">
+          </div>
+          <button class="btn btn-primary" style="width:auto" onclick="gerarChave()">Gerar Chave</button>
+        </div>
+        <div class="key-result" id="key-result">
+          <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Nova chave gerada com sucesso:</div>
+          <div class="key-val" id="key-result-val"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-sm btn-ghost" onclick="copyKey()">📋 Copiar chave</button>
+            <span style="font-size:11px;color:var(--dim);align-self:center">Compartilhe com o responsável pela máquina</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────
+const API = window.location.origin; // mesmo servidor
+
+// ── State ────────────────────────────────────────────────────
+let token     = sessionStorage.getItem('msk_portal_token') ?? '';
+let userEmail = sessionStorage.getItem('msk_portal_email') ?? '';
+let machines  = [];
+let keys      = [];
+
+// ── Boot ─────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (token) { showDashboard(); loadAll(); }
+});
+
+// ── Auth ─────────────────────────────────────────────────────
+async function doLogin() {
+  const email  = document.getElementById('email').value.trim();
+  const senha  = document.getElementById('senha').value;
+  const errEl  = document.getElementById('login-error');
+  const btn    = document.getElementById('login-btn');
+
+  errEl.style.display = 'none';
+  btn.innerHTML = '<span class="spin"></span> Entrando…';
+  btn.disabled  = true;
+
+  try {
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email, senha }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Credenciais inválidas');
+    if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
+
+    token     = data.token;
+    userEmail = data.user.email;
+    sessionStorage.setItem('msk_portal_token', token);
+    sessionStorage.setItem('msk_portal_email', userEmail);
+
+    showDashboard();
+    loadAll();
+  } catch (err) {
+    errEl.textContent  = err.message;
+    errEl.style.display = 'block';
+    btn.innerHTML = 'Entrar';
+    btn.disabled  = false;
+  }
+}
+
+function logout() {
+  token = ''; userEmail = '';
+  sessionStorage.removeItem('msk_portal_token');
+  sessionStorage.removeItem('msk_portal_email');
+  document.getElementById('dashboard').style.display    = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('user-info').style.display    = 'none';
+}
+
+function showDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display    = 'block';
+  document.getElementById('user-info').style.display    = 'flex';
+  document.getElementById('user-email').textContent     = userEmail;
+}
+
+// ── API helpers ───────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers ?? {}) },
+  });
+  if (res.status === 401) { logout(); throw new Error('Sessão expirada.'); }
+  return res;
+}
+
+// ── Load data ─────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.allSettled([loadMachines(), loadKeys()]);
+}
+
+async function loadMachines() {
+  try {
+    const res = await apiFetch('/api/licenses');
+    machines  = await res.json();
+    renderMachines();
+    updateKpis();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function loadKeys() {
+  try {
+    const res = await apiFetch('/api/licenses/keys');
+    keys = await res.json();
+    renderKeys();
+    updateKpis();
+  } catch (err) { toast(err.message, true); }
+}
+
+function updateKpis() {
+  const active  = keys.filter(k => k.status === 'active').length;
+  const revoked = keys.filter(k => k.status === 'revoked').length;
+  document.getElementById('k-total').textContent    = keys.length;
+  document.getElementById('k-active').textContent   = active;
+  document.getElementById('k-revoked').textContent  = revoked;
+  document.getElementById('k-machines').textContent = machines.length;
+}
+
+// ── Render machines ───────────────────────────────────────────
+function renderMachines() {
+  const tbody = document.getElementById('machines-body');
+  if (!machines.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--dim)">Nenhuma máquina registrada ainda.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = machines.map(m => {
+    const isActive  = m.status !== 'revoked';
+    const badge     = isActive ? '<span class="badge badge-green">Ativa</span>' : '<span class="badge badge-red">Revogada</span>';
+    const lastLogin = m.lastLogin ? new Date(m.lastLogin).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}) : '—';
+    const loc       = [m.cidade, m.uf].filter(Boolean).join(' / ') || '—';
+    const key       = m.key ?? '—';
+    const keyShort  = key.length > 8 ? key.slice(0,12)+'…' : key;
+    return `<tr>
+      <td>
+        <div class="td-main">${esc(m.machineName || 'Sem nome')}</div>
+        <div style="font-size:10px;color:var(--dim)">ID: ${esc(m.machineId.slice(0,12))}…</div>
+        ${m.ip ? `<div style="font-size:10px;color:var(--dim)">IP: ${esc(m.ip)}</div>` : ''}
+      </td>
+      <td>
+        <span class="mono" title="${esc(key)}">${esc(keyShort)}</span>
+        <button class="copy-btn" onclick="copy('${esc(key)}')">📋</button>
+      </td>
+      <td class="hide-sm">${esc(loc)}</td>
+      <td class="hide-sm">${lastLogin}</td>
+      <td>${badge}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-sm btn-danger" onclick="deleteMachine('${esc(m.machineId)}','${esc(m.machineName||'esta máquina')}')">Remover</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render keys ───────────────────────────────────────────────
+function renderKeys() {
+  const tbody = document.getElementById('keys-body');
+  if (!keys.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--dim)">Nenhuma chave gerada ainda. Use a aba "Gerar Chave".</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = keys.map(k => {
+    const badge   = k.status === 'active'
+      ? '<span class="badge badge-green">Ativa</span>'
+      : '<span class="badge badge-red">Revogada</span>';
+    const created = k.criadoEm ? new Date(k.criadoEm).toLocaleDateString('pt-BR') : '—';
+    const action  = k.status === 'active'
+      ? `<button class="btn btn-sm btn-danger"  onclick="revokeKey('${k.id}')">Revogar</button>`
+      : `<button class="btn btn-sm btn-success" onclick="reactivateKey('${k.id}')">Reativar</button>`;
+    return `<tr>
+      <td>
+        <span class="mono">${esc(k.key)}</span>
+        <button class="copy-btn" onclick="copy('${esc(k.key)}')">📋</button>
+      </td>
+      <td>${esc(k.descricao || '—')}</td>
+      <td class="hide-sm">${created}</td>
+      <td>${badge}</td>
+      <td><div class="actions">${action}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Actions ───────────────────────────────────────────────────
+async function gerarChave() {
+  const desc = document.getElementById('gen-desc').value.trim();
+  try {
+    const res  = await apiFetch('/api/licenses/keys/generate', {
+      method: 'POST', body: JSON.stringify({ descricao: desc || undefined })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    document.getElementById('key-result-val').textContent = data.key;
+    document.getElementById('key-result').style.display   = 'block';
+    document.getElementById('gen-desc').value = '';
+    toast('Chave gerada com sucesso!');
+    await loadKeys();
+  } catch (err) { toast(err.message, true); }
+}
+
+function copyKey() {
+  const key = document.getElementById('key-result-val').textContent;
+  copy(key);
+}
+
+async function revokeKey(id) {
+  if (!confirm('Revogar esta chave? A máquina ativada com ela ainda funcionará localmente até o próximo login.')) return;
+  try {
+    await apiFetch(`/api/licenses/keys/${id}/revoke`, { method: 'PATCH' });
+    toast('Chave revogada.');
+    await loadKeys();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function reactivateKey(id) {
+  try {
+    await apiFetch(`/api/licenses/keys/${id}/reactivate`, { method: 'PATCH' });
+    toast('Chave reativada.');
+    await loadKeys();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function deleteMachine(machineId, name) {
+  if (!confirm(`Remover o registro da máquina "${name}"? Os dados locais dela permanecem intactos.`)) return;
+  try {
+    await apiFetch(`/api/licenses/${machineId}`, { method: 'DELETE' });
+    toast('Máquina removida.');
+    await loadMachines();
+  } catch (err) { toast(err.message, true); }
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function showTab(name) {
+  ['machines','keys','generate'].forEach(t => {
+    document.getElementById(`pane-${t}`).style.display = t === name ? 'block' : 'none';
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+  });
+  if (name === 'machines') loadMachines();
+  if (name === 'keys')     loadKeys();
+}
+
+function copy(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copiado!'));
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+
+function toast(msg, isError = false) {
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (isError ? ' error' : '');
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+</script>
+</body>
+</html>
