@@ -40,8 +40,8 @@ const Avisos        = lazy(() => import('./pages/Avisos'));
 const Agenda        = lazy(() => import('./pages/Agenda'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
 const Relatorios    = lazy(() => import('./pages/Relatorios'));
-const Licencas      = lazy(() => import('./pages/Licencas'));
 const Documentos    = lazy(() => import('./pages/Documentos'));
+// Licenças removed from main app — managed via the standalone portal at /portal
 // ──────────────────────────────────────────────────────────────
 
 function PageLoader() {
@@ -100,7 +100,6 @@ function AppContent() {
     avisos:        <Avisos />,
     relatorios:    <Relatorios />,
     configuracoes: <Configuracoes />,
-    licencas:      <Licencas />,
     documentos:    <Documentos />,
   };
 

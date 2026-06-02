@@ -24,8 +24,7 @@ export type PageKey =
   | 'avisos'
   | 'relatorios'
   | 'documentos'
-  | 'configuracoes'
-  | 'licencas';
+  | 'configuracoes';
 
 interface NavItem {
   key: PageKey;
@@ -47,7 +46,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'relatorios',    label: 'Relatórios',     icon: BarChart2 },
   { key: 'documentos',    label: 'Documentos',     icon: Stamp },
   { key: 'configuracoes', label: 'Configurações',  icon: Settings },
-  { key: 'licencas',      label: 'Licenças',       icon: KeyRound, adminOnly: true },
 ];
 
 interface LayoutProps {

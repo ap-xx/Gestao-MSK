@@ -16,7 +16,7 @@ export const ASSISTENTE_PAGES = new Set([
 export function canAccessPage(role: UserRole | undefined, page: string): boolean {
   if (!role) return false;
   if (role === 'admin') return true;
-  if (role === 'advogado') return page !== 'licencas';
+  if (role === 'advogado') return true; // all pages — Licenças moved to standalone portal
   if (role === 'assistente') return ASSISTENTE_PAGES.has(page);
   return false;
 }

@@ -1621,6 +1621,27 @@ export default function Configuracoes() {
       {tab === 'dados' && (
         <div className="space-y-5">
 
+          {/* Portal de Licenças */}
+          {isAdmin && (
+            <div className="bg-[#141414] border border-amber-500/20 rounded-xl p-4 flex items-center gap-4">
+              <KeyRound className="w-5 h-5 text-amber-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[#f5f5f5]">Portal de Licenças</p>
+                <p className="text-xs text-[#505050]">
+                  Gerencie máquinas, gere e revogue chaves de acesso de qualquer navegador.
+                </p>
+              </div>
+              <a
+                href="https://gestao-msk.vercel.app/portal"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-lg transition-colors shrink-0"
+              >
+                Abrir portal →
+              </a>
+            </div>
+          )}
+
           {/* Backup Automático */}
           <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5 space-y-5">
             <div>
