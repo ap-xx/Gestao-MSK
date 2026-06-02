@@ -125,12 +125,11 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
     primeiroVencimento: new Date().toISOString().split('T')[0],
   });
 
-  // When tipo changes to Bônus, auto-enable faturamento with unico
+  // Bônus = cortesia do advogado, sem cobrança → desabilita faturamento
   const handleTipo = (t: TipoContrato) => {
     setForm(f => ({ ...f, tipo: t }));
     if (t === 'Bônus') {
-      setFaturamento(true);
-      setFat(p => ({ ...p, periodicidade: 'unico', parcelas: 1 }));
+      setFaturamento(false);
     }
   };
 
@@ -158,7 +157,6 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
       clienteNome:     cliente?.nome || '',
       tipo:            form.tipo,
       valorMensal:     form.valorMensal ? parseFloat(form.valorMensal) : undefined,
-      valorBonus:      form.valorBonus ? parseFloat(form.valorBonus) : undefined,
       percentualExito: form.percentualExito ? parseFloat(form.percentualExito) : undefined,
       valorCausa:      form.valorCausa ? parseFloat(form.valorCausa) : undefined,
       descricao:       form.descricao,
@@ -224,7 +222,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
               ))}
             </div>
             {form.tipo === 'Bônus' && (
-              <p className="text-[10px] text-pink-400/70 mt-1">Bônus por resultado excepcional — faturamento único habilitado automaticamente.</p>
+              <p className="text-[10px] text-pink-400/70 mt-1">Cortesia do advogado — registra o serviço sem cobrança ao cliente.</p>
             )}
           </div>
 
@@ -238,8 +236,10 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             )}
             {form.tipo === 'Bônus' && (
               <div className="col-span-2">
-                <label className={labelClass}>Valor do Bônus (R$) *</label>
-                <input type="number" className={inputClass} value={form.valorBonus} onChange={e => set('valorBonus', e.target.value)} placeholder="0,00" min="0" step="0.01" required={form.tipo === 'Bônus'} />
+                <div className="flex items-center gap-2 px-4 py-3 bg-pink-500/5 border border-pink-500/20 rounded-lg">
+                  <span className="text-pink-400 text-sm">🎁</span>
+                  <p className="text-sm text-pink-300">Cortesia do advogado — sem cobrança ao cliente</p>
+                </div>
               </div>
             )}
             {(form.tipo === 'Êxito' || form.tipo === 'Misto') && (
@@ -291,8 +291,8 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             </div>
           </div>
 
-          {/* ── Faturamento ── */}
-          <div className={`border rounded-xl p-4 transition-all ${faturamento ? 'border-amber-500/30 bg-amber-500/5' : 'border-[#2a2a2a]'}`}>
+          {/* ── Faturamento (oculto para Bônus que é cortesia) ── */}
+          {form.tipo !== 'Bônus' && <div className={`border rounded-xl p-4 transition-all ${faturamento ? 'border-amber-500/30 bg-amber-500/5' : 'border-[#2a2a2a]'}`}>
             {/* Toggle */}
             <button type="button" onClick={() => setFaturamento(v => !v)}
               className="flex items-center justify-between w-full">
@@ -368,7 +368,7 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Observações ── */}
           <div>
@@ -480,8 +480,13 @@ function ContratoView({ contrato, onClose, onEdit, canEdit = true }: { contrato:
             {contrato.valorCausa && (
               <div><p className="text-xs text-[#505050]">Valor da Causa</p><p className="text-[#f5f5f5]">{formatCurrency(contrato.valorCausa)}</p></div>
             )}
-            {contrato.valorBonus && (
-              <div><p className="text-xs text-[#505050]">Valor do Bônus</p><p className="text-pink-400 font-bold">{formatCurrency(contrato.valorBonus)}</p></div>
+            {contrato.tipo === 'Bônus' && (
+              <div className="col-span-2">
+                <div className="flex items-center gap-2 px-3 py-2 bg-pink-500/5 border border-pink-500/20 rounded-lg">
+                  <span className="text-sm">🎁</span>
+                  <p className="text-xs text-pink-300">Cortesia do advogado — sem cobrança ao cliente</p>
+                </div>
+              </div>
             )}
           </div>
           <div className="border-t border-[#2a2a2a] pt-4">
