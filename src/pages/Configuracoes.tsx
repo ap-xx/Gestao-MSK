@@ -5,6 +5,7 @@ import {
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
   Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
   ClipboardList, Clock, Edit2, ShieldCheck, ToggleLeft, ToggleRight,
+  KeyRound, QrCode, CheckCircle, XCircle,
 } from 'lucide-react';
 import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi } from '../services/api';
 import {
@@ -23,6 +24,172 @@ import Portal from '../components/ui/Portal';
 
 import type { Escritorio, User as UserType, UserRole } from '../types';
 import AbaAuditoria from './configuracoes/AbaAuditoria';
+
+// ─── Two-Factor Auth Section ──────────────────────────────────
+function TwoFactorSection() {
+  const { user, updateUser } = useAuth();
+  const { showToast } = useToast();
+  const API_BASE = (import.meta.env?.VITE_API_URL as string) ?? '/api';
+
+  const enabled = user?.totpEnabled ?? false;
+  const [step, setStep]           = useState<'idle' | 'qr' | 'verify' | 'disable'>('idle');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [secret, setSecret]       = useState('');
+  const [code, setCode]           = useState('');
+  const [loading, setLoading]     = useState(false);
+
+  function getToken() { return sessionStorage.getItem('msk_token') ?? ''; }
+
+  async function startSetup() {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_BASE}/auth/2fa/setup`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao configurar 2FA');
+      setQrDataUrl(data.qrDataUrl);
+      setSecret(data.secret);
+      setStep('qr');
+    } catch (e: any) { showToast('error', '2FA', e.message); }
+    finally { setLoading(false); }
+  }
+
+  async function activate() {
+    if (code.length < 6) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_BASE}/auth/2fa/activate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totp: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Código inválido');
+      updateUser({ totpEnabled: true });
+      showToast('success', '2FA ativado!', 'Autenticação em dois fatores habilitada.');
+      setStep('idle'); setCode(''); setQrDataUrl(''); setSecret('');
+    } catch (e: any) { showToast('error', 'Código inválido', e.message); }
+    finally { setLoading(false); }
+  }
+
+  async function disable() {
+    if (code.length < 6) return;
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_BASE}/auth/2fa/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totp: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Código inválido');
+      updateUser({ totpEnabled: false });
+      showToast('info', '2FA desativado');
+      setStep('idle'); setCode('');
+    } catch (e: any) { showToast('error', 'Código inválido', e.message); }
+    finally { setLoading(false); }
+  }
+
+  const inputCode = "w-full bg-[#1e1e1e] border border-amber-500/30 rounded-lg px-4 py-3 text-[#f5f5f5] text-2xl font-mono tracking-[0.5em] text-center placeholder-[#404040] focus:border-amber-500/60 outline-none transition-colors";
+
+  return (
+    <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5 mt-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <KeyRound className={`w-4 h-4 ${enabled ? 'text-green-400' : 'text-[#505050]'}`} />
+          <h3 className="font-semibold text-[#f5f5f5] text-sm">Autenticação em Dois Fatores (2FA)</h3>
+        </div>
+        {enabled
+          ? <span className="flex items-center gap-1.5 text-xs bg-green-500/15 text-green-400 border border-green-500/20 px-2.5 py-1 rounded-full font-medium"><CheckCircle className="w-3 h-3" /> Ativo</span>
+          : <span className="flex items-center gap-1.5 text-xs bg-[#1e1e1e] text-[#505050] border border-[#2a2a2a] px-2.5 py-1 rounded-full"><XCircle className="w-3 h-3" /> Inativo</span>
+        }
+      </div>
+      <p className="text-xs text-[#505050] mb-4 leading-relaxed">
+        Adiciona uma camada extra de segurança. Ao fazer login, você precisará inserir um código temporário gerado pelo
+        Google Authenticator ou Authy no seu celular.
+      </p>
+
+      {/* ── Estado: idle ── */}
+      {step === 'idle' && (
+        <>
+          {!enabled ? (
+            <button onClick={startSetup} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 rounded-lg text-sm font-medium transition-all disabled:opacity-50">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+              Ativar 2FA
+            </button>
+          ) : (
+            <button onClick={() => setStep('disable')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-lg text-sm font-medium transition-all">
+              <XCircle className="w-4 h-4" />
+              Desativar 2FA
+            </button>
+          )}
+        </>
+      )}
+
+      {/* ── Estado: QR code ── */}
+      {step === 'qr' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-5">
+            {qrDataUrl && (
+              <div className="bg-white p-3 rounded-xl w-fit mx-auto sm:mx-0">
+                <img src={qrDataUrl} alt="QR Code 2FA" className="w-44 h-44" />
+              </div>
+            )}
+            <div className="flex-1">
+              <p className="text-xs text-[#a0a0a0] mb-2 leading-relaxed">
+                <strong className="text-[#f5f5f5]">1.</strong> Instale o <strong>Google Authenticator</strong> ou <strong>Authy</strong> no seu celular.<br/>
+                <strong className="text-[#f5f5f5]">2.</strong> Escaneie o QR Code ao lado.<br/>
+                <strong className="text-[#f5f5f5]">3.</strong> Digite o código de 6 dígitos gerado pelo app.
+              </p>
+              <p className="text-[10px] text-[#404040] mb-3">Chave manual: <span className="font-mono text-amber-400/70">{secret}</span></p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#a0a0a0] mb-1.5">Código de verificação *</label>
+            <input type="text" inputMode="numeric" value={code} maxLength={6}
+              onChange={e => setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+              className={inputCode} placeholder="000000" autoFocus />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { setStep('idle'); setCode(''); }} className="flex-1 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+            <button onClick={activate} disabled={loading || code.length < 6}
+              className="flex-1 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Confirmar e Ativar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Estado: disable ── */}
+      {step === 'disable' && (
+        <div className="space-y-4">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <p className="text-sm text-red-400 font-medium mb-1">Confirme para desativar</p>
+            <p className="text-xs text-[#a0a0a0]">
+              Digite o código de 6 dígitos do seu app autenticador para confirmar a desativação do 2FA.
+            </p>
+          </div>
+          <input type="text" inputMode="numeric" value={code} maxLength={6}
+            onChange={e => setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+            className={inputCode} placeholder="000000" autoFocus />
+          <div className="flex gap-2">
+            <button onClick={() => { setStep('idle'); setCode(''); }} className="flex-1 py-2.5 bg-[#1e1e1e] border border-[#2a2a2a] text-[#a0a0a0] rounded-lg text-sm">Cancelar</button>
+            <button onClick={disable} disabled={loading || code.length < 6}
+              className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+              Desativar 2FA
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Tab = 'escritorio' | 'responsavel' | 'notificacoes' | 'usuarios' | 'email' | 'dados' | 'google' | 'auditoria' | 'permissoes';
 
@@ -931,6 +1098,9 @@ export default function Configuracoes() {
           </button>
         </form>
       )}
+
+      {/* ── Tab: Responsável → seção 2FA ───────────────────────── */}
+      {tab === 'responsavel' && <TwoFactorSection />}
 
       {/* ── Tab: Notificações ────────────────────────────────── */}
       {tab === 'notificacoes' && (

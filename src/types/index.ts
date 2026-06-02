@@ -13,6 +13,8 @@ export interface User {
   oab?: string;
   avatar?: string;
   ativo: boolean;
+  /** True when the user has TOTP 2FA enabled (synced from server) */
+  totpEnabled?: boolean;
   criadoEm: string;
 }
 

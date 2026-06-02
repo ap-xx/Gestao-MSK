@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, Scale, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Eye, EyeOff, Scale, Lock, Mail, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { useAuth, Requires2FAError } from '../context/AuthContext';
 
 const SLOW_MSGS = [
   { delay: 5,  text: 'Conectando ao servidor...' },
@@ -9,7 +9,7 @@ const SLOW_MSGS = [
 ];
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWith2FA } = useAuth();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
@@ -17,6 +17,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const [slowMsg, setSlowMsg] = useState('');
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // 2FA state
+  const [step, setStep] = useState<'credentials' | 'totp'>('credentials');
+  const [pendingUserId, setPendingUserId] = useState('');
+  const [totp, setTotp] = useState('');
 
   function clearTimers() {
     timers.current.forEach(clearTimeout);
@@ -32,19 +37,36 @@ export default function Login() {
     setLoading(true);
     clearTimers();
 
-    // Mensagens progressivas enquanto aguarda o servidor
-    SLOW_MSGS.forEach(({ delay, text }) => {
-      timers.current.push(setTimeout(() => setSlowMsg(text), delay * 1000));
-    });
-
-    try {
-      await login(email, senha);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login.');
-    } finally {
-      clearTimers();
-      setLoading(false);
-      setSlowMsg('');
+    if (step === 'credentials') {
+      SLOW_MSGS.forEach(({ delay, text }) => {
+        timers.current.push(setTimeout(() => setSlowMsg(text), delay * 1000));
+      });
+      try {
+        await login(email, senha);
+      } catch (err: any) {
+        if (err instanceof Requires2FAError) {
+          clearTimers();
+          setLoading(false);
+          setSlowMsg('');
+          setPendingUserId(err.userId);
+          setStep('totp');
+          return;
+        }
+        setError(err.message || 'Erro ao fazer login.');
+      } finally {
+        clearTimers();
+        setLoading(false);
+        setSlowMsg('');
+      }
+    } else {
+      // TOTP step
+      try {
+        await loginWith2FA(pendingUserId, totp);
+      } catch (err: any) {
+        setError(err.message || 'Código inválido.');
+      } finally {
+        setLoading(false);
+      }
     }
   }
 
@@ -71,7 +93,14 @@ export default function Login() {
 
         {/* Form Card */}
         <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-6">Acesso ao Sistema</h2>
+          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-6">
+            {step === 'totp' ? (
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+                Verificação em dois fatores
+              </span>
+            ) : 'Acesso ao Sistema'}
+          </h2>
 
           {error && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mb-5 text-red-400 text-sm">
@@ -88,56 +117,67 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-[#a0a0a0] mb-2">E-mail</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a0]" />
+            {step === 'credentials' ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-[#a0a0a0] mb-2">E-mail</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a0]" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                      className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg pl-10 pr-4 py-3 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors"
+                      placeholder="seu@email.com" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#a0a0a0] mb-2">Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a0]" />
+                    <input type={showSenha ? 'text' : 'password'} value={senha} onChange={e => setSenha(e.target.value)}
+                      className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg pl-10 pr-12 py-3 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors"
+                      placeholder="••••••••" required />
+                    <button type="button" onClick={() => setShowSenha(!showSenha)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors">
+                      {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* ── TOTP step ── */
+              <div>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-5">
+                  <p className="text-sm text-amber-400 font-medium mb-1">Código do Autenticador</p>
+                  <p className="text-xs text-[#a0a0a0]">
+                    Abra o Google Authenticator ou Authy e digite o código de 6 dígitos para <strong className="text-[#f5f5f5]">MSK Gestor</strong>.
+                  </p>
+                </div>
+                <label className="block text-sm font-medium text-[#a0a0a0] mb-2">Código de verificação</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg pl-10 pr-4 py-3 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors"
-                  placeholder="seu@email.com"
+                  type="text"
+                  inputMode="numeric"
+                  value={totp}
+                  onChange={e => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full bg-[#1e1e1e] border border-amber-500/30 rounded-lg px-4 py-3 text-[#f5f5f5] text-2xl font-mono tracking-[0.5em] text-center placeholder-[#505050] transition-colors focus:border-amber-500/60 outline-none"
+                  placeholder="000000"
+                  maxLength={6}
+                  autoFocus
                   required
                 />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[#a0a0a0] mb-2">Senha</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a0a0a0]" />
-                <input
-                  type={showSenha ? 'text' : 'password'}
-                  value={senha}
-                  onChange={e => setSenha(e.target.value)}
-                  className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg pl-10 pr-12 py-3 text-[#f5f5f5] text-sm placeholder-[#505050] transition-colors"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSenha(!showSenha)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#a0a0a0] hover:text-[#f5f5f5] transition-colors"
-                >
-                  {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <button type="button" onClick={() => { setStep('credentials'); setTotp(''); setError(''); }}
+                  className="mt-3 text-xs text-[#505050] hover:text-[#a0a0a0] transition-colors">
+                  ← Voltar para o login
                 </button>
               </div>
-            </div>
+            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-semibold py-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 mt-2"
-            >
+            <button type="submit" disabled={loading || (step === 'totp' && totp.length < 6)}
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-semibold py-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 mt-2">
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Entrando...
+                  {step === 'totp' ? 'Verificando...' : 'Entrando...'}
                 </span>
-              ) : (
-                'Entrar no Sistema'
-              )}
+              ) : step === 'totp' ? 'Verificar e Entrar' : 'Entrar no Sistema'}
             </button>
           </form>
 

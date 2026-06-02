@@ -23,6 +23,7 @@ import perfisRoutes  from './routes/perfis';
 import boletoRoutes    from './routes/boleto';
 import licensesRoutes  from './routes/licenses';
 import datajudRoutes   from './routes/datajud';
+import totpRoutes      from './routes/totp';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -71,6 +72,7 @@ app.use('/api/perfis',      perfisRoutes);
 app.use('/api/boleto',     boletoRoutes);
 app.use('/api/licenses',   licensesRoutes);
 app.use('/api/datajud',    datajudRoutes);
+app.use('/api/auth/2fa',   totpRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 

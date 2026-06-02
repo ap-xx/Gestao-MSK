@@ -10,10 +10,19 @@ const REFRESH_KEY = 'msk_refresh';
 // (Google Calendar + E-mail SMTP precisam de JWT)
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
+/** Thrown by login() when the server requires a TOTP code to continue */
+export class Requires2FAError extends Error {
+  readonly code = 'requires_2fa';
+  constructor(public readonly userId: string) {
+    super('Autenticação em dois fatores obrigatória.');
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, senha: string) => Promise<void>;
+  loginWith2FA: (userId: string, totp: string) => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
   changePassword: (senhaAtual: string, novaSenha: string) => Promise<void>;
@@ -32,37 +41,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, senha: string) => {
-    // ── Etapa 1: autenticação local (instantânea, sem servidor) ──
     const { UsersDB } = await import('../data/db');
-    const found = UsersDB.getByEmail(email.toLowerCase().trim());
+    const normalEmail = email.toLowerCase().trim();
+    const found = UsersDB.getByEmail(normalEmail);
     if (!found || found.senha !== senha) throw new Error('E-mail ou senha incorretos.');
     if (!found.ativo) throw new Error('Usuário inativo. Contate o administrador.');
+
+    // ── Se o usuário tem 2FA habilitado localmente, exige código antes de prosseguir
+    if (found.totpEnabled) {
+      // Confirm with server (server has the real TOTP secret)
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalEmail, senha }),
+        signal: AbortSignal.timeout(65_000),
+      }).catch(() => null);
+
+      if (!res) throw new Error('Servidor indisponível. Com 2FA ativo, é necessária conexão ao servidor.');
+      const data = await res.json();
+      if (data.requires2fa) throw new Requires2FAError(data.userId);
+      // If server says no 2FA (race condition), continue normally
+    }
+
+    // ── Login local imediato ──────────────────────────────────────
     SessionDB.set(found);
     setUser(found);
     void auditoriaApi.log('login', 'usuario', found.id, found.email);
 
-    // ── Etapa 2: atualizar estatísticas da licença desta máquina ──
     licenseApi.updateLoginStats();
-    void licenseApi.fetchGeo();           // geolocalização via IP (uma vez)
-    void licenseApi.reportToServer();     // heartbeat para o servidor (fire-and-forget)
+    void licenseApi.fetchGeo();
+    void licenseApi.reportToServer();
 
-    // ── Etapa 3: buscar JWT do servidor em background ─────────────
-    // O Render free tier pode levar 30-60s para acordar — não bloqueamos
-    // o login por isso. Quando o token chegar, Google Calendar e E-mail
-    // passam a funcionar automaticamente sem novo login.
+    // ── JWT do servidor em background (se não necessitou 2FA) ─────
     fetch(`${API_BASE}/auth/login`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email: email.toLowerCase().trim(), senha }),
-      signal:  AbortSignal.timeout(65_000), // cobre o cold-start do Render (~50s)
+      body:    JSON.stringify({ email: normalEmail, senha }),
+      signal:  AbortSignal.timeout(65_000),
     })
       .then(res => res.ok ? res.json() : null)
-      .then((data: { token?: string; refreshToken?: string } | null) => {
+      .then((data: { token?: string; refreshToken?: string; totpEnabled?: boolean } | null) => {
         if (!data) return;
         if (data.token)        sessionStorage.setItem(TOKEN_KEY, data.token);
         if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
+        // Sync totpEnabled from server to local user
+        if (data.totpEnabled !== undefined) {
+          const { UsersDB: DB } = require('../data/db');
+          DB.update(found.id, { totpEnabled: data.totpEnabled });
+          updateUser({ totpEnabled: data.totpEnabled });
+        }
       })
-      .catch(() => { /* servidor indisponível — dados já estão locais */ });
+      .catch(() => {});
+  }, []);
+
+  const loginWith2FA = useCallback(async (userId: string, totp: string) => {
+    const res = await fetch(`${API_BASE}/auth/2fa/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, totp }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Código inválido.');
+
+    // Save JWT
+    if (data.token)        sessionStorage.setItem(TOKEN_KEY, data.token);
+    if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
+
+    // Complete local login
+    const { UsersDB } = await import('../data/db');
+    const found = UsersDB.getById(userId);
+    if (!found) throw new Error('Usuário não encontrado localmente.');
+    SessionDB.set({ ...found, totpEnabled: true });
+    setUser({ ...found, totpEnabled: true });
+    void auditoriaApi.log('login', 'usuario', found.id, found.email);
+    licenseApi.updateLoginStats();
+    void licenseApi.reportToServer();
   }, []);
 
   const logout = useCallback(() => {
@@ -89,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWith2FA, logout, updateUser, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

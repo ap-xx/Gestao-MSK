@@ -148,18 +148,38 @@
   <!-- ── Login ── -->
   <div id="login-screen">
     <div class="login-card">
-      <h2>Portal de Licenças</h2>
-      <p>Acesso exclusivo para administradores</p>
+      <h2 id="login-title">Portal de Licenças</h2>
+      <p id="login-sub">Acesso exclusivo para administradores</p>
       <div class="error-msg" id="login-error"></div>
-      <div class="field">
-        <label>E-mail</label>
-        <input type="email" id="email" placeholder="admin@msksistema.com.br" autocomplete="username">
+
+      <!-- Step 1: credentials -->
+      <div id="login-step1">
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="email" placeholder="admin@msksistema.com.br" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input type="password" id="senha" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary" onclick="doLogin()" id="login-btn">Entrar</button>
       </div>
-      <div class="field">
-        <label>Senha</label>
-        <input type="password" id="senha" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+
+      <!-- Step 2: TOTP -->
+      <div id="login-step2" style="display:none">
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:14px;margin-bottom:20px">
+          <p style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:4px">🔐 Verificação em dois fatores</p>
+          <p style="font-size:11px;color:var(--sub)">Abra o Google Authenticator ou Authy e insira o código de 6 dígitos para <strong>MSK Gestor</strong>.</p>
+        </div>
+        <div class="field">
+          <label>Código do autenticador</label>
+          <input type="text" inputmode="numeric" id="totp" maxlength="6" placeholder="000000"
+            style="font-size:24px;font-family:monospace;letter-spacing:0.5em;text-align:center"
+            onkeydown="if(event.key==='Enter')verifyTotp()" oninput="this.value=this.value.replace(/\D/g,'')">
+        </div>
+        <button class="btn btn-primary" onclick="verifyTotp()" id="totp-btn">Verificar e Entrar</button>
+        <button onclick="backToCredentials()" style="display:block;margin-top:12px;background:none;border:none;color:var(--dim);font-size:12px;cursor:pointer;font-family:inherit">← Voltar</button>
       </div>
-      <button class="btn btn-primary" onclick="doLogin()" id="login-btn">Entrar</button>
     </div>
   </div>
 
@@ -275,6 +295,8 @@ window.addEventListener('load', () => {
 });
 
 // ── Auth ─────────────────────────────────────────────────────
+let pendingUserId = '';
+
 async function doLogin() {
   const email  = document.getElementById('email').value.trim();
   const senha  = document.getElementById('senha').value;
@@ -282,17 +304,31 @@ async function doLogin() {
   const btn    = document.getElementById('login-btn');
 
   errEl.style.display = 'none';
-  btn.innerHTML = '<span class="spin"></span> Entrando…';
+  btn.innerHTML = '<span class="spin"></span> Verificando…';
   btn.disabled  = true;
 
   try {
-    const res = await fetch(`${API}/api/auth/login`, {
+    const res  = await fetch(`${API}/api/auth/login`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ email, senha }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? 'Credenciais inválidas');
+
+    // 2FA required
+    if (data.requires2fa) {
+      pendingUserId = data.userId;
+      document.getElementById('login-step1').style.display = 'none';
+      document.getElementById('login-step2').style.display = 'block';
+      document.getElementById('login-title').textContent   = '🔐 Verificação 2FA';
+      document.getElementById('login-sub').textContent     = 'Insira o código do seu app autenticador';
+      document.getElementById('totp').focus();
+      btn.innerHTML = 'Entrar';
+      btn.disabled  = false;
+      return;
+    }
+
     if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
 
     token     = data.token;
@@ -303,11 +339,56 @@ async function doLogin() {
     showDashboard();
     loadAll();
   } catch (err) {
-    errEl.textContent  = err.message;
+    errEl.textContent   = err.message;
     errEl.style.display = 'block';
     btn.innerHTML = 'Entrar';
     btn.disabled  = false;
   }
+}
+
+async function verifyTotp() {
+  const totp   = document.getElementById('totp').value.trim();
+  const errEl  = document.getElementById('login-error');
+  const btn    = document.getElementById('totp-btn');
+
+  if (totp.length < 6) return;
+  errEl.style.display = 'none';
+  btn.innerHTML = '<span class="spin"></span> Verificando…';
+  btn.disabled  = true;
+
+  try {
+    const res  = await fetch(`${API}/api/auth/2fa/verify`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ userId: pendingUserId, totp }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Código inválido');
+    if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
+
+    token     = data.token;
+    userEmail = data.user.email;
+    sessionStorage.setItem('msk_portal_token', token);
+    sessionStorage.setItem('msk_portal_email', userEmail);
+
+    showDashboard();
+    loadAll();
+  } catch (err) {
+    errEl.textContent   = err.message;
+    errEl.style.display = 'block';
+    btn.innerHTML = 'Verificar e Entrar';
+    btn.disabled  = false;
+  }
+}
+
+function backToCredentials() {
+  pendingUserId = '';
+  document.getElementById('totp').value               = '';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-step1').style.display = 'block';
+  document.getElementById('login-step2').style.display = 'none';
+  document.getElementById('login-title').textContent   = 'Portal de Licenças';
+  document.getElementById('login-sub').textContent     = 'Acesso exclusivo para administradores';
 }
 
 function logout() {

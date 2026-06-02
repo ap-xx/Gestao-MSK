@@ -225,6 +225,8 @@ const migrations: Array<[string, string]> = [
   ['clientes',    'ALTER TABLE clientes ADD COLUMN avaliacao INTEGER DEFAULT 0'],
   ['documentos',  'ALTER TABLE documentos ADD COLUMN categoria TEXT DEFAULT "outros"'],
   ['users',       'ALTER TABLE users ADD COLUMN perfilId TEXT'],
+  ['users_totp1', 'ALTER TABLE users ADD COLUMN totpSecret TEXT DEFAULT NULL'],
+  ['users_totp2', 'ALTER TABLE users ADD COLUMN totpEnabled INTEGER NOT NULL DEFAULT 0'],
 ];
 for (const [, sql] of migrations) {
   try { db.exec(sql); } catch { /* coluna já existe — ignora */ }

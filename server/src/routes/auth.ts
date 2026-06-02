@@ -31,6 +31,15 @@ router.post('/login', async (req: Request, res: Response) => {
     return;
   }
 
+  // ── 2FA check ─────────────────────────────────────────────
+  // If the user has TOTP enabled, we don't issue a JWT yet.
+  // The client must complete verification via POST /api/auth/2fa/verify.
+  const userRow = db.prepare('SELECT totpEnabled FROM users WHERE id = ?').get(user.id) as any;
+  if (userRow?.totpEnabled) {
+    res.json({ requires2fa: true, userId: user.id });
+    return;
+  }
+
   const token = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET!,
@@ -47,7 +56,10 @@ router.post('/login', async (req: Request, res: Response) => {
   res.json({
     token,
     refreshToken,
-    user: { id: user.id, nome: user.nome, email: user.email, role: user.role, ativo: true, criadoEm: new Date().toISOString() },
+    user: {
+      id: user.id, nome: user.nome, email: user.email, role: user.role,
+      ativo: true, totpEnabled: false, criadoEm: new Date().toISOString(),
+    },
   });
 });
 
