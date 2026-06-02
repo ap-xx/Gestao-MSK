@@ -15,6 +15,7 @@ import { downloadCsv, fmtCsvDate } from '../utils/exportCsv';
 import { downloadXlsx, xlsxDate } from '../utils/exportXlsx';
 import { adicionarDiasUteis } from '../utils/prazos';
 import { maskCNJ } from '../utils/masks';
+import { parseCNJ } from '../utils/parseCNJ';
 import { usePersistedFilter } from '../hooks/usePersistedFilter';
 import { useUndoDelete } from '../hooks/useUndoDelete';
 import { useCtrlSave } from '../hooks/useCtrlSave';
@@ -523,14 +524,27 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
         </div>
 
         <form id="processo-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-          {/* Número CNJ + DataJud */}
+          {/* Número CNJ + auto-parse + DataJud */}
           <div>
             <label className={labelClass}>Número CNJ *</label>
             <div className="flex gap-2">
               <input
                 className={inputClass}
                 value={form.numeroCNJ}
-                onChange={e => set('numeroCNJ', maskCNJ(e.target.value))}
+                onChange={e => {
+                  const masked = maskCNJ(e.target.value);
+                  set('numeroCNJ', masked);
+                  // Auto-detect tribunal from the CNJ number as soon as it's complete
+                  const decoded = parseCNJ(masked);
+                  if (decoded?.tribunalAlias && decoded.tribunalAlias !== form.tribunalAlias) {
+                    setForm(f => ({
+                      ...f,
+                      numeroCNJ: masked,
+                      tribunalAlias: decoded.tribunalAlias,
+                      areaAtuacao: decoded.areaAtuacao,
+                    }));
+                  }
+                }}
                 required
                 placeholder="0000000-00.0000.0.00.0000"
                 maxLength={25}
@@ -543,7 +557,25 @@ function ProcessoModal({ processo, clientes, onClose, onSave }: ModalProps) {
                 DataJud
               </button>
             </div>
-            <p className="text-xs text-[#505050] mt-1">Use "DataJud" para buscar dados atualizados no CNJ.</p>
+            {/* Show decoded info when CNJ is complete */}
+            {(() => {
+              const d = parseCNJ(form.numeroCNJ);
+              if (!d) return <p className="text-xs text-[#505050] mt-1">Use "DataJud" para buscar dados adicionais (partes, andamentos).</p>;
+              return (
+                <p className="text-xs mt-1 flex items-center gap-1.5">
+                  <span className="text-green-400">✓</span>
+                  <span className="text-[#a0a0a0]">{d.tribunalNome || d.tribunalAlias.toUpperCase()}</span>
+                  <span className="text-[#505050]">·</span>
+                  <span className="text-[#505050]">Ano {d.ano}</span>
+                  {d.tribunalAlias && (
+                    <>
+                      <span className="text-[#505050]">·</span>
+                      <span className="text-amber-400/70 text-[10px]">Tribunal detectado automaticamente</span>
+                    </>
+                  )}
+                </p>
+              );
+            })()}
           </div>
 
           {dadosDataJud && (
