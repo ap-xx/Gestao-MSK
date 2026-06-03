@@ -311,13 +311,31 @@ async function doLogin() {
   btn.innerHTML = '<span class="spin"></span> Verificando…';
   btn.disabled  = true;
 
+  // Show "waking up" message after 5 seconds if still waiting
+  const slowTimer = setTimeout(() => {
+    btn.innerHTML = '<span class="spin"></span> Servidor acordando… (~60 s)';
+  }, 5000);
+
+  // 90-second hard timeout — covers Render's cold-start (~60 s)
+  const controller = new AbortController();
+  const hardTimeout = setTimeout(() => controller.abort(), 90_000);
+
   try {
-    const res  = await fetch(`${API}/api/auth/login`, {
+    const res = await fetch(`${API}/api/auth/login`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ email, senha }),
+      signal: controller.signal,
     });
-    const data = await res.json();
+    clearTimeout(slowTimer);
+    clearTimeout(hardTimeout);
+
+    // Detect HTML response (Render cold-start page) instead of JSON
+    const text = await res.text();
+    if (text.trimStart().startsWith('<')) {
+      throw new Error('Servidor retornou HTML (cold-start). Aguarde 30 s e tente novamente.');
+    }
+    const data = JSON.parse(text);
     if (!res.ok) throw new Error(data.error ?? 'Credenciais inválidas');
 
     // 2FA required
@@ -343,7 +361,12 @@ async function doLogin() {
     showDashboard();
     loadAll();
   } catch (err) {
-    errEl.textContent   = err.message;
+    clearTimeout(slowTimer);
+    clearTimeout(hardTimeout);
+    const msg = err.name === 'AbortError'
+      ? 'Tempo esgotado. O servidor demorou mais de 90 s para responder. Tente novamente.'
+      : err.message;
+    errEl.textContent   = msg;
     errEl.style.display = 'block';
     btn.innerHTML = 'Entrar';
     btn.disabled  = false;
@@ -365,8 +388,11 @@ async function verifyTotp() {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ userId: pendingUserId, totp }),
+      signal: AbortSignal.timeout(30_000),
     });
-    const data = await res.json();
+    const text = await res.text();
+    if (text.trimStart().startsWith('<')) throw new Error('Servidor acordando, tente novamente.');
+    const data = JSON.parse(text);
     if (!res.ok) throw new Error(data.error ?? 'Código inválido');
     if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
 
