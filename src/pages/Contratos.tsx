@@ -124,25 +124,49 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
     parcelas: 1,
     primeiroVencimento: new Date().toISOString().split('T')[0],
   });
+  // "Data final do faturamento" → auto-calculates number of parcelas
+  const [dataFinalFat, setDataFinalFat] = useState(form.dataFim || '');
+  // When true, valor_por_parcela = valorSugerido / parcelas automatically
+  const [autoValor, setAutoValor] = useState(!contrato?.faturamentoConfig?.valor);
 
   // Bônus = cortesia do advogado, sem cobrança → desabilita faturamento
   const handleTipo = (t: TipoContrato) => {
     setForm(f => ({ ...f, tipo: t }));
-    if (t === 'Bônus') {
-      setFaturamento(false);
-    }
+    if (t === 'Bônus') setFaturamento(false);
   };
 
   function set(key: string, val: string) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
 
-  // Sync valor sugerido para faturamento a partir dos campos de valor
+  // Valor sugerido from contract fields
   const valorSugerido = form.tipo === 'Mensal' ? parseFloat(form.valorMensal) || 0
-    : form.tipo === 'Bônus' ? parseFloat(form.valorBonus) || 0
     : form.tipo === 'Êxito' || form.tipo === 'Misto'
       ? (parseFloat(form.valorCausa) || 0) * ((parseFloat(form.percentualExito) || 0) / 100)
     : 0;
+
+  // Auto-divide: when parcelas or valorSugerido changes, recalculate per-parcela value
+  React.useEffect(() => {
+    if (autoValor && valorSugerido > 0 && fat.parcelas > 0) {
+      setFat(f => ({ ...f, valor: Math.round((valorSugerido / fat.parcelas) * 100) / 100 }));
+    }
+  }, [fat.parcelas, valorSugerido, autoValor]);
+
+  // Calculate parcelas from "data final do faturamento"
+  function calcParcelasFromDataFinal(dataFinal: string) {
+    setDataFinalFat(dataFinal);
+    if (!dataFinal || !fat.primeiroVencimento || fat.periodicidade === 'unico') {
+      if (fat.periodicidade === 'unico') setFat(f => ({ ...f, parcelas: 1 }));
+      return;
+    }
+    const start  = new Date(fat.primeiroVencimento + 'T12:00:00');
+    const end    = new Date(dataFinal + 'T12:00:00');
+    const dias   = PERIODICIDADE_DIAS[fat.periodicidade];
+    if (!dias || end <= start) return;
+    const diffDays = (end.getTime() - start.getTime()) / 86_400_000;
+    const n = Math.round(diffDays / dias) + 1;
+    setFat(f => ({ ...f, parcelas: Math.max(1, n) }));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -309,62 +333,99 @@ function ContratoModal({ contrato, clientes, onClose, onSave }: ModalProps) {
             {/* Config when enabled */}
             {faturamento && (
               <div className="mt-4 space-y-3">
-                {/* Valor + Periodicidade */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelClass}>
-                      Valor por parcela (R$) *
-                      {valorSugerido > 0 && (
-                        <button type="button" onClick={() => setFat(f => ({ ...f, valor: valorSugerido }))}
-                          className="ml-2 text-amber-400 hover:text-amber-300 text-[10px] underline">
-                          usar {formatCurrency(valorSugerido)}
-                        </button>
-                      )}
-                    </label>
-                    <input type="number" className={inputClass}
-                      value={fat.valor || ''}
-                      onChange={e => setFat(f => ({ ...f, valor: parseFloat(e.target.value) || 0 }))}
-                      placeholder="0,00" min="0" step="0.01" required={faturamento} />
-                  </div>
+                {/* Periodicidade + 1º vencimento + Data final */}
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className={labelClass}>Periodicidade</label>
                     <select className={inputClass} value={fat.periodicidade}
-                      onChange={e => setFat(f => ({ ...f, periodicidade: e.target.value as PeriodicidadeFaturamento,
-                        parcelas: e.target.value === 'unico' ? 1 : f.parcelas }))}>
+                      onChange={e => {
+                        const p = e.target.value as PeriodicidadeFaturamento;
+                        setFat(f => ({ ...f, periodicidade: p, parcelas: p === 'unico' ? 1 : f.parcelas }));
+                        if (dataFinalFat) setTimeout(() => calcParcelasFromDataFinal(dataFinalFat), 0);
+                      }}>
                       {(Object.entries(PERIODICIDADE_LABELS) as [PeriodicidadeFaturamento, string][]).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
                     </select>
                   </div>
-                </div>
-
-                {/* Parcelas + Primeiro vencimento */}
-                <div className="grid grid-cols-2 gap-3">
-                  {fat.periodicidade !== 'unico' && (
-                    <div>
-                      <label className={labelClass}>Nº de parcelas <span className="text-[#505050] font-normal">(0 = recorrente)</span></label>
-                      <input type="number" className={inputClass}
-                        value={fat.parcelas}
-                        onChange={e => setFat(f => ({ ...f, parcelas: Math.max(0, parseInt(e.target.value) || 0) }))}
-                        min="0" max="360" />
-                    </div>
-                  )}
                   <div>
                     <label className={labelClass}>1º vencimento *</label>
                     <DateInput className={inputClass} value={fat.primeiroVencimento}
-                      onChange={e => setFat(f => ({ ...f, primeiroVencimento: e.target.value }))} required={faturamento} />
+                      onChange={e => { setFat(f => ({ ...f, primeiroVencimento: e.target.value })); }}
+                      required={faturamento} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>
+                      Data final
+                      <span className="ml-1 text-[10px] text-[#505050] font-normal">→ calcula parcelas</span>
+                    </label>
+                    <DateInput className={inputClass} value={dataFinalFat}
+                      onChange={e => calcParcelasFromDataFinal(e.target.value)} />
                   </div>
                 </div>
 
-                {/* Preview */}
+                {/* Valor por parcela + Nº parcelas */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className={`${labelClass} mb-0`}>Valor por parcela (R$) *</label>
+                      <button type="button"
+                        onClick={() => setAutoValor(v => !v)}
+                        className={`text-[10px] px-2 py-0.5 rounded border transition-all ${
+                          autoValor
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                            : 'border-[#2a2a2a] text-[#505050] hover:text-[#a0a0a0]'
+                        }`}
+                        title="Quando ativo: valor = total ÷ parcelas">
+                        ÷ auto
+                      </button>
+                    </div>
+                    <input type="number" className={inputClass}
+                      value={fat.valor || ''}
+                      onChange={e => { setAutoValor(false); setFat(f => ({ ...f, valor: parseFloat(e.target.value) || 0 })); }}
+                      placeholder={autoValor && valorSugerido > 0 && fat.parcelas > 0
+                        ? formatCurrency(valorSugerido / fat.parcelas)
+                        : '0,00'}
+                      min="0" step="0.01" required={faturamento} />
+                    {autoValor && valorSugerido > 0 && fat.parcelas > 0 && (
+                      <p className="text-[10px] text-amber-400/70 mt-1">
+                        {formatCurrency(valorSugerido)} ÷ {fat.parcelas} = {formatCurrency(valorSugerido / fat.parcelas)}
+                      </p>
+                    )}
+                  </div>
+                  {fat.periodicidade !== 'unico' && (
+                    <div>
+                      <label className={labelClass}>
+                        Nº de parcelas
+                        <span className="ml-1 text-[#505050] font-normal text-[10px]">(0 = recorrente)</span>
+                      </label>
+                      <input type="number" className={inputClass}
+                        value={fat.parcelas}
+                        onChange={e => setFat(f => ({ ...f, parcelas: Math.max(0, parseInt(e.target.value) || 0) }))}
+                        min="0" max="999" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview total */}
                 {fat.valor > 0 && fat.parcelas > 0 && (
-                  <div className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2 text-xs text-[#505050]">
-                    {fat.parcelas} × {formatCurrency(fat.valor)} = <strong className="text-amber-400">{formatCurrency(fat.parcelas * fat.valor)}</strong>
-                    {' · '}Primeiro em {new Date(fat.primeiroVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  <div className="bg-[#141414] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#505050]">
+                        {fat.parcelas}× {formatCurrency(fat.valor)} ({PERIODICIDADE_LABELS[fat.periodicidade]})
+                      </span>
+                      <strong className="text-amber-400 text-sm">{formatCurrency(fat.parcelas * fat.valor)}</strong>
+                    </div>
+                    <p className="text-[#505050] mt-1">
+                      1º em {new Date(fat.primeiroVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      {dataFinalFat && ` · último em ${new Date(dataFinalFat + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                    </p>
                   </div>
                 )}
-                {fat.valor > 0 && fat.parcelas === 0 && fat.periodicidade !== 'unico' && (
-                  <p className="text-[10px] text-amber-400/70">Recorrente — lançamentos gerados manualmente conforme necessário.</p>
+                {fat.parcelas === 0 && fat.periodicidade !== 'unico' && (
+                  <p className="text-[10px] text-amber-400/70">
+                    Recorrente — gere os lançamentos manualmente em Honorários conforme o período.
+                  </p>
                 )}
               </div>
             )}

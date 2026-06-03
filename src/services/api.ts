@@ -539,8 +539,33 @@ export const googleApi = {
     localStorage.removeItem('msk_google_connected');
     return result;
   },
-  sync: () =>
-    serverReq<{ ok: true; synced: number; errors: number }>('POST', '/google/sync'),
+  /** Sync frontend data to Google Calendar.
+   *  Sends processos, avisos and contratos from the local IDB so the server
+   *  can create/update events even though its own SQLite is empty. */
+  sync: async () => {
+    const [processos, avisos, contratos] = await Promise.all([
+      IDBProcessos.getAll(),
+      IDBAviso.getAll(),
+      IDBContratos.getAll(),
+    ]);
+    return serverReq<{ ok: true; synced: number; errors: number }>(
+      'POST', '/google/sync',
+      {
+        processos: processos.map(p => ({
+          id: p.id, clienteNome: p.clienteNome, vara: p.vara, status: p.status,
+          audiencias: p.audiencias ?? [],
+        })),
+        avisos: avisos.map(a => ({
+          id: a.id, titulo: a.titulo, descricao: a.descricao,
+          dataLimite: a.dataLimite, lido: a.lido,
+        })),
+        contratos: contratos.map(c => ({
+          id: c.id, clienteNome: c.clienteNome, tipo: c.tipo,
+          dataFim: c.dataFim, status: c.status,
+        })),
+      },
+    );
+  },
 };
 
 // ─────────────────────────────────────────────────────────────

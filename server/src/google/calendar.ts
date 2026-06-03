@@ -316,9 +316,27 @@ export async function syncContrato(params: {
   );
 }
 
-// ─── Full sync (all entities → one user's calendar) ──────────
+// ─── Full sync ──────────────────────────────────────────────
+// Accepts optional client-side data payload. When provided, uses it instead
+// of the server's SQLite tables (which are empty in a frontend-first setup).
 
-export async function fullSyncForUser(userId: string): Promise<{ synced: number; errors: number }> {
+export interface SyncPayload {
+  processos?: Array<{
+    id: string; clienteNome: string; vara: string; status: string;
+    audiencias: Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }>;
+  }>;
+  avisos?: Array<{
+    id: string; titulo: string; descricao: string; dataLimite?: string; lido: boolean;
+  }>;
+  contratos?: Array<{
+    id: string; clienteNome: string; tipo: string; dataFim?: string; status: string;
+  }>;
+}
+
+export async function fullSyncForUser(
+  userId: string,
+  payload?: SyncPayload,
+): Promise<{ synced: number; errors: number }> {
   const cal = await getCalendar(userId);
   if (!cal) throw new Error('Usuário não conectado ao Google Calendar');
   const { calendarId } = getToken(userId)!;
@@ -326,15 +344,23 @@ export async function fullSyncForUser(userId: string): Promise<{ synced: number;
   let synced = 0;
   let errors = 0;
 
-  type ProcessoRow = { id: string; clienteNome: string; vara: string; audiencias: string };
-  const processos = db.prepare('SELECT id, clienteNome, vara, audiencias FROM processos WHERE status = ?').all('ativo') as ProcessoRow[];
+  // ── Processos / Audiências ────────────────────────────────
+  let processos: SyncPayload['processos'];
+  if (payload?.processos) {
+    processos = payload.processos.filter(p => p.status === 'ativo');
+  } else {
+    type ProcessoRow = { id: string; clienteNome: string; vara: string; audiencias: string };
+    processos = (db.prepare('SELECT id, clienteNome, vara, audiencias FROM processos WHERE status = ?').all('ativo') as ProcessoRow[])
+      .map(p => {
+        let audiencias: any[] = [];
+        try { audiencias = JSON.parse(p.audiencias); } catch { /* ignore */ }
+        return { ...p, audiencias };
+      });
+  }
 
-  for (const p of processos) {
-    let audiencias: Array<{ data: string; hora?: string; tipo: string; vara?: string; local?: string }> = [];
-    try { audiencias = JSON.parse(p.audiencias); } catch { continue; }
-
-    for (let i = 0; i < audiencias.length; i++) {
-      const a = audiencias[i];
+  for (const p of processos ?? []) {
+    for (let i = 0; i < p.audiencias.length; i++) {
+      const a = p.audiencias[i];
       if (!a.data) continue;
       try {
         const body = audienciaEvent(a.data, a.hora, a.tipo, p.clienteNome, a.vara ?? p.vara, a.local);
@@ -344,10 +370,18 @@ export async function fullSyncForUser(userId: string): Promise<{ synced: number;
     }
   }
 
-  type AvisoRow = { id: string; titulo: string; descricao: string; dataLimite: string; lido: number };
-  const avisos = db.prepare('SELECT id, titulo, descricao, dataLimite, lido FROM avisos WHERE dataLimite IS NOT NULL AND lido = 0').all() as AvisoRow[];
+  // ── Avisos ────────────────────────────────────────────────
+  let avisos: SyncPayload['avisos'];
+  if (payload?.avisos) {
+    avisos = payload.avisos.filter(a => a.dataLimite && !a.lido);
+  } else {
+    type AvisoRow = { id: string; titulo: string; descricao: string; dataLimite: string; lido: number };
+    avisos = (db.prepare('SELECT id, titulo, descricao, dataLimite, lido FROM avisos WHERE dataLimite IS NOT NULL AND lido = 0').all() as AvisoRow[])
+      .map(av => ({ ...av, lido: Boolean(av.lido), dataLimite: av.dataLimite ?? undefined }));
+  }
 
-  for (const av of avisos) {
+  for (const av of avisos ?? []) {
+    if (!av.dataLimite) continue;
     try {
       const body = avisoEvent(av.titulo, av.descricao, av.dataLimite);
       await upsertEvent(cal, calendarId, userId, 'aviso', `aviso-${av.id}`, body);
@@ -355,10 +389,17 @@ export async function fullSyncForUser(userId: string): Promise<{ synced: number;
     } catch { errors++; }
   }
 
-  type ContratoRow = { id: string; clienteNome: string; tipo: string; dataFim: string };
-  const contratos = db.prepare("SELECT id, clienteNome, tipo, dataFim FROM contratos WHERE status = 'ativo' AND dataFim IS NOT NULL").all() as ContratoRow[];
+  // ── Contratos ─────────────────────────────────────────────
+  let contratos: SyncPayload['contratos'];
+  if (payload?.contratos) {
+    contratos = payload.contratos.filter(c => c.status === 'ativo' && c.dataFim);
+  } else {
+    type ContratoRow = { id: string; clienteNome: string; tipo: string; dataFim: string };
+    contratos = db.prepare("SELECT id, clienteNome, tipo, dataFim FROM contratos WHERE status = 'ativo' AND dataFim IS NOT NULL").all() as ContratoRow[];
+  }
 
-  for (const c of contratos) {
+  for (const c of contratos ?? []) {
+    if (!c.dataFim) continue;
     try {
       const body = contratoEvent(c.clienteNome, c.tipo, c.dataFim);
       await upsertEvent(cal, calendarId, userId, 'contrato', `contrato-${c.id}`, body);

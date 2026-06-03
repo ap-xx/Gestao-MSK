@@ -123,6 +123,9 @@ router.delete('/disconnect', requireAuth, (req, res) => {
 });
 
 // ── POST /api/google/sync ─────────────────────────────────────
+// Accepts an optional payload with { processos, avisos, contratos } from
+// the frontend (client-side data takes priority over server SQLite which
+// is empty in a frontend-first architecture).
 router.post('/sync', requireAuth, async (req, res) => {
   const userId = req.user!.id;
 
@@ -131,7 +134,8 @@ router.post('/sync', requireAuth, async (req, res) => {
   }
 
   try {
-    const result = await fullSyncForUser(userId);
+    const payload = req.body && Object.keys(req.body).length > 0 ? req.body : undefined;
+    const result  = await fullSyncForUser(userId, payload);
     res.json({ ok: true, ...result });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Erro desconhecido';
