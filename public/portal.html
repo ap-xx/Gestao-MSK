@@ -287,7 +287,7 @@
 // When served from the Render backend itself, use same origin.
 const API = window.location.hostname.endsWith('onrender.com')
   ? window.location.origin
-  : 'https://msk-api.onrender.com';
+  : 'https://gestao-msk.onrender.com';
 
 // ── State ────────────────────────────────────────────────────
 let token     = sessionStorage.getItem('msk_portal_token') ?? '';

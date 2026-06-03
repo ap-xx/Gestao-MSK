@@ -93,7 +93,7 @@ app.get('/portal', (_req, res) => {
 
 // ── Cron endpoint (sem JWT, autenticado por CRON_SECRET) ──────
 // Chamado pelo Render Cron Job ou qualquer scheduler externo.
-// Render Cron Job URL: GET https://msk-api.onrender.com/api/cron/gerar-avisos?secret=CRON_SECRET
+// Render Cron Job URL: GET https://gestao-msk.onrender.com/api/cron/gerar-avisos?secret=CRON_SECRET
 app.get('/api/cron/gerar-avisos', (req, res) => {
   const secret = process.env.CRON_SECRET;
   if (secret && req.query.secret !== secret) {

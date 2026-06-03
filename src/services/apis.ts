@@ -145,10 +145,10 @@ export async function consultarProcessoDataJud(
   if (!tribunal) throw new Error(`Tribunal '${tribunalAlias}' não encontrado.`);
 
   // ── Proxy pelo backend (DataJud bloqueia CORS direto do browser) ──
-  // VITE_API_URL já contém '/api' (ex: https://msk-api.onrender.com/api),
+  // VITE_API_URL já contém '/api' (ex: https://gestao-msk.onrender.com/api),
   // portanto o endpoint é ${BASE}/datajud (sem repetir /api).
   const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
-    ?? 'https://msk-api.onrender.com/api';
+    ?? 'https://gestao-msk.onrender.com/api';
 
   const response = await fetch(`${API_BASE}/datajud`, {
     method: 'POST',

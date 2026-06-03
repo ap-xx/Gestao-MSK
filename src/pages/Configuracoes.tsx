@@ -34,7 +34,7 @@ function TwoFactorSection() {
   // Use absolute URL when env var is not set so the call reaches the
   // Render backend even when the frontend is served from Vercel.
   const API_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
-    ?? 'https://msk-api.onrender.com/api';
+    ?? 'https://gestao-msk.onrender.com/api';
 
   const enabled = user?.totpEnabled ?? false;
   const [step, setStep]           = useState<'idle' | 'qr' | 'verify' | 'disable'>('idle');

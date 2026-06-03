@@ -11,7 +11,7 @@ import { useToast } from '../../context/ToastContext';
 // The server endpoint reuses the existing backup infrastructure.
 
 const SERVER_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
-  ?? 'https://msk-api.onrender.com/api';
+  ?? 'https://gestao-msk.onrender.com/api';
 
 function getToken() { return sessionStorage.getItem('msk_token') ?? ''; }
 

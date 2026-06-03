@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { Scale, Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 const SERVER_BASE = (import.meta.env?.VITE_API_URL as string | undefined)
-  ?? 'https://msk-api.onrender.com/api';
+  ?? 'https://gestao-msk.onrender.com/api';
 
 type Status = 'loading' | 'waking' | 'success' | 'error';
 
