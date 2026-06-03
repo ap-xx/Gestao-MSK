@@ -296,6 +296,12 @@ let keys      = [];
 // ── Boot ─────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   if (token) { showDashboard(); loadAll(); }
+
+  // Pre-warm the Render server as soon as the page loads.
+  // By the time the user fills the form and clicks, the server should be awake.
+  fetch(`${API}/api/health`, { signal: AbortSignal.timeout(120_000) })
+    .then(() => console.log('[portal] server warm'))
+    .catch(() => console.log('[portal] server still waking…'));
 });
 
 // ── Auth ─────────────────────────────────────────────────────
@@ -311,67 +317,83 @@ async function doLogin() {
   btn.innerHTML = '<span class="spin"></span> Verificando…';
   btn.disabled  = true;
 
-  // Show "waking up" message after 5 seconds if still waiting
-  const slowTimer = setTimeout(() => {
-    btn.innerHTML = '<span class="spin"></span> Servidor acordando… (~60 s)';
-  }, 5000);
+  // Try up to 2 attempts (covers cases where Render takes > 90 s)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    // Progressive messages
+    const slowTimer = setTimeout(() => {
+      btn.innerHTML = `<span class="spin"></span> Servidor acordando… aguarde${attempt > 1 ? ' (tentativa ' + attempt + '/2)' : ''}`;
+    }, attempt === 1 ? 5000 : 2000);
 
-  // 90-second hard timeout — covers Render's cold-start (~60 s)
-  const controller = new AbortController();
-  const hardTimeout = setTimeout(() => controller.abort(), 90_000);
+    const controller = new AbortController();
+    const hardTimeout = setTimeout(() => controller.abort(), 120_000); // 2 minutes per attempt
 
-  try {
-    const res = await fetch(`${API}/api/auth/login`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email, senha }),
-      signal: controller.signal,
-    });
-    clearTimeout(slowTimer);
-    clearTimeout(hardTimeout);
+    try {
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email, senha }),
+        signal: controller.signal,
+      });
+      clearTimeout(slowTimer);
+      clearTimeout(hardTimeout);
 
-    // Detect HTML response (Render cold-start page) instead of JSON
-    const text = await res.text();
-    if (text.trimStart().startsWith('<')) {
-      throw new Error('Servidor retornou HTML (cold-start). Aguarde 30 s e tente novamente.');
-    }
-    const data = JSON.parse(text);
-    if (!res.ok) throw new Error(data.error ?? 'Credenciais inválidas');
+      const text = await res.text();
+      if (text.trimStart().startsWith('<')) {
+        // Got HTML (Render cold-start) — retry if we have attempts left
+        if (attempt < 2) { await sleep(3000); continue; }
+        throw new Error('O servidor demorou demais. Aguarde 30 s e tente novamente.');
+      }
+      const data = JSON.parse(text);
+      if (!res.ok) throw new Error(data.error ?? 'Credenciais inválidas');
 
-    // 2FA required
-    if (data.requires2fa) {
-      pendingUserId = data.userId;
-      document.getElementById('login-step1').style.display = 'none';
-      document.getElementById('login-step2').style.display = 'block';
-      document.getElementById('login-title').textContent   = '🔐 Verificação 2FA';
-      document.getElementById('login-sub').textContent     = 'Insira o código do seu app autenticador';
-      document.getElementById('totp').focus();
+      // 2FA required
+      if (data.requires2fa) {
+        pendingUserId = data.userId;
+        document.getElementById('login-step1').style.display = 'none';
+        document.getElementById('login-step2').style.display = 'block';
+        document.getElementById('login-title').textContent   = '🔐 Verificação 2FA';
+        document.getElementById('login-sub').textContent     = 'Insira o código do seu app autenticador';
+        document.getElementById('totp').focus();
+        btn.innerHTML = 'Entrar';
+        btn.disabled  = false;
+        return;
+      }
+
+      if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
+
+      token     = data.token;
+      userEmail = data.user.email;
+      sessionStorage.setItem('msk_portal_token', token);
+      sessionStorage.setItem('msk_portal_email', userEmail);
+
+      showDashboard();
+      loadAll();
+      return; // success — exit loop
+
+    } catch (err) {
+      clearTimeout(slowTimer);
+      clearTimeout(hardTimeout);
+
+      if (err.name === 'AbortError' && attempt < 2) {
+        // Timeout on first attempt — retry automatically
+        btn.innerHTML = '<span class="spin"></span> Reconectando…';
+        await sleep(2000);
+        continue;
+      }
+
+      const msg = err.name === 'AbortError'
+        ? 'Servidor demorou demais (>4 min). Aguarde alguns minutos e tente novamente.'
+        : err.message;
+      errEl.textContent   = msg;
+      errEl.style.display = 'block';
       btn.innerHTML = 'Entrar';
       btn.disabled  = false;
       return;
     }
-
-    if (data.user?.role !== 'admin') throw new Error('Acesso restrito ao administrador.');
-
-    token     = data.token;
-    userEmail = data.user.email;
-    sessionStorage.setItem('msk_portal_token', token);
-    sessionStorage.setItem('msk_portal_email', userEmail);
-
-    showDashboard();
-    loadAll();
-  } catch (err) {
-    clearTimeout(slowTimer);
-    clearTimeout(hardTimeout);
-    const msg = err.name === 'AbortError'
-      ? 'Tempo esgotado. O servidor demorou mais de 90 s para responder. Tente novamente.'
-      : err.message;
-    errEl.textContent   = msg;
-    errEl.style.display = 'block';
-    btn.innerHTML = 'Entrar';
-    btn.disabled  = false;
   }
 }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function verifyTotp() {
   const totp   = document.getElementById('totp').value.trim();
