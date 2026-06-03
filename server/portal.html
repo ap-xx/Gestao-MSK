@@ -556,7 +556,8 @@ function renderMachines() {
       <td>${badge}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-sm btn-danger" onclick="deleteMachine('${esc(m.machineId)}','${esc(m.machineName||'esta máquina')}')">Remover</button>
+          <button class="btn btn-sm btn-danger" onclick="revokeAndBlock('${esc(m.key)}','${esc(m.machineName||'esta máquina')}','${esc(m.machineId)}')">Revogar acesso</button>
+          <button class="btn btn-sm btn-ghost" onclick="deleteMachine('${esc(m.machineId)}','${esc(m.machineName||'esta máquina')}')">Remover relatório</button>
         </div>
       </td>
     </tr>`;
@@ -628,6 +629,26 @@ async function reactivateKey(id) {
     await apiFetch(`/api/licenses/keys/${id}/reactivate`, { method: 'PATCH' });
     toast('Chave reativada.');
     await loadKeys();
+  } catch (err) { toast(err.message, true); }
+}
+
+async function revokeAndBlock(key, name, machineId) {
+  if (!key || key === '—') {
+    toast('Chave não encontrada para esta máquina — ela ainda não fez login após a URL ser corrigida.', true);
+    return;
+  }
+  if (!confirm(`Revogar acesso da máquina "${name}"?\n\nNa próxima vez que ela abrir o sistema será bloqueada e pedirá uma nova chave.`)) return;
+  try {
+    // Block the key value (works for both server-generated and locally-generated keys)
+    await apiFetch('/api/licenses/keys/block', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ key, descricao: `Revogada — ${name}` }),
+    });
+    // Remove machine report so it doesn't re-appear immediately
+    await apiFetch(`/api/licenses/${machineId}`, { method: 'DELETE' });
+    toast(`✓ Acesso revogado para "${name}". Na próxima abertura do sistema, será solicitada nova chave.`);
+    await loadAll();
   } catch (err) { toast(err.message, true); }
 }
 

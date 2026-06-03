@@ -78,6 +78,33 @@ router.post('/report', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// ─── GET /api/licenses/validate ──────────────────────────────
+// Public endpoint — client checks if its key is still active.
+// Returns { valid: true } if the key exists and is not revoked.
+// Returns { valid: false, reason } if revoked or unknown.
+// If the key is unknown on the server (never synced), returns { valid: true }
+// so offline-first machines are not blocked.
+
+router.get('/validate', (req: Request, res: Response) => {
+  const key = (req.query.key as string) ?? '';
+  if (!key) { res.status(400).json({ error: 'key é obrigatório.' }); return; }
+
+  // Check server-side generated keys table
+  const serverKey = db.prepare('SELECT status FROM license_keys WHERE key = ?').get(key) as { status: string } | undefined;
+  if (serverKey) {
+    if (serverKey.status === 'revoked') {
+      res.json({ valid: false, reason: 'Chave revogada pelo administrador.' });
+    } else {
+      res.json({ valid: true });
+    }
+    return;
+  }
+
+  // Key not found in server DB → was generated locally or not synced yet.
+  // Don't block — allow (offline-first principle).
+  res.json({ valid: true, unknown: true });
+});
+
 // ─── GET /api/licenses ────────────────────────────────────────
 // Admin only — returns machine reports joined with key status.
 
@@ -113,6 +140,28 @@ router.get('/', requireAuth, (req: Request, res: Response) => {
   }));
 
   res.json(records);
+});
+
+// ─── POST /api/licenses/keys/block ───────────────────────────
+// Admin — marks a specific key value as revoked.
+// Used when the key was locally generated (not in license_keys yet).
+
+router.post('/keys/block', requireAuth, (req: Request, res: Response) => {
+  if (req.user?.role !== 'admin') { res.status(403).json({ error: 'Acesso negado.' }); return; }
+  const { key, descricao } = req.body as { key?: string; descricao?: string };
+  if (!key) { res.status(400).json({ error: 'key é obrigatório.' }); return; }
+
+  const existing = db.prepare('SELECT id FROM license_keys WHERE key = ?').get(key) as { id: string } | undefined;
+  const now = new Date().toISOString();
+  if (existing) {
+    db.prepare(`UPDATE license_keys SET status = 'revoked', atualizadoEm = ? WHERE id = ?`).run(now, existing.id);
+  } else {
+    db.prepare(`
+      INSERT INTO license_keys (id, key, descricao, status, criadoPor, criadoEm, atualizadoEm)
+      VALUES (?, ?, ?, 'revoked', ?, ?, ?)
+    `).run(generateId(), key, descricao ?? 'Bloqueada pelo administrador', req.user!.email ?? 'admin', now, now);
+  }
+  res.json({ ok: true });
 });
 
 // ─── GET /api/licenses/keys ───────────────────────────────────

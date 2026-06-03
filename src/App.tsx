@@ -78,6 +78,29 @@ function AppContent() {
     () => validateLicenseKey(LicenseDB.get()?.licenseKey ?? '')
   );
 
+  // Background server-side revocation check.
+  // If server says key is revoked AND is reachable → clear local key, show gate.
+  // If server is unreachable → keep offline-first behavior (no block).
+  useEffect(() => {
+    if (!licensed) return;
+    const key = LicenseDB.get()?.licenseKey;
+    if (!key) return;
+    const RENDER_URL = 'https://gestao-msk.onrender.com/api';
+    fetch(`${RENDER_URL}/licenses/validate?key=${encodeURIComponent(key)}`, {
+      signal: AbortSignal.timeout(15_000),
+    })
+      .then(r => r.json())
+      .then((data: { valid: boolean; reason?: string }) => {
+        if (data.valid === false) {
+          // Key explicitly revoked by admin → clear local key and show gate
+          LicenseDB.clear();
+          localStorage.removeItem('msk_license');
+          setLicensed(false);
+        }
+      })
+      .catch(() => { /* server unreachable — keep offline access */ });
+  }, [licensed]);
+
   if (!licensed) return <LicenseGate onActivated={() => setLicensed(true)} />;
 
   if (loading) {

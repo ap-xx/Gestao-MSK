@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Eye, EyeOff, Download, Upload, X,
   Calendar, RefreshCw, Link2, Link2Off, CheckCircle2, AlertCircle,
   ClipboardList, Clock, Edit2, ShieldCheck, ToggleLeft, ToggleRight,
-  KeyRound, QrCode, CheckCircle, XCircle, Server,
+  KeyRound, QrCode, CheckCircle, XCircle, Server, Monitor,
 } from 'lucide-react';
 import { escritorioApi, usersApi, configApi, backupApi, googleApi, auditoriaApi, perfisApi, eprocApi } from '../services/api';
 import {
@@ -1646,6 +1646,48 @@ export default function Configuracoes() {
       {/* ── Tab: Dados / Backup ─────────────────────────────── */}
       {tab === 'dados' && (
         <div className="space-y-5">
+
+          {/* Identificação desta máquina */}
+          {(() => {
+            const { LicenseDB: LDB } = require('../data/db') as typeof import('../data/db');
+            const lic = LDB.get();
+            if (!lic) return null;
+            return (
+              <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-4">
+                <p className="text-sm font-semibold text-[#f5f5f5] mb-3 flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-amber-400" /> Esta Máquina
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>Nome da máquina</label>
+                    <input className={inputClass}
+                      defaultValue={lic.machineName || 'PC Registrado'}
+                      onBlur={e => {
+                        const { LicenseDB: L } = require('../data/db') as typeof import('../data/db');
+                        L.updateStats({ machineName: e.target.value.trim() || 'PC Registrado' });
+                        showToast('success', 'Nome atualizado');
+                      }}
+                      placeholder="Ex: PC do Escritório" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Cidade / UF (corrigir localização)</label>
+                    <input className={inputClass}
+                      defaultValue={lic.cidade ? `${lic.cidade}/${lic.uf ?? ''}` : ''}
+                      onBlur={e => {
+                        const parts = e.target.value.split('/');
+                        const { LicenseDB: L } = require('../data/db') as typeof import('../data/db');
+                        L.updateStats({ cidade: parts[0]?.trim(), uf: parts[1]?.trim().toUpperCase() });
+                        showToast('success', 'Localização atualizada');
+                      }}
+                      placeholder="Ex: Caxias do Sul/RS" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-[#505050] mt-2">
+                  Chave: <span className="font-mono">{lic.licenseKey}</span>
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Portal de Licenças */}
           {isAdmin && (
