@@ -150,6 +150,8 @@
     <div class="login-card">
       <h2 id="login-title">Portal de Licenças</h2>
       <p id="login-sub">Acesso exclusivo para administradores</p>
+      <!-- Server status indicator -->
+      <div id="server-status" style="display:none;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:16px;text-align:center"></div>
       <div class="error-msg" id="login-error"></div>
 
       <!-- Step 1: credentials -->
@@ -297,11 +299,35 @@ let keys      = [];
 window.addEventListener('load', () => {
   if (token) { showDashboard(); loadAll(); }
 
-  // Pre-warm the Render server as soon as the page loads.
-  // By the time the user fills the form and clicks, the server should be awake.
+  // Pre-warm: ping /api/health on load and show status to user
+  const statusEl = document.getElementById('server-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'rgba(245,158,11,.08)';
+  statusEl.style.color = '#f59e0b';
+  statusEl.style.border = '1px solid rgba(245,158,11,.2)';
+  statusEl.textContent = '⏳ Verificando servidor…';
+
   fetch(`${API}/api/health`, { signal: AbortSignal.timeout(120_000) })
-    .then(() => console.log('[portal] server warm'))
-    .catch(() => console.log('[portal] server still waking…'));
+    .then(r => {
+      if (r.ok) {
+        statusEl.style.background = 'rgba(34,197,94,.08)';
+        statusEl.style.color = '#22c55e';
+        statusEl.style.border = '1px solid rgba(34,197,94,.2)';
+        statusEl.textContent = '✓ Servidor online';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+      } else {
+        statusEl.style.background = 'rgba(239,68,68,.08)';
+        statusEl.style.color = '#ef4444';
+        statusEl.style.border = '1px solid rgba(239,68,68,.2)';
+        statusEl.textContent = `✗ Servidor respondeu ${r.status} — verifique o Render`;
+      }
+    })
+    .catch(err => {
+      statusEl.style.background = 'rgba(239,68,68,.08)';
+      statusEl.style.color = '#ef4444';
+      statusEl.style.border = '1px solid rgba(239,68,68,.2)';
+      statusEl.textContent = `✗ Servidor inacessível: ${err.message}. Verifique o Render dashboard.`;
+    });
 });
 
 // ── Auth ─────────────────────────────────────────────────────
