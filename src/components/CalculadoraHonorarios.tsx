@@ -5,11 +5,17 @@ import { useDraggable } from '../hooks/useDraggable';
 
 /**
  * Calculadora de Honorários — flutuante e arrastável.
- * Clique no ícone ⠿ do cabeçalho e arraste para reposicionar.
+ * • Fechado: arraste pelo ícone, clique para abrir
+ * • Aberto: arraste pelo cabeçalho ⠿, clique X para fechar
+ * • Auto-enquadra na tela ao sair dos limites
  */
 export default function CalculadoraHonorarios() {
   const [open, setOpen] = useState(false);
-  const { wrapperStyle, dragHandleProps, dragging } = useDraggable('calculadora', { x: 24, y: 96 });
+  const { wrapperStyle, onMouseDown, dragging, wasClick } = useDraggable(
+    'calculadora',
+    { x: 24, y: 96 },
+    { w: 288, h: open ? 420 : 44 },
+  );
 
   // Alt+C abre/fecha a calculadora
   useEffect(() => {
@@ -49,12 +55,14 @@ export default function CalculadoraHonorarios() {
     // Draggable wrapper — position persisted in localStorage
     <div style={wrapperStyle}>
 
-      {/* Collapsed: just the icon button */}
+      {/* Collapsed: draggable icon — click opens, drag moves */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          title="Calculadora de Honorários (Alt+C)"
+          onMouseDown={onMouseDown}
+          onClick={() => { if (wasClick()) setOpen(true); }}
+          title="Calculadora (clique para abrir · arraste para mover)"
           className="w-11 h-11 bg-[#1e1e1e] border border-[#2a2a2a] hover:border-amber-500/40 rounded-xl flex items-center justify-center text-[#505050] hover:text-amber-400 shadow-lg transition-all"
+          style={{ cursor: dragging ? 'grabbing' : 'grab' }}
         >
           <Calculator className="w-5 h-5" />
         </button>
@@ -62,13 +70,14 @@ export default function CalculadoraHonorarios() {
 
       {/* Expanded panel */}
       {open && (
-        <div className="w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden select-none"
-             style={{ opacity: dragging ? 0.85 : 1 }}>
+        <div className="w-72 bg-[#141414] border border-[#2a2a2a] rounded-2xl shadow-2xl overflow-hidden"
+             style={{ opacity: dragging ? 0.85 : 1, userSelect: 'none' }}>
 
-          {/* Drag handle header — grab here to move */}
+          {/* Drag handle header */}
           <div
             className="flex items-center justify-between px-3 py-3 border-b border-[#2a2a2a]"
-            {...dragHandleProps}
+            onMouseDown={onMouseDown}
+            style={{ cursor: dragging ? 'grabbing' : 'grab' }}
           >
             <div className="flex items-center gap-2">
               <GripVertical className="w-3.5 h-3.5 text-[#404040]" />

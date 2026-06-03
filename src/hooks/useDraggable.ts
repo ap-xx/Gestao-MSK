@@ -1,86 +1,120 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface Position { x: number; y: number }
 
-const STORAGE_KEY_PREFIX = 'msk_drag_';
+const STORAGE_PREFIX = 'msk_drag_';
+const DRAG_THRESHOLD = 4; // pixels before we consider it a drag (not a click)
 
 /**
- * Makes a fixed-position element draggable by the user.
- * Position is persisted in localStorage so it survives page reloads.
+ * Makes a fixed-position element draggable from any handle element.
  *
- * @param id          Unique key for this element (used for persistence)
- * @param defaultPos  Default position { x, y } from bottom-right corner (positive = distance from edge)
+ * • Position uses CSS `right`/`bottom` offsets (distance from screen edges).
+ * • Auto-clamps to the visible viewport — can't drag off-screen.
+ * • Persists position in localStorage.
+ * • Distinguishes click vs drag: `wasClick()` returns true when the mouse
+ *   moved fewer than DRAG_THRESHOLD pixels, so you can still use onClick
+ *   for toggle behaviour on the same element.
  */
 export function useDraggable(
   id: string,
   defaultPos: Position = { x: 24, y: 96 },
+  /** Width & height of the element in px — used for clamping */
+  elementSize: { w: number; h: number } = { w: 288, h: 48 },
 ) {
-  const storageKey = STORAGE_KEY_PREFIX + id;
+  const storageKey = STORAGE_PREFIX + id;
 
   const [pos, setPos] = useState<Position>(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
-      return saved ? JSON.parse(saved) : defaultPos;
-    } catch {
-      return defaultPos;
-    }
+      const raw = localStorage.getItem(storageKey);
+      return raw ? JSON.parse(raw) : defaultPos;
+    } catch { return defaultPos; }
   });
 
   const [dragging, setDragging] = useState(false);
+  const hasDragged = useRef(false);
   const startMouse = useRef<Position>({ x: 0, y: 0 });
   const startPos   = useRef<Position>({ x: 0, y: 0 });
 
+  function clamp(next: Position): Position {
+    const maxX = window.innerWidth  - elementSize.w - 4;
+    const maxY = window.innerHeight - elementSize.h - 4;
+    return {
+      x: Math.max(4, Math.min(maxX, next.x)),
+      y: Math.max(4, Math.min(maxY, next.y)),
+    };
+  }
+
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only left button
+    if (e.button !== 0) return;
     e.preventDefault();
-    setDragging(true);
+
+    hasDragged.current = false;
     startMouse.current = { x: e.clientX, y: e.clientY };
-    startPos.current   = { ...pos };
-  }, [pos]);
+    startPos.current   = pos;
 
-  useEffect(() => {
-    if (!dragging) return;
+    function onMove(ev: MouseEvent) {
+      const dx = ev.clientX - startMouse.current.x;
+      const dy = ev.clientY - startMouse.current.y;
 
-    function onMouseMove(e: MouseEvent) {
-      const dx = e.clientX - startMouse.current.x;
-      const dy = e.clientY - startMouse.current.y;
-      // We use right/bottom offsets, so movement is inverted
-      const newPos = {
-        x: Math.max(8, startPos.current.x - dx),
-        y: Math.max(8, startPos.current.y + dy),
-      };
-      setPos(newPos);
+      if (!hasDragged.current && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        hasDragged.current = true;
+        setDragging(true);
+      }
+
+      if (hasDragged.current) {
+        // right-offset:   mouse moves RIGHT (+dx) → element moves right  → right offset DECREASES (-dx)
+        // bottom-offset:  mouse moves DOWN  (+dy) → element moves down   → bottom offset DECREASES (-dy)
+        setPos(clamp({
+          x: startPos.current.x - dx,
+          y: startPos.current.y - dy,
+        }));
+      }
     }
 
-    function onMouseUp() {
+    function onUp() {
       setDragging(false);
+      // Persist only after drag ends
+      if (hasDragged.current) {
+        setPos(prev => {
+          const clamped = clamp(prev);
+          localStorage.setItem(storageKey, JSON.stringify(clamped));
+          return clamped;
+        });
+      }
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos, storageKey]);
+
+  /** Returns true when the last mousedown → mouseup was a click (not a drag). */
+  const wasClick = useCallback(() => !hasDragged.current, []);
+
+  // Re-clamp if window is resized
+  useEffect(() => {
+    function onResize() {
       setPos(prev => {
-        localStorage.setItem(storageKey, JSON.stringify(prev));
-        return prev;
+        const clamped = clamp(prev);
+        localStorage.setItem(storageKey, JSON.stringify(clamped));
+        return clamped;
       });
     }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup',   onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup',   onMouseUp);
-    };
-  }, [dragging, storageKey]);
-
-  /** Apply to the drag handle (usually the header bar) */
-  const dragHandleProps = {
-    onMouseDown,
-    style: { cursor: dragging ? 'grabbing' : 'grab' } as React.CSSProperties,
-  };
-
-  /** Apply to the outermost wrapper div */
   const wrapperStyle: React.CSSProperties = {
-    position:  'fixed',
-    right:     `${pos.x}px`,
-    bottom:    `${pos.y}px`,
-    zIndex:    50,
-    userSelect: dragging ? 'none' : 'auto',
+    position:   'fixed',
+    right:      `${pos.x}px`,
+    bottom:     `${pos.y}px`,
+    zIndex:     50,
+    userSelect: dragging ? 'none' : undefined,
   };
 
-  return { wrapperStyle, dragHandleProps, dragging };
+  return { wrapperStyle, onMouseDown, dragging, wasClick };
 }

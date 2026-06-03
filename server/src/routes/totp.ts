@@ -15,8 +15,10 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
-// Configure TOTP settings (Google Authenticator compatible)
-authenticator.options = { digits: 6, period: 30, algorithm: 'sha1', window: 1 };
+// Configure TOTP settings (Google Authenticator compatible).
+// SHA-1 is the TOTP default (RFC 6238) — omitted to avoid type issues with
+// older @otplib typings that don't accept the literal string 'sha1'.
+authenticator.options = { digits: 6, period: 30, window: 1 };
 
 function generateRefreshToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
