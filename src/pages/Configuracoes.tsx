@@ -90,6 +90,10 @@ function TwoFactorSection() {
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Código inválido');
       updateUser({ totpEnabled: true });
+      // Also persist to localStorage so it survives login/refresh
+      import('../data/db').then(({ UsersDB }) => {
+        if (user) UsersDB.update(user.id, { totpEnabled: true });
+      });
       showToast('success', '2FA ativado!', 'Autenticação em dois fatores habilitada.');
       setStep('idle'); setCode(''); setQrDataUrl(''); setSecret('');
     } catch (e: any) { showToast('error', 'Código inválido', e.message); }
@@ -109,6 +113,10 @@ function TwoFactorSection() {
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error ?? 'Código inválido');
       updateUser({ totpEnabled: false });
+      // Also persist to localStorage
+      import('../data/db').then(({ UsersDB }) => {
+        if (user) UsersDB.update(user.id, { totpEnabled: false });
+      });
       showToast('info', '2FA desativado');
       setStep('idle'); setCode('');
     } catch (e: any) { showToast('error', 'Código inválido', e.message); }
@@ -395,12 +403,16 @@ export default function Configuracoes() {
     if (tab === 'usuarios') loadUsers();
   }, [tab, loadUsers]);
 
-  // Load google status when tab changes to google
+  // Load google status when tab changes to google.
+  // On error (server sleeping), keep previous state — don't reset to disconnected.
   const loadGoogleStatus = useCallback(() => {
     setLoadingGoogle(true);
     googleApi.status()
       .then(data => setGoogleStatus(data))
-      .catch(() => setGoogleStatus({ connected: false }))
+      .catch(() => {
+        // Server unreachable — preserve last known state (don't overwrite with false)
+        setGoogleStatus(prev => prev ?? { connected: false });
+      })
       .finally(() => setLoadingGoogle(false));
   }, []);
 

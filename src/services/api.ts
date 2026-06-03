@@ -76,7 +76,10 @@ function logAudit(
 // HTTP PARA SERVIDOR (Google Calendar + E-mail SMTP)
 // ─────────────────────────────────────────────────────────────
 
-const SERVER_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+// Fallback to the known Render URL so server features work even when
+// VITE_API_URL is not set in the Vercel environment variables.
+const SERVER_BASE = (import.meta.env.VITE_API_URL as string | undefined)
+  ?? 'https://gestao-msk.onrender.com/api';
 const TOKEN_KEY   = 'msk_token';
 const REFRESH_KEY = 'msk_refresh';
 
@@ -507,21 +510,35 @@ export const googleApi = {
   authUrl: () =>
     serverReq<{ url: string }>('GET', '/google/auth-url'),
 
-  /** Retorna status da conexão; se servidor dormindo, retorna "desconectado"
-   *  sem lançar erro para não quebrar a tela de Configurações. */
+  /** Retorna status da conexão.
+   *  Persiste o último estado conhecido em localStorage para sobreviver a refreshes
+   *  quando o servidor está dormindo. */
   status: async () => {
+    const CACHE_KEY = 'msk_google_connected';
     try {
-      return await serverReq<{
+      const result = await serverReq<{
         connected: boolean;
         connectedAt?: string;
         calendarId?: string;
       }>('GET', '/google/status');
+      // Cache the result
+      localStorage.setItem(CACHE_KEY, JSON.stringify(result));
+      return result;
     } catch {
+      // Server unreachable — return last known state
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+      } catch { /* malformed cache */ }
       return { connected: false };
     }
   },
 
-  disconnect: () => serverReq<{ ok: true }>('DELETE', '/google/disconnect'),
+  disconnect: async () => {
+    const result = await serverReq<{ ok: true }>('DELETE', '/google/disconnect');
+    localStorage.removeItem('msk_google_connected');
+    return result;
+  },
   sync: () =>
     serverReq<{ ok: true; synced: number; errors: number }>('POST', '/google/sync'),
 };

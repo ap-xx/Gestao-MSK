@@ -84,17 +84,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!data) return;
         if (data.token)        sessionStorage.setItem(TOKEN_KEY, data.token);
         if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
-        // Sync totpEnabled from server to local user
-        // Fix: use dynamic import (no require() in ESM/browser) and update via
-        // SessionDB + setUser directly to avoid stale closure on updateUser.
+        // Sync totpEnabled from server — BUT never overwrite a locally-set
+        // true with false from a delayed background response. If the user
+        // just activated 2FA while the server was waking up, we must not
+        // let a stale login response reset it.
         if (data.totpEnabled !== undefined) {
-          const { UsersDB: DB } = await import('../data/db');
-          DB.update(found.id, { totpEnabled: data.totpEnabled });
           const current = SessionDB.get();
-          if (current) {
-            const updated = { ...current, totpEnabled: data.totpEnabled };
-            SessionDB.set(updated);
-            setUser(updated);
+          const localTrue = current?.totpEnabled === true;
+          // Only apply if server says true, OR local is not already true
+          if (data.totpEnabled === true || !localTrue) {
+            const { UsersDB: DB } = await import('../data/db');
+            DB.update(found.id, { totpEnabled: data.totpEnabled });
+            if (current) {
+              const updated = { ...current, totpEnabled: data.totpEnabled };
+              SessionDB.set(updated);
+              setUser(updated);
+            }
           }
         }
       })
