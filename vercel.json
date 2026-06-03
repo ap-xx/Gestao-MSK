@@ -1,18 +1,33 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/portal",       "destination": "/portal.html" },
-    { "source": "/oauth/google", "destination": "/index.html"  },
-    { "source": "/(.*)",         "destination": "/index.html"  }
+  "routes": [
+    {
+      "src": "/portal",
+      "dest": "/portal.html"
+    },
+    {
+      "src": "/oauth/google",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(favicon\\.svg|manifest\\.json|robots\\.txt|portal\\.html)(.*)",
+      "dest": "/$1$2"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options",        "value": "DENY" },
         { "key": "Referrer-Policy",        "value": "strict-origin-when-cross-origin" }
       ]
     }
